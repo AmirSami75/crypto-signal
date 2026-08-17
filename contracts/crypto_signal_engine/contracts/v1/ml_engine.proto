@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package crypto_signal.ml.v1;
+
+option csharp_namespace = "CryptoMlSignal.Contracts.Ml.V1";
+
+import "google/protobuf/timestamp.proto";
+
+// Private, versioned contract between the .NET orchestrator and Python ML engine.
+service MlEngineService {
+  rpc GetCapabilities(GetCapabilitiesRequest) returns (GetCapabilitiesResponse);
+  rpc GetModelInfo(GetModelInfoRequest) returns (GetModelInfoResponse);
+  rpc PredictSignal(PredictSignalRequest) returns (PredictSignalResponse);
+}
+
+message GetCapabilitiesRequest {
+  string request_id = 1;
+}
+
+message GetCapabilitiesResponse {
+  string request_id = 1;
+  string service = 2;
+  string service_version = 3;
+  string protocol_version = 4;
+  repeated string capabilities = 5;
+  repeated string supported_operations = 6;
+  bool model_ready = 7;
+  uint32 minimum_candles = 8;
+  uint32 maximum_candles = 9;
+}
+
+message GetModelInfoRequest {
+  string request_id = 1;
+}
+
+message GetModelInfoResponse {
+  string request_id = 1;
+  bool ready = 2;
+  string model_id = 3;
+  string model_version = 4;
+  string project_version = 5;
+  string symbol = 6;
+  string interval = 7;
+  google.protobuf.Timestamp trained_at = 8;
+  uint32 feature_count = 9;
+  double probability_threshold = 10;
+  string sell_semantics = 11;
+}
+
+message Candle {
+  google.protobuf.Timestamp open_time = 1;
+  double open = 2;
+  double high = 3;
+  double low = 4;
+  double close = 5;
+  double volume = 6;
+}
+
+enum Signal {
+  SIGNAL_UNSPECIFIED = 0;
+  SIGNAL_SELL = 1;
+  SIGNAL_HOLD = 2;
+  SIGNAL_BUY = 3;
+}
+
+message SignalProbabilities {
+  double sell = 1;
+  double hold = 2;
+  double buy = 3;
+}
+
+message PredictSignalRequest {
+  string request_id = 1;
+  string symbol = 2;
+  string interval = 3;
+  repeated Candle candles = 4;
+  // Optional optimistic pin. When set, inference fails if another model is loaded.
+  string expected_model_version = 5;
+}
+
+message PredictSignalResponse {
+  string request_id = 1;
+  Signal signal = 2;
+  int32 numeric_signal = 3;
+  SignalProbabilities probabilities = 4;
+  double confidence = 5;
+  double close_price = 6;
+  google.protobuf.Timestamp candle_open_time = 7;
+  string symbol = 8;
+  string interval = 9;
+  string model_id = 10;
+  string model_version = 11;
+  google.protobuf.Timestamp model_trained_at = 12;
+  double probability_threshold = 13;
+  string input_digest_sha256 = 14;
+  string sell_semantics = 15;
+  string warning = 16;
+  double processing_milliseconds = 17;
+}

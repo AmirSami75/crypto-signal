@@ -1,0 +1,33 @@
+.idea/
+.vscode/
+.DS_Store
+
+# .NET
+**/bin/
+**/obj/
+*.user
+*.suo
+
+# Node
+**/node_modules/
+**/dist/
+*.tsbuildinfo
+
+# Python
+.venv/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Local ML datasets and generated artifacts
+src/signal-ml/data/*
+src/signal-ml/artifacts/*
+!src/signal-ml/data/.gitkeep
+!src/signal-ml/artifacts/.gitkeep
+
+# Local overrides and secrets
+.env
+.env.*
+!*.env.example
+devops/compose.override.yml

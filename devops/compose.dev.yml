@@ -1,0 +1,61 @@
+services:
+  db:
+    env_file:
+      - ./env/dev/db.env
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql
+
+  signal-ml:
+    build:
+      network: host
+      target: development
+      args:
+        PIP_PROXY: ${PIP_PROXY:-http://127.0.0.1:10808}
+    env_file:
+      - ./env/dev/ml.env
+    command: ["python", "-m", "crypto_signal_engine"]
+    ports:
+      - "127.0.0.1:50051:50051"
+    volumes:
+      - ../src/signal-ml/src:/app/src:ro
+      - ../src/signal-ml/artifacts:/app/artifacts:ro
+
+  api:
+    build:
+      network: host
+      target: development
+    env_file:
+      - ./env/dev/api.env
+      - ./env/dev/db.env
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    environment:
+      DOTNET_CLI_HOME: /tmp/dotnet
+      NUGET_PACKAGES: /tmp/nuget
+      DOTNET_WATCH_RESTART_ON_RUDE_EDIT: "true"
+      DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE: "true"
+    command: ["dotnet", "watch", "run", "--no-launch-profile", "--urls", "http://0.0.0.0:8080"]
+    ports:
+      - "127.0.0.1:8000:8080"
+    volumes:
+      - ../src/backend:/workspace/src/backend
+      - ../contracts:/workspace/contracts:ro
+
+  dashboard:
+    build:
+      network: host
+      target: development
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - ../src/frontend:/app
+      - frontend_node_modules:/app/node_modules
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5173/"]
+
+volumes:
+  postgres_dev_data:
+    name: crypto-signal-postgres-dev-dotnet
+  frontend_node_modules:

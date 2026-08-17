@@ -1,0 +1,40 @@
+[market]
+symbol = "BTCUSDT"
+interval = "1h"
+start = "2020-01-01T00:00:00Z"
+end = ""
+raw_data_path = "data/BTCUSDT_1h.csv"
+
+[features]
+prediction_horizon = 6
+label_threshold = 0.0035
+
+[model]
+test_fraction = 0.20
+cv_splits = 5
+probability_threshold = 0.50
+random_state = 42
+max_iter = 250
+learning_rate = 0.05
+max_leaf_nodes = 15
+min_samples_leaf = 40
+l2_regularization = 1.0
+
+[backtest]
+fee_rate = 0.0010
+slippage_rate = 0.0005
+allow_short = false
+
+[output]
+artifact_dir = "artifacts"
+
+[network]
+# V2RayN local HTTP proxy. Use "off" only when direct Binance access works.
+proxy_url = "http://127.0.0.1:10808"
+timeout_seconds = 30
+
+[logging]
+level = "INFO"
+log_file = "artifacts/logs/crypto_signal.log"
+max_bytes = 5000000
+backup_count = 3

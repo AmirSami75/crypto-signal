@@ -1,0 +1,17 @@
+.git
+.idea
+.vscode
+.venv
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+**/.pytest_cache
+**/bin
+**/obj
+**/node_modules
+**/dist
+src/signal-ml/data
+src/signal-ml/artifacts/*
+!src/signal-ml/artifacts/model.joblib
+!src/signal-ml/artifacts/metadata.json
+tests

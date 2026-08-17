@@ -1,0 +1,79 @@
+name: crypto-signal
+
+x-service-defaults: &service-defaults
+  init: true
+  networks:
+    - application
+
+services:
+  db:
+    image: postgres:18.3-alpine3.23
+    shm_size: 128mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - application
+
+  signal-ml:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: devops/docker/signal-ml/Dockerfile
+      target: runtime
+    image: crypto-signal-ml:${IMAGE_TAG:-local}
+    expose:
+      - "50051"
+    healthcheck:
+      test: ["CMD", "python", "-m", "crypto_signal_engine.healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  api:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: devops/docker/backend/Dockerfile
+      target: runtime
+    image: crypto-signal-api:${IMAGE_TAG:-local}
+    depends_on:
+      db:
+        condition: service_healthy
+      signal-ml:
+        condition: service_healthy
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080'"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  dashboard:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: devops/docker/frontend/Dockerfile
+      target: runtime
+    image: crypto-signal-dashboard:${IMAGE_TAG:-local}
+    depends_on:
+      api:
+        condition: service_healthy
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/dashboard-health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+networks:
+  application:
+    driver: bridge
