@@ -31,3 +31,7 @@ src/signal-ml/artifacts/*
 .env.*
 !*.env.example
 devops/compose.override.yml
+
+# Serilog rolling file output. Written under the content root when the file sink is enabled, which
+# in the dev container is the bind-mounted source tree.
+Logs/

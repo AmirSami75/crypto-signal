@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package crypto_signal.ml.v1;
 
-option csharp_namespace = "CryptoMlSignal.Contracts.Ml.V1";
+option csharp_namespace = "CryptoSignal.Contracts.Ml.V1";
 
 import "google/protobuf/timestamp.proto";
 

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>CryptoSignal.Auth</RootNamespace>
+    <AssemblyName>CryptoSignal.Auth</AssemblyName>
+    <!-- Ported library: see CryptoSignal.Infra.csproj for the rationale. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Docs\Permissions_Documents.pdf" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Docs\Permissions_Documents.pdf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CryptoSignal.Infra\CryptoSignal.Infra.csproj" />
+  </ItemGroup>
+
+</Project>

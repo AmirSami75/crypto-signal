@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>CryptoSignal.Api</RootNamespace>
+    <AssemblyName>CryptoSignal.Api</AssemblyName>
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+
+    <!-- Swagger reads the generated XML from AppContext.BaseDirectory; the default output name is
+         $(AssemblyName).xml, which is what Program.cs lists in apiXmlFiles. CS1591 is muted so an
+         undocumented public member is not a build error under TreatWarningsAsErrors. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.35.1" />
+    <PackageReference Include="Grpc.Net.ClientFactory" Version="2.80.0" />
+    <PackageReference Include="Grpc.Tools" Version="2.80.0" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CryptoSignal.Infra\CryptoSignal.Infra.csproj" />
+    <ProjectReference Include="..\CryptoSignal.Auth\CryptoSignal.Auth.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="../../../../contracts/crypto_signal_engine/contracts/v1/ml_engine.proto"
+              GrpcServices="Client"
+              Link="Protos/ml_engine.proto" />
+  </ItemGroup>
+</Project>
