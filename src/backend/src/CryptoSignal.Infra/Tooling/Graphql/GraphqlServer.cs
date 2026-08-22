@@ -1,7 +1,5 @@
-﻿using System.Net.Http.Headers;
 using HotChocolate.Execution.Configuration;
 using Microsoft.AspNetCore.Cors.Infrastructure;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CryptoSignal.Infra.Tooling.Graphql;
@@ -10,16 +8,22 @@ public static class GraphqlServer
 {
     /// <summary>
     /// Adds a GraphQL server to the ASP.NET service container with dynamic configurations.
-    /// You can customize the GraphQL server, add remote schemas for schema stitching, and configure CORS policies.
+    /// You can customize the GraphQL server and configure CORS policies.
     /// </summary>
     /// <param name="services">The IServiceCollection to add services to.</param>
     /// <param name="configureGraphQl">An optional action to configure the GraphQL server.</param>
-    /// <param name="remoteSchemas">An optional dictionary of remote schemas for schema stitching.</param>
     /// <param name="configureCors">An optional tuple containing a CORS policy name and configuration action.</param>
-    /// <returns>The modified IServiceCollection.</returns>
+    /// <param name="useFiltering">Adds HotChocolate's filtering conventions to the schema.</param>
+    /// <remarks>
+    /// Remote-schema stitching used to be configured here. It was dropped along with the
+    /// HotChocolate.Stitching package reference: stitching was removed from HotChocolate in v14 in
+    /// favour of Fusion, so the last release — 13.9.16 — pulled a second, parallel HotChocolate 13.x
+    /// assembly graph into a v16 build and its <c>AddRemoteSchema</c> extension could no longer bind
+    /// to the v16 <c>IRequestExecutorBuilder</c>. Nothing in this deployment serves GraphQL, so there
+    /// is no gateway to stitch; a future one would use Fusion rather than stitching anyway.
+    /// </remarks>
     public static void InjectGraphQlServices(this IServiceCollection services,
         Action<IRequestExecutorBuilder>? configureGraphQl = null,
-        Dictionary<string, string>? remoteSchemas = null,
         Tuple<string, Action<CorsPolicyBuilder>>? configureCors = null,
         bool useFiltering = false)
     {
@@ -29,39 +33,13 @@ public static class GraphqlServer
                 opts.AddPolicy(configureCors.Item1, configureCors.Item2));
         }
 
-        var svc = services
-            .AddGraphQLServer();
+        var svc = services.AddGraphQLServer();
 
+        // Applied to the builder already created rather than calling AddGraphQLServer a second time,
+        // which returned a fresh builder and silently discarded any configuration applied to the first.
         if (useFiltering)
-        {
-            svc = services
-                .AddGraphQLServer().AddFiltering();
-        }
-
+            svc.AddFiltering();
 
         configureGraphQl?.Invoke(svc);
-
-        if (remoteSchemas == null) return;
-
-        foreach (var remoteSchema in remoteSchemas)
-        {
-            svc.Services.AddHttpClient(remoteSchema.Key, (sp, client) =>
-            {
-                client.BaseAddress = new Uri(remoteSchema.Value);
-
-                var httpContextAccessor = sp.GetRequiredService<IHttpContextAccessor>();
-                var httpContext = httpContextAccessor.HttpContext;
-
-                var token = httpContext?.Request.Headers.Authorization.ToString();
-
-                if (!string.IsNullOrEmpty(token))
-                {
-                    client.DefaultRequestHeaders.Authorization =
-                        new AuthenticationHeaderValue("Bearer", token.Replace("Bearer ", ""));
-                }
-            });
-            
-            svc.AddRemoteSchema(remoteSchema.Key, ignoreRootTypes: true);
-        }
     }
 }

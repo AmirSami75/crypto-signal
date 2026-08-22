@@ -1,10 +1,10 @@
 using System.Reflection;
 using Asp.Versioning;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.OpenApi.Models;
 using CryptoSignal.Infra.Exceptions.Common;
 using CryptoSignal.Infra.Tooling.Swagger;
 using CryptoSignal.Infra.Tooling.Swagger.Filter;
+using Microsoft.OpenApi;
 using Swashbuckle.AspNetCore.Filters;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using Path = System.IO.Path;
@@ -13,9 +13,14 @@ namespace CryptoSignal.Infra.Tooling.Registrations;
 
 public static class SwaggerSvcInjections
 {
+    /// <summary>
+    /// Registers Swagger generation: XML comments, one document per configured version, JWT bearer
+    /// security, and the operation/document filters that normalise summaries and version routes.
+    /// </summary>
     public static void AddSwagger(this IServiceCollection services, SwaggerConfiguration swaggerConfiguration)
     {
         Assert.NotNull(services, nameof(services));
+        Assert.NotNull(swaggerConfiguration, nameof(swaggerConfiguration));
 
         //Add services to use Example Filters in swagger
         services.AddSwaggerExamples();
@@ -26,19 +31,29 @@ public static class SwaggerSvcInjections
             foreach (var xmlFileName in swaggerConfiguration.XmlFilesName)
             {
                 var xmlDocPath = Path.Combine(AppContext.BaseDirectory, xmlFileName);
-                options.IncludeXmlComments(xmlDocPath, true);
+
+                // Skipped rather than thrown on. IncludeXmlComments opens the file eagerly, so a
+                // single missing file takes the whole process down at startup — and the assemblies
+                // listed here are referenced projects whose GenerateDocumentationFile setting this
+                // library cannot control. A missing file costs documentation, not availability.
+                if (!File.Exists(xmlDocPath)) continue;
+
+                options.IncludeXmlComments(xmlDocPath, includeControllerXmlComments: true);
             }
 
             //show controller XML comments like summary
             options.EnableAnnotations();
 
-            swaggerConfiguration.ApiName = string.IsNullOrEmpty(swaggerConfiguration.ApiName)
-                ? "Api"
-                : swaggerConfiguration.ApiName;
             foreach (var version in swaggerConfiguration.Versions)
             {
-                options.SwaggerDoc(version,
-                    new OpenApiInfo { Version = "v1", Title = $"{swaggerConfiguration.ApiName}" });
+                // Version has to be the document's own version, not a constant. SetVersionInPathsFilter
+                // substitutes Info.Version into the "v{version}" route placeholder, so hardcoding it
+                // would point every document's paths at the same version.
+                options.SwaggerDoc(version, new OpenApiInfo
+                {
+                    Version = version,
+                    Title = swaggerConfiguration.ApiName
+                });
             }
 
             #region Filters
@@ -48,10 +63,6 @@ public static class SwaggerSvcInjections
 
             //Set summary of action if not already set
             options.OperationFilter<ApplySummariesOperationFilter>();
-
-            //Set correct apies that match with Scenario
-            if (swaggerConfiguration.IsScenarioNameSet)
-                options.DocumentFilter<ScenarioDocumentFilter>(swaggerConfiguration.ScenarioName);
 
             #region Add Jwt Authentication
 
@@ -84,11 +95,15 @@ public static class SwaggerSvcInjections
             {
                 if (!apiDesc.TryGetMethodInfo(out MethodInfo methodInfo)) return false;
 
-                var versions = methodInfo.DeclaringType
-                    .GetCustomAttributes<ApiVersionAttribute>(true)
-                    .SelectMany(attr => attr.Versions);
+                // A method reached through a non-controller endpoint has no declaring type, so there
+                // is nothing to read an ApiVersion from — exclude it instead of dereferencing null.
+                var declaringType = methodInfo.DeclaringType;
+                if (declaringType is null) return false;
 
-                return versions.Any(v => $"v{v}" == docName);
+                return declaringType
+                    .GetCustomAttributes<ApiVersionAttribute>(inherit: true)
+                    .SelectMany(attr => attr.Versions)
+                    .Any(v => $"v{v}" == docName);
             });
 
             #endregion

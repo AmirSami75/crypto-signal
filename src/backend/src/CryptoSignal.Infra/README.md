@@ -29,6 +29,24 @@ database provider**. The Oracle and SQL Server paths were removed rather than le
 `Tooling/Graphql` and `Tooling/Messaging` are ported but unwired: this deployment runs no GraphQL
 gateway and the compose stack has no broker.
 
+## Ported-tooling deviations
+
+Two upstream dependencies could not be carried over as-is.
+
+**Swagger filters target Microsoft.OpenApi 2.x.** Swashbuckle 10.x resolves Microsoft.OpenApi 2.7.5,
+which moved every model type out of `Microsoft.OpenApi.Models` into the root `Microsoft.OpenApi`
+namespace and replaced `OpenApiSecurityScheme.Reference` with the standalone
+`OpenApiSecuritySchemeReference` type. `AuthorizationOperationFilter` therefore builds its
+requirement as `[new OpenApiSecuritySchemeReference("Bearer")] = []`, pointing at the definition
+`AddSwagger` registers under that id. `Operation.Summary`, `.Parameters`, `.Responses` and
+`.Security` are all nullable in 2.x and are null-guarded rather than assumed populated — the 1.x
+types hid those dereferences.
+
+**`HotChocolate.Stitching` was dropped.** Stitching was removed from HotChocolate in v14 in favour of
+Fusion, so its last release (13.9.16) pulled a parallel 13.x assembly graph into this v16 build and
+failed with `CS7069` on `IRequestExecutorBuilder`. `GraphqlServer.AddRemoteSchema` went with it.
+Nothing here serves GraphQL, so there is no gateway to stitch, and a future one would use Fusion.
+
 ## Configuration
 
 Everything binds from the `API_Settings` configuration section. `InjectApiSettings(config)` must be
