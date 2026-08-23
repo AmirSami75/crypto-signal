@@ -1,10 +1,36 @@
 <!doctype html>
-<html lang="en">
+<html lang="fa" dir="rtl">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#07111f" />
-    <title>Crypto Signal Operations</title>
+    <meta name="theme-color" content="#ffffff" />
+    <title>سامانه عملیات کریپتو سیگنال</title>
+
+    <!--
+      Theme, applied before the first paint.
+
+      React cannot do this: the bundle is fetched and evaluated after the document has already been
+      painted, so a saved dark theme would arrive as a white flash followed by a snap to dark. Reading
+      the stored value here — synchronously, in <head>, before <body> exists — is the only point at
+      which that flash can be avoided. The key matches THEME_STORAGE_KEY in src/lib/useTheme.ts.
+
+      Light is the default: no stored choice means no attribute, and the palette on `:root` is the
+      light one. The OS `prefers-color-scheme` is deliberately not consulted — the theme is an explicit
+      choice here, and a first visit looks the same for everyone.
+    -->
+    <script>
+      try {
+        var stored = localStorage.getItem('cs.theme')
+        if (stored === 'dark' || stored === 'light') {
+          document.documentElement.dataset.theme = stored
+          if (stored === 'dark') {
+            document.querySelector('meta[name="theme-color"]').content = '#17191c'
+          }
+        }
+      } catch (error) {
+        /* Storage can throw outright when cookies are blocked. Light is a fine answer. */
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

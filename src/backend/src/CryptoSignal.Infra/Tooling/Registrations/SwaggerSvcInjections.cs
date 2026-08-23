@@ -66,18 +66,27 @@ public static class SwaggerSvcInjections
 
             #region Add Jwt Authentication
 
-            //Add Lockout icon on top of swagger ui page to authenticate
-
-            var securityScheme = new OpenApiSecurityScheme()
+            // Declares the scheme that the padlock on each protected operation points at.
+            //
+            // `Http` + `bearer` rather than `ApiKey` in the header: with an http/bearer scheme the UI
+            // owns the "Bearer " prefix, so the Authorize dialog takes the bare token and cannot be
+            // broken by pasting it with or without the word. `Name`/`In` are ignored for this scheme
+            // type — the location is implied — and are left only because they cost nothing and document
+            // where the header lands.
+            var securityScheme = new OpenApiSecurityScheme
             {
-                Description = "Enter JWT Token Without Bearer String ...",
+                Description = "Paste the raw JWT from POST /api/v1/auth/login (response `data.token`). "
+                              + "Do not include the word Bearer — it is added for you.",
                 Name = "Authorization",
                 In = ParameterLocation.Header,
                 Type = SecuritySchemeType.Http,
                 Scheme = "bearer",
-                BearerFormat = "JWT" // Optional
+                BearerFormat = "JWT"
             };
             options.AddSecurityDefinition("Bearer", securityScheme);
+
+            // The definition alone draws nothing. Which operations carry a padlock — and therefore
+            // which ones the UI attaches the token to — is decided per operation by this filter.
             options.OperationFilter<AuthorizationOperationFilter>();
 
             #endregion

@@ -13,7 +13,14 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+
+    // Empty on purpose. Without it, TypeScript auto-includes every @types/* package in
+    // node_modules — so installing @types/node for vite.config.ts would hand the browser build
+    // `process`, `Buffer` and `__dirname` as globals that typecheck cleanly and are undefined at
+    // runtime. React's types are not affected: they arrive through `import … from 'react'` and
+    // through jsx: react-jsx resolving react/jsx-runtime, neither of which uses this list.
+    "types": []
   },
   "include": ["src"]
 }

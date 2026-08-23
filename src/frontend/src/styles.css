@@ -1,49 +1,282 @@
+/*
+ * Tailwind v4 is configured here, not in a JS file.
+ *
+ * Two layers, deliberately kept apart:
+ *
+ * 1. **The palette** — plain custom properties on `:root`, redeclared under `[data-theme='dark']`.
+ *    A theme swap is therefore a single attribute change on <html>; nothing re-renders and no
+ *    component knows which theme is active.
+ * 2. **The mapping** — `@theme inline` hands those properties to Tailwind, which turns each one into
+ *    utilities: `--color-surface` yields `bg-surface`/`text-surface`/`border-surface`. `inline` is
+ *    what makes the indirection work: the palette variable is substituted into the utility itself,
+ *    so `bg-surface` resolves against whichever `--surface` is in scope rather than freezing the
+ *    light value into a theme layer.
+ *
+ * Depth comes from hairline borders and whitespace, not shadows — a shadow is reserved for the two
+ * things that genuinely float above the page, a popover and the mobile drawer.
+ */
+@import 'tailwindcss';
+
+/* Persian variable font, self-hosted. Its @font-face blocks carry unicode-range subsets for Arabic
+   and Latin, so Latin identifiers and digits render from the same family without a fallback swap. */
+@import '@fontsource-variable/vazirmatn';
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────────
+   Light — the default. `data-theme` is absent until someone picks a theme, so this is what a first
+   visit gets regardless of the OS setting.
+   ───────────────────────────────────────────────────────────────────────────────────────────────── */
 :root {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #eaf3ff;
-  background: #07111f;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
+  /* Tells the browser which way its own widgets go: form controls, scrollbars, the caret. */
+  color-scheme: light;
+
+  --ground: #ffffff;
+  --surface: #ffffff;
+  --surface-muted: #f5f5f5;
+  --surface-raised: #ffffff;
+
+  --line: #e8e8e8;
+  --line-strong: #d8d8d8;
+
+  --ink: #0a0a0a;
+  --ink-soft: #3f3f42;
+  --ink-muted: #606060;
+  --ink-faint: #8c8c8c;
+
+  /*
+   * The accent, in four jobs rather than one.
+   *
+   * `--brand` is the chosen hue and is used where contrast is not at stake: rings, hairlines, dots,
+   * tints. It cannot be used for text or as a fill behind white text — #3ea4ec against white is
+   * 2.7:1, well under the 4.5:1 that body-sized text needs. `--brand-fill` is the same hue deepened
+   * to 4.6:1 against `--brand-on`, and `--brand-ink` is deepened further (5.7:1 on white) for links
+   * and small labels drawn directly on the page.
+   */
+  --brand: #3ea4ec;
+  --brand-ink: #0f6ba8;
+  --brand-fill: #1479c2;
+  --brand-fill-hover: #0f6ba8;
+  --brand-on: #ffffff;
+  --ring: #42a6ff;
+
+  --success: #009767;
+  --success-ink: #007a53;
+  --warn: #cd8900;
+  --warn-ink: #96650b;
+  --danger: #e40014;
+  --danger-ink: #c00010;
+  --info: #0084cc;
+
+  --float: 0 18px 44px -16px rgb(10 22 34 / 0.24), 0 2px 8px -3px rgb(10 22 34 / 0.10);
+  --scrim: rgb(12 20 28 / 0.42);
+
+  /* Three elements have to agree on the header band: the header itself, the sidebar's brand row, and
+     the drawer's. A variable is the only way they stay agreed. 3.5rem rather than the reference's
+     3rem — Persian sits on a taller baseline and needs the extra 8px to breathe. */
+  --app-header-height: 3.5rem;
 }
 
-* { box-sizing: border-box; }
+/* ─────────────────────────────────────────────────────────────────────────────────────────────────
+   Dark — opt-in, via the header toggle. Only the palette is restated; every rule above stays.
+   ───────────────────────────────────────────────────────────────────────────────────────────────── */
+:root[data-theme='dark'] {
+  color-scheme: dark;
 
-body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at 78% 6%, rgba(28, 196, 167, .14), transparent 28rem),
-    linear-gradient(145deg, #07111f 0%, #0a1626 58%, #07111f 100%);
+  --ground: #17191c;
+  --surface: #1e2125;
+  --surface-muted: #26292e;
+  --surface-raised: #24272c;
+
+  --line: #2b2f34;
+  --line-strong: #3a4046;
+
+  --ink: #f4f4f5;
+  --ink-soft: #ced2d8;
+  --ink-muted: #a1a5ab;
+  --ink-faint: #7d828a;
+
+  /* Inverted arrangement: on a dark ground the bright hue is the readable one, so it becomes both
+     the fill and the text colour, and the fill carries near-black ink (7.6:1) instead of white. */
+  --brand: #4ca9ff;
+  --brand-ink: #8ac5ff;
+  --brand-fill: #4ca9ff;
+  --brand-fill-hover: #74bcff;
+  --brand-on: #06121c;
+  --ring: #4ca9ff;
+
+  --success: #3fcb90;
+  --success-ink: #6fdcac;
+  --warn: #e9a94b;
+  --warn-ink: #f0bd72;
+  --danger: #ff6d70;
+  --danger-ink: #ff9092;
+  --info: #79aad8;
+
+  --float: 0 22px 50px -18px rgb(0 0 0 / 0.66), 0 2px 10px -3px rgb(0 0 0 / 0.5);
+  --scrim: rgb(4 7 10 / 0.66);
 }
 
-.shell { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 76px 0; }
-.hero { display: flex; justify-content: space-between; gap: 48px; align-items: end; }
-.eyebrow { color: #5fe2c8; font-size: 12px; font-weight: 800; letter-spacing: .19em; }
-h1 { margin: 18px 0; font-size: clamp(48px, 8vw, 96px); line-height: .91; letter-spacing: -.065em; }
-.lede { max-width: 640px; color: #9eb0c5; font-size: 18px; line-height: 1.6; }
-.mode-card, .service-card, .boundary-card { border: 1px solid #1f3349; background: rgba(12, 27, 45, .78); box-shadow: 0 18px 60px rgba(0,0,0,.18); }
-.mode-card { min-width: 260px; padding: 24px; border-radius: 18px; }
-.mode-card span, .mode-card small { display: block; color: #8399b1; }
-.mode-card strong { display: block; margin: 10px 0 8px; color: #ffcf66; font-size: 34px; }
-.service-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 64px; }
-.service-card { padding: 24px; border-radius: 16px; }
-.service-card h2 { margin: 32px 0 6px; font-size: 22px; }
-.service-card p { margin: 0; color: #8399b1; }
-.status-row { display: flex; align-items: center; gap: 8px; color: #8399b1; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: #ffcf66; box-shadow: 0 0 14px #ffcf66; }
-.dot.healthy { background: #5fe2c8; box-shadow: 0 0 14px #5fe2c8; }
-.boundary-card { margin-top: 16px; padding: 34px; border-radius: 18px; }
-.boundary-card h2 { max-width: 760px; font-size: 28px; line-height: 1.3; }
-.flow { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 26px; color: #dceaff; }
-.flow span { padding: 10px 14px; border: 1px solid #29425d; border-radius: 999px; }
-.flow b { color: #5fe2c8; }
-.flow.muted { color: #8399b1; }
-.alert { margin-top: 30px; padding: 14px 18px; color: #ffd4d4; background: #421e28; border-radius: 10px; }
+@theme inline {
+  --font-sans: 'Vazirmatn Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-@media (max-width: 760px) {
-  .shell { padding: 44px 0; }
-  .hero { display: block; }
-  .mode-card { margin-top: 36px; }
-  .service-grid { grid-template-columns: 1fr; margin-top: 32px; }
+  /* Latin-only face for values that must stay unambiguous — prices, hashes, model versions, IDs.
+     Persian text is proportional; a monospace column of digits is easier to compare at a glance. */
+  --font-mono: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, monospace;
+
+  --color-ground: var(--ground);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-raised: var(--surface-raised);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+
+  --color-accent: var(--brand);
+  --color-accent-ink: var(--brand-ink);
+  --color-accent-fill: var(--brand-fill);
+  --color-accent-fill-hover: var(--brand-fill-hover);
+  --color-accent-on: var(--brand-on);
+
+  --color-success: var(--success);
+  --color-success-ink: var(--success-ink);
+  --color-warn: var(--warn);
+  --color-warn-ink: var(--warn-ink);
+  --color-danger: var(--danger);
+  --color-danger-ink: var(--danger-ink);
+  --color-info: var(--info);
+  --color-ring: var(--ring);
+  --color-scrim: var(--scrim);
+
+  /* The reference's single `--radius: 1rem`, opened into a scale so a chip and a panel are not
+     forced to the same curve. `rounded-xl` — controls, cards, nav items — is the 1rem one. */
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+
+  --shadow-float: var(--float);
+}
+
+/*
+ * `dir="rtl"` on <html> drives the whole mirror. Layout is written with logical utilities — ms/me,
+ * ps/pe, start/end, text-start/text-end, border-s/border-e — which resolve against the document
+ * direction, so nothing here needs an `rtl:` override. `npm run rtl:audit` fails the build if a
+ * physical one (pl-, mr-, left-, border-r, text-left …) ever appears. The `rtl:`/`ltr:` variants are
+ * reserved for visuals that are genuinely handed, like a chevron that must point at what it opens.
+ */
+@layer base {
+  html {
+    /* Persian glyphs sit taller than Latin ones; the default 1.5 crowds stacked labels. */
+    line-height: 1.7;
+    -webkit-text-size-adjust: 100%;
+    background-color: var(--ground);
+  }
+
+  body {
+    min-width: 320px;
+    min-height: 100dvh;
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--font-sans);
+    background-color: var(--ground);
+    text-rendering: optimizeLegibility;
+    font-synthesis: none;
+  }
+
+  /* Vazirmatn's Persian is a touch heavy at 700; 600 reads as bold without going muddy at 13px. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--brand) 24%, transparent);
+  }
+
+  /* Numeric input arrows are LTR-anchored widgets that look broken inside an RTL field, and every
+     numeric field here is typed rather than stepped. */
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+
+  /* A default scrollbar is a wide grey slab that reads as chrome. `color-scheme` already handles the
+     dark variant, so only the width and colour need saying. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+}
+
+@layer components {
+  /*
+   * Latin digits inside Persian prose.
+   *
+   * `direction: ltr` with `unicode-bidi: isolate` is the part that matters: a bare number inside an
+   * RTL paragraph is neutral-directional, so an adjacent `%`, `/` or `-` jumps to the wrong side of
+   * it. Isolating the run pins the punctuation to the number it belongs to.
+   */
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+
+  /* Same isolation for Latin text that is an identifier rather than a number — a username, an email,
+     a model name. Without it a trailing dot or parenthesis migrates across the string. */
+  .latin {
+    direction: ltr;
+    unicode-bidi: isolate;
+    text-align: start;
+  }
+
+  /* Micro-label above a value: the reference's small, wide-tracked caption. Persian has no case, so
+     tracking and weight carry what uppercase would in Latin. */
+  .micro-label {
+    font-size: 0.6875rem;
+    line-height: 1.5;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--ink-muted);
+  }
+}
+
+/*
+ * Applied to <html> for ~200ms around a theme switch, so the palette cross-fades instead of
+ * snapping. Scoped to a class rather than left on permanently: a global colour transition makes
+ * every hover feel laggy, and it would fight the drawer and popover animations.
+ */
+.theme-transition,
+.theme-transition *,
+.theme-transition *::before,
+.theme-transition *::after {
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    fill 180ms ease,
+    stroke 180ms ease !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-transition,
+  .theme-transition *,
+  .theme-transition *::before,
+  .theme-transition *::after {
+    transition: none !important;
+  }
 }

@@ -60,7 +60,19 @@ public abstract class BaseAuthController<TController, TUserEntity, TLoginHistory
         TLoginDto dto,
         CancellationToken ct)
     {
-        if (Request.Headers.TryGetValue("X-ClientIp", out var clientIp))
+        // The connection's own remote address wins over the header, and the ordering is the security
+        // control rather than a preference. `X-ClientIp` is set by the caller, so a client that wanted
+        // to poison the audit trail could name any address it liked and the login-history row would
+        // record it as fact. Reading the socket first means the recorded address is one the server
+        // observed; the header survives only as a fallback for a deployment sitting behind a proxy
+        // that rewrites the connection to a loopback address.
+        //
+        // A browser cannot discover its own public address, so before this the column was null for
+        // every sign-in from the dashboard — the header the client would have to send is one it has no
+        // way to fill in.
+        clientIpName = HttpContext.Connection.RemoteIpAddress?.ToString();
+
+        if (string.IsNullOrWhiteSpace(clientIpName) && Request.Headers.TryGetValue("X-ClientIp", out var clientIp))
             clientIpName = clientIp[0];
 
         if (Request.Headers.TryGetValue("X-ClientOS", out var clientOs))

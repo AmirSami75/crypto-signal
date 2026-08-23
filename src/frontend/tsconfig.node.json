@@ -4,7 +4,11 @@
     "skipLibCheck": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "noEmit": true
+    "noEmit": true,
+
+    // vite.config.ts runs in Node, not the browser: it reads process.env to pick the proxy target.
+    // This is the only project in the build that gets Node globals, which is the point of the split.
+    "types": ["node"]
   },
   "include": ["vite.config.ts"]
 }

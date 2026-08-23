@@ -7,6 +7,7 @@ using CryptoSignal.Api.Application.Options;
 using CryptoSignal.Api.Clients;
 using CryptoSignal.Api.Contracts;
 using CryptoSignal.Api.Domain;
+using CryptoSignal.Api.Domain.Constants;
 using CryptoSignal.Api.Domain.Models.Auth;
 using CryptoSignal.Auth.API.Attributes.Permissions;
 using CryptoSignal.Auth.Application.DTOs.Role;
@@ -30,9 +31,12 @@ using CryptoSignal.Infra.Tooling.Registrations;
 using CryptoSignal.Infra.Tooling.Swagger;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.Extensions.Options;
 using Serilog;
+using System.Globalization;
+using System.Threading.RateLimiting;
 
 // Aliased instead of importing Microsoft.Extensions.Diagnostics.HealthChecks wholesale: that
 // namespace declares its own HealthReport, which would collide with this API's probe contract.
@@ -240,6 +244,62 @@ services.AddFluentValidationModule([typeof(IApiMarker).Assembly, typeof(IAuthMar
 
 #endregion
 
+#region Rate Limiting
+
+// The only anonymous write endpoint is POST /api/v1/auth/register, and it is the only thing
+// limited here. Login needs no counterpart: it already locks an account after
+// AuthGlobalVariables.NumberOfWrongPasswordsAllowed failures, which bounds guessing against a
+// known username. Nothing comparable bounds how many *new* accounts a caller can create, so a
+// fixed window per client IP is the floor.
+services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // A rejection is produced by this middleware, upstream of both MVC and
+    // UnifiedExceptionHandlerMiddleware, so neither shapes the body — without this a client would
+    // get a bare 429 with no payload. Written by hand to keep the same IsSuccess/StatusCode/Message
+    // envelope every other error uses. WriteAsJsonAsync applies the app's web JSON defaults, so
+    // these names go out camelCase, matching MVC's success envelope.
+    options.OnRejected = async (context, ct) =>
+    {
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+            context.HttpContext.Response.Headers.RetryAfter =
+                ((int)retryAfter.TotalSeconds).ToString(CultureInfo.InvariantCulture);
+
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            new
+            {
+                IsSuccess = false,
+
+                // The literal HTTP status, not an ApiResultStatusCode: that enum has no 429
+                // member, and a body that disagreed with the status line would be worse than a
+                // number the client already understands.
+                StatusCode = StatusCodes.Status429TooManyRequests,
+                Message = "تعداد درخواست‌های شما بیش از حد مجاز است. لطفا کمی بعد دوباره تلاش کنید",
+            },
+            ct);
+    };
+
+    options.AddPolicy(RateLimitPolicies.Registration, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            // Partition by remote IP. Behind the compose stack's nginx this is the proxy address
+            // unless forwarded headers are honoured, which they are not today — so treat this as a
+            // coarse guard against a single unsophisticated source, not as per-user accounting.
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = RateLimitPolicies.RegistrationPermitLimit,
+                Window = TimeSpan.FromMinutes(RateLimitPolicies.RegistrationWindowMinutes),
+
+                // No queue: a caller over the limit should be told so immediately rather than have
+                // the request held open.
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            }));
+});
+
+#endregion
+
 #region CORS
 
 var allowedOrigins = config
@@ -298,6 +358,11 @@ try
     await app.UseDatabaseInitialization<CryptoSignalDbContext>();
 
     app.UseRouting();
+
+    // After UseRouting so the endpoint — and therefore its [EnableRateLimiting] policy — is known,
+    // and before authentication so an anonymous flood is rejected without touching the database.
+    app.UseRateLimiter();
+
     app.UseAuthentication();
     app.UseAuthorization();
 

@@ -37,10 +37,21 @@ public class AuthorizationOperationFilter : IOperationFilter
         // Microsoft.OpenApi 2.x models a reference as its own type rather than a Reference property
         // on the scheme, so the requirement points at the "Bearer" definition registered in
         // AddSwagger by id. The empty scope list is required by the spec for non-OAuth2 schemes.
+        //
+        // `context.Document` is the load-bearing argument, and leaving it off is silent: the reference
+        // constructs happily, the operation reports a requirement in memory, and the writer then drops
+        // it. OpenApiSecurityRequirement.SerializeInternal only emits a key whose reference can be
+        // resolved — `Target is not null`, or an id that is present in
+        // `Reference.HostDocument.Components.SecuritySchemes` — and a reference built without a host
+        // document satisfies neither. Every protected operation serialises as `"security": [{}]`,
+        // which per the spec is an *empty* requirement, i.e. anonymous. The Swagger UI reads that as
+        // "no auth here", shows no padlock, and never attaches the token however many times you paste
+        // it into the Authorize dialog. The document is passed by reference and resolution happens at
+        // write time, so it does not matter that Components is still being filled in right now.
         operation.Security ??= [];
         operation.Security.Add(new OpenApiSecurityRequirement
         {
-            [new OpenApiSecuritySchemeReference("Bearer")] = []
+            [new OpenApiSecuritySchemeReference("Bearer", context.Document)] = []
         });
     }
 }
