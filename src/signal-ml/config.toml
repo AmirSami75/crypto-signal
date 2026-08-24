@@ -1,13 +1,61 @@
 [market]
+# `symbol` is the market every single-market command speaks about — the legacy pipeline, and the default
+# for `signal` when no `--symbol` is given. `symbols` is the pooled training set: one model is fitted
+# across all of them, which is what lets it answer for a market it never saw. Every feature is scale-free
+# and the barrier distances are in ATR units, so a 1.5-ATR bet means the same thing on all seven.
 symbol = "BTCUSDT"
+symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT"]
 interval = "1h"
 start = "2020-01-01T00:00:00Z"
 end = ""
 raw_data_path = "data/BTCUSDT_1h.csv"
+data_dir = "data"
 
 [features]
 prediction_horizon = 6
 label_threshold = 0.0035
+
+[barrier]
+# How far forward a label is allowed to look for a barrier touch. 24 hourly candles is a day: long enough
+# for a 3-ATR move to happen, short enough that the bet is still about the setup rather than about drift.
+max_horizon = 24
+atr_window = 14
+
+# The bracket distances the model is trained to answer for, in ATR units. A request outside this span is
+# answered with an extrapolation warning rather than refused — see `ML_BARRIER_ATR_BOUNDS`.
+grid_atr = [0.5, 1.0, 1.5, 2.0, 3.0]
+min_risk_reward = 0.4
+max_risk_reward = 4.0
+
+# Pairs sampled per candle. Barrier-pair coverage is a property of the *pool*, not of each candle: across
+# seven markets and ~58k candles each, three pairs per candle still gives every pair in the grid well over
+# a hundred thousand rows. Six doubles the frame — measured at 2.4M rows and 5.1GB peak — to buy coverage
+# that is already saturated, which on a 16GB machine is the difference between fitting and swapping.
+pairs_per_candle = 3
+
+# The block nothing fits, calibrates or selects on, cut by timestamp with a `max_horizon` purge gap.
+holdout_fraction = 0.2
+
+# Inside what remains: fit, then fit the calibration correction on later candles, then decide on later
+# candles still whether the correction earned its place. Isotonic is *attempted*; the shipped method is
+# recorded in the bundle, and on this model the raw estimator has so far won.
+calibration_blocks = [0.6, 0.2, 0.2]
+calibration_method = "isotonic"
+
+# Per-symbol bundles trained on that symbol's own history. Each is an optimisation over the pooled model,
+# never a prerequisite: the registry falls back to pooled when one is missing or broken.
+per_symbol_overrides = ["BTCUSDT"]
+
+# The one fixed bracket the holdout backtest walks. One pair, because averaging a 0.5-ATR bet and a 3-ATR
+# bet into a single equity curve answers nothing.
+backtest_take_profit_atr = 1.5
+backtest_stop_loss_atr = 1.0
+backtest_minimum_confidence = 0.5
+
+# The barrier model answers both sides of a bet from one estimator, so the report measures both. This is
+# not `backtest.allow_short` below, which belongs to the legacy close-to-close model where SELL means exit
+# to cash. At serving time the caller decides per request.
+allow_short = true
 
 [model]
 test_fraction = 0.20
@@ -27,6 +75,10 @@ allow_short = false
 
 [output]
 artifact_dir = "artifacts"
+# The serving registry. `ML_MODEL_DIR` points the engine here, and it loads every `*.joblib` it finds, so
+# reports and CSVs stay in `artifact_dir` and only bundles land in `model_dir`.
+model_dir = "artifacts/models"
+legacy_dir = "artifacts/legacy"
 
 [network]
 # V2RayN local HTTP proxy. Use "off" only when direct Binance access works.

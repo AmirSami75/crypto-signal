@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import datetime, timezone
-import json
 from pathlib import Path
 import time
 from typing import Any
@@ -11,51 +10,33 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from .backtest import run_backtest
-from . import __version__
-from .config import AppConfig
-from .data import (
+from ..evaluation import run_backtest
+from .. import __version__
+from ..config import AppConfig
+from ..data import (
     fetch_historical_ohlcv,
     fetch_recent_ohlcv,
     load_ohlcv,
     save_ohlcv,
     validate_ohlcv,
 )
-from .features import make_features, make_supervised
-from .model import (
+from ..features import WARMUP_COLUMNS, build_features
+from ..labeling import build_horizon_dataset
+from ..modeling import (
     ALL_CLASSES,
+    CalibrationReport,
     aligned_probabilities,
     classification_metrics,
     fit_model,
     probabilities_to_signals,
     walk_forward_validation,
 )
-from .log_setup import get_logger
+from ..log_setup import get_logger
+from .artifacts import write_json
 
 
 SIGNAL_NAMES = {-1: "SELL", 0: "HOLD", 1: "BUY"}
 logger = get_logger(__name__)
-
-
-def _json_default(value: Any) -> Any:
-    if isinstance(value, Path):
-        return str(value)
-    if isinstance(value, (np.integer,)):
-        return int(value)
-    if isinstance(value, (np.floating,)):
-        return float(value)
-    if isinstance(value, (pd.Timestamp, datetime)):
-        return value.isoformat()
-    raise TypeError(f"Cannot serialize {type(value).__name__}")
-
-
-def write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(payload, indent=2, sort_keys=True, default=_json_default),
-        encoding="utf-8",
-    )
-    logger.debug("JSON artifact written | path=%s", path)
 
 
 def download_data(config: AppConfig) -> dict[str, Any]:
@@ -156,7 +137,7 @@ def _config_snapshot(config: AppConfig) -> dict[str, Any]:
         "features": asdict(config.features),
         "model": asdict(config.model),
         "backtest": asdict(config.backtest),
-        "output": {"artifact_dir": str(config.output.artifact_dir)},
+        "output": {"artifact_dir": str(config.output.legacy_dir)},
         "network": {
             "proxy_enabled": config.network.proxy_url is not None,
             "proxy_url": config.network.proxy_url,
@@ -169,11 +150,21 @@ def _config_snapshot(config: AppConfig) -> dict[str, Any]:
     }
 
 
-def _report_markdown(metadata: dict[str, Any]) -> str:
+def _report_markdown(
+    metadata: dict[str, Any],
+    calibration: CalibrationReport | None = None,
+) -> str:
+    """Render the run report.
+
+    `calibration` is optional because this pipeline trains the legacy close-to-close model, whose
+    argmax label carries no confidence for anyone to threshold on. The barrier path produces one and
+    passes it; the section is simply absent otherwise rather than rendered empty, since a calibration
+    heading with nothing under it reads as "we checked and it was fine".
+    """
     test = metadata["strict_holdout"]["classification"]
     strategy = metadata["strict_holdout"]["backtest"]["strategy"]
     benchmark = metadata["strict_holdout"]["backtest"]["buy_and_hold"]
-    return f"""# Model run report
+    report = f"""# Model run report
 
 Generated: {metadata['trained_at_utc']}
 
@@ -203,6 +194,9 @@ These are research results, not a promise of future performance. The holdout mus
 reused repeatedly for model selection. After any strategy change, begin a new forward paper-
 trading window.
 """
+    if calibration is not None:
+        report += "\n" + calibration.markdown()
+    return report
 
 
 def train_and_backtest(config: AppConfig, refresh: bool = False) -> dict[str, Any]:
@@ -215,7 +209,7 @@ def train_and_backtest(config: AppConfig, refresh: bool = False) -> dict[str, An
     )
     raw = _load_or_download(config, refresh=refresh)
     logger.info("Stage 1/7 complete: market data ready | rows=%s", f"{len(raw):,}")
-    dataset, feature_columns = make_supervised(
+    dataset, feature_columns = build_horizon_dataset(
         raw,
         prediction_horizon=config.features.prediction_horizon,
         threshold=config.features.label_threshold,
@@ -284,7 +278,11 @@ def train_and_backtest(config: AppConfig, refresh: bool = False) -> dict[str, An
 
     logger.info("Training production model on every labeled row")
     production_model = fit_model(dataset[feature_columns], dataset["target"], config.model)
-    artifact_dir = config.output.artifact_dir
+    # The legacy run writes into its own subdirectory: it produces a `REPORT.md` and a
+    # `metadata.json` of the same names as the barrier run's, and the two describe different models
+    # answering different questions. One overwriting the other silently is how a reader ends up
+    # judging the barrier model by a close-to-close backtest.
+    artifact_dir = config.output.legacy_dir
     artifact_dir.mkdir(parents=True, exist_ok=True)
     trained_at = datetime.now(tz=timezone.utc).isoformat()
     elapsed = time.perf_counter() - started
@@ -355,7 +353,7 @@ def latest_signal(config: AppConfig, use_network: bool = True) -> dict[str, Any]
         config.market.interval,
         use_network,
     )
-    artifact_path = config.output.artifact_dir / "model.joblib"
+    artifact_path = config.output.legacy_dir / "model.joblib"
     if not artifact_path.exists():
         raise FileNotFoundError("Train the model before requesting a signal")
     bundle = joblib.load(artifact_path)
@@ -387,19 +385,13 @@ def latest_signal(config: AppConfig, use_network: bool = True) -> dict[str, Any]
         raw = load_ohlcv(config.market.raw_data_path, config.market.interval)
         data_source = "local CSV"
 
-    features = make_features(raw)
+    features = build_features(raw)
     # The model handles occasional missing indicator values natively. Only require
     # the long-window features that establish the warm-up period.
-    readiness_columns = [
-        "log_return_1",
-        "volatility_168",
-        "sma_ratio_168",
-        "volume_ratio_168",
-    ]
-    latest_index = features.dropna(subset=readiness_columns).index.max()
+    latest_index = features.frame.dropna(subset=list(WARMUP_COLUMNS)).index.max()
     if pd.isna(latest_index):
         raise ValueError("Not enough recent candles to calculate all features")
-    latest_row = features.loc[[int(latest_index)], feature_columns]
+    latest_row = features.frame.loc[[int(latest_index)], feature_columns]
     probabilities = aligned_probabilities(bundle["model"], latest_row)
     numeric_signal = int(
         probabilities_to_signals(
@@ -425,7 +417,7 @@ def latest_signal(config: AppConfig, use_network: bool = True) -> dict[str, Any]
         "sell_semantics": bundle["metadata"]["sell_semantics"],
         "warning": "Research signal only; not financial advice or an execution instruction.",
     }
-    write_json(config.output.artifact_dir / "latest_signal.json", payload)
+    write_json(config.output.legacy_dir / "latest_signal.json", payload)
     logger.info(
         "Signal pipeline finished | signal=%s | SELL=%.2f%% | HOLD=%.2f%% | BUY=%.2f%% | elapsed=%.3fs",
         payload["signal"],

@@ -25,9 +25,43 @@ def _boolean(name: str, default: bool) -> bool:
     raise ValueError(f"{name} must be true or false")
 
 
+def _float(name: str, default: float, minimum: float, maximum: float) -> float:
+    raw = os.getenv(name, repr(default))
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a number") from exc
+    if not minimum <= value <= maximum:
+        raise ValueError(f"{name} must be between {minimum} and {maximum}")
+    return value
+
+
 def _optional_path(name: str) -> Path | None:
     raw = os.getenv(name, "").strip()
     return Path(raw).resolve() if raw else None
+
+
+def _atr_bounds(name: str, default: tuple[float, float]) -> tuple[float, float]:
+    """The trained barrier grid's span, as `"low,high"`.
+
+    Not a validation limit — a request outside this range is answered with an extrapolation note in
+    `warning`, because refusing a 5-ATR stop on a model trained to 4 would be a worse answer than a
+    flagged one. It is reported in `GetModelInfo` so a caller can see the edge of the training set
+    rather than infer it from a warning after the fact.
+    """
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    parts = [part.strip() for part in raw.split(",")]
+    if len(parts) != 2:
+        raise ValueError(f"{name} must be two comma-separated numbers, e.g. 0.5,4.0")
+    try:
+        low, high = float(parts[0]), float(parts[1])
+    except ValueError as exc:
+        raise ValueError(f"{name} must be two comma-separated numbers, e.g. 0.5,4.0") from exc
+    if not 0 < low < high:
+        raise ValueError(f"{name} must satisfy 0 < low < high, got {low} and {high}")
+    return low, high
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,7 +72,19 @@ class EngineSettings:
     port: int
     workers: int
     shutdown_grace_seconds: int
-    model_path: Path
+
+    #: Directory of `<SYMBOL>_<INTERVAL>.joblib` bundles plus an optional `_pooled_<INTERVAL>.joblib`
+    #: wildcard. Read at every resolution rather than at start-up, so a replaced artifact on a mounted
+    #: volume is picked up without a restart.
+    model_directory: Path
+
+    #: The pre-registry single artifact, still honoured as a fallback so an existing deployment keeps
+    #: working after the upgrade. A directory bundle always wins over it.
+    model_path: Path | None
+
+    default_max_holding_periods: int
+    minimum_confidence: float
+    barrier_atr_bounds: tuple[float, float]
     minimum_candles: int
     maximum_candles: int
     max_receive_message_mb: int
@@ -53,9 +99,12 @@ class EngineSettings:
     @classmethod
     def from_environment(cls) -> EngineSettings:
         environment = os.getenv("ML_ENVIRONMENT", "production").strip().lower()
+        # SANDBOX sits between the two: real venue, real order lifecycle, no real money. It is a
+        # distinct mode rather than a flavour of PAPER because `LIVE_TRADING_SAFETY.md` binds every
+        # record to exactly one mode, and a sandbox fill must never land in a paper portfolio.
         operating_mode = os.getenv("OPERATING_MODE", "PAPER").strip().upper()
-        if operating_mode not in {"PAPER", "LIVE"}:
-            raise ValueError("OPERATING_MODE must be PAPER or LIVE")
+        if operating_mode not in {"PAPER", "SANDBOX", "LIVE"}:
+            raise ValueError("OPERATING_MODE must be PAPER, SANDBOX or LIVE")
 
         log_level = os.getenv("ML_LOG_LEVEL", "INFO").strip().upper()
         if log_level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
@@ -85,9 +134,21 @@ class EngineSettings:
             port=_integer("ML_GRPC_PORT", 50051, 1, 65_535),
             workers=_integer("ML_GRPC_WORKERS", 8, 1, 128),
             shutdown_grace_seconds=_integer("ML_SHUTDOWN_GRACE_SECONDS", 20, 0, 300),
-            model_path=Path(
-                os.getenv("ML_MODEL_PATH", "artifacts/model.joblib")
-            ).resolve(),
+            model_directory=Path(os.getenv("ML_MODEL_DIR", "artifacts/models")).resolve(),
+            # Unset by default now that the registry exists. Naming a path that is not there would put
+            # a permanent "artifacts/model.joblib is missing" entry in `rejections()`, which is noise
+            # for every deployment that has moved to the directory.
+            model_path=_optional_path("ML_MODEL_PATH"),
+            # 0 means "whatever horizon the bundle was labelled at". Deferring to the model is the right
+            # default: a holding limit longer than the labels were computed over asks the model about a
+            # bet it never saw, and one shorter silently truncates the bet it was trained on.
+            default_max_holding_periods=_integer("ML_DEFAULT_MAX_HOLDING_PERIODS", 0, 0, 10_000),
+            # The floor applied when a request does not set its own. 0.0 lets every priced side through
+            # and leaves the decision to expected value, which is the honest default for an engine that
+            # does not know the caller's risk appetite; the orchestrator's risk engine is where a
+            # policy floor belongs.
+            minimum_confidence=_float("ML_MINIMUM_CONFIDENCE", 0.0, 0.0, 0.999),
+            barrier_atr_bounds=_atr_bounds("ML_BARRIER_ATR_BOUNDS", (0.5, 4.0)),
             minimum_candles=minimum_candles,
             maximum_candles=maximum_candles,
             max_receive_message_mb=_integer("ML_MAX_RECEIVE_MESSAGE_MB", 16, 1, 256),

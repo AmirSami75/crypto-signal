@@ -1,3 +1,19 @@
+"""Process entry point: settings in, a listening gRPC server out.
+
+Composition happens here and only here. The registry, the evaluator and the two application services
+are constructed once and shared across every worker thread, which is safe because none of them holds
+per-request state — the registry serialises inference behind a per-model lock, and everything above it
+is a pure function of the request.
+
+The one judgement call worth naming: **a start-up with no servable model is a warning, not a crash.**
+It is tempting to refuse to boot, but the model directory is a mounted volume and the orchestrator
+retries a failed container: a crash-loop turns "the artifact has not been copied in yet" into a service
+that is never reachable long enough for anyone to copy it in. Instead the server comes up, reports an
+empty inventory, answers `GetCapabilities` honestly, and fails individual requests with
+FAILED_PRECONDITION until an artifact appears. Resolution reads the directory per request, so nothing
+needs restarting once one does.
+"""
+
 from __future__ import annotations
 
 from concurrent import futures
@@ -9,10 +25,13 @@ import grpc
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 from grpc_reflection.v1alpha import reflection
 
-from crypto_signal_engine.application.inference import InferenceService
+from crypto_signal_engine import __version__
+from crypto_signal_engine.application.bot_advisor import BotAdvisorService
+from crypto_signal_engine.application.evaluator import MarketEvaluator
+from crypto_signal_engine.application.signal_service import SignalService
 from crypto_signal_engine.contracts.v1 import ml_engine_pb2, ml_engine_pb2_grpc
-from crypto_signal_engine.infrastructure.model_repository import JoblibModelRepository
-from crypto_signal_engine.logging import configure_logging
+from crypto_signal_engine.infrastructure.model_registry import ModelRegistry
+from crypto_signal_engine.log_setup import configure_logging
 from crypto_signal_engine.settings import EngineSettings
 from crypto_signal_engine.transport.grpc.servicer import MlEngineServicer, SERVICE_NAME
 
@@ -20,14 +39,79 @@ from crypto_signal_engine.transport.grpc.servicer import MlEngineServicer, SERVI
 logger = logging.getLogger(__name__)
 
 
-def build_server(settings: EngineSettings) -> tuple[grpc.Server, health.HealthServicer]:
-    repository = JoblibModelRepository(settings.model_path)
-    model_info = repository.load()
-    inference = InferenceService(
-        repository,
+def build_services(
+    settings: EngineSettings,
+) -> tuple[ModelRegistry, SignalService, BotAdvisorService]:
+    """The application layer, wired to the model registry.
+
+    Returns the three objects it composed rather than assembled inline, so a test can drive the services
+    directly without binding a port. The registry comes back too — start-up logging needs it, and
+    reaching it through `service._evaluator._registry` would make two layers of encapsulation notional.
+    """
+    registry = ModelRegistry(settings.model_directory, single_artifact=settings.model_path)
+    evaluator = MarketEvaluator(
+        registry,
         minimum_candles=settings.minimum_candles,
         maximum_candles=settings.maximum_candles,
+        default_max_holding_periods=settings.default_max_holding_periods,
+        default_minimum_confidence=settings.minimum_confidence,
+        barrier_atr_bounds=settings.barrier_atr_bounds,
     )
+    signals = SignalService(
+        evaluator,
+        service_name=SERVICE_NAME,
+        service_version=__version__,
+        operating_mode=settings.operating_mode,
+    )
+    return registry, signals, BotAdvisorService(evaluator)
+
+
+def _log_inventory(registry: ModelRegistry) -> None:
+    """Report what the engine can actually answer for, before the first request asks.
+
+    `available()` loads every artifact, so this doubles as an eager validation pass: a bundle whose
+    metadata is wrong is named at start-up rather than at 3am on the request that needed it. Rejections
+    are logged at WARNING by the registry itself; the count is repeated here so a healthy line and a
+    degraded one are distinguishable at a glance.
+    """
+    descriptors = registry.available()
+    rejected = registry.rejections()
+    if not descriptors:
+        logger.warning(
+            "No servable model | directory=%s | rejected=%s | "
+            "signal requests will fail with FAILED_PRECONDITION until an artifact appears",
+            registry.directory,
+            len(rejected),
+        )
+        return
+
+    logger.info(
+        "Model inventory | servable=%s | rejected=%s | directory=%s",
+        len(descriptors),
+        len(rejected),
+        registry.directory,
+    )
+    for descriptor in descriptors:
+        # A pooled bundle covers every symbol, so listing its training set would misreport its reach;
+        # "*" is what `GetCapabilities` says and what the log should say too.
+        coverage = "*" if descriptor.is_pooled else ",".join(descriptor.symbols)
+        logger.info(
+            "  %s %s | model=%s | version=%s | features=%s | atr_window=%s | max_horizon=%s | "
+            "calibration=%s | trained=%s",
+            coverage,
+            descriptor.interval,
+            descriptor.model_id,
+            descriptor.model_version[:12],
+            descriptor.feature_count,
+            descriptor.atr_window,
+            descriptor.max_horizon,
+            descriptor.calibration_method or "unrecorded",
+            descriptor.trained_at.date().isoformat(),
+        )
+
+
+def build_server(settings: EngineSettings) -> tuple[grpc.Server, health.HealthServicer]:
+    registry, signals, advisor = build_services(settings)
     options = (
         ("grpc.max_receive_message_length", settings.max_receive_message_mb * 1_048_576),
         ("grpc.max_send_message_length", settings.max_send_message_mb * 1_048_576),
@@ -41,11 +125,7 @@ def build_server(settings: EngineSettings) -> tuple[grpc.Server, health.HealthSe
         options=options,
     )
     ml_engine_pb2_grpc.add_MlEngineServiceServicer_to_server(
-        MlEngineServicer(
-            inference,
-            minimum_candles=settings.minimum_candles,
-            maximum_candles=settings.maximum_candles,
-        ),
+        MlEngineServicer(signals, advisor),
         server,
     )
     health_service = health.HealthServicer()
@@ -93,14 +173,16 @@ def build_server(settings: EngineSettings) -> tuple[grpc.Server, health.HealthSe
             "rpc_method": SERVICE_NAME,
         },
     )
+    # The operating mode is on the start-up line because every record the orchestrator writes is bound
+    # to one, and "which mode is this process serving" is the first question asked of a surprising fill.
     logger.info(
-        "Loaded production model %s version=%s symbol=%s interval=%s transport=%s",
-        model_info.model_id,
-        model_info.model_version[:12],
-        model_info.symbol,
-        model_info.interval,
+        "ML engine serving | version=%s | mode=%s | transport=%s | workers=%s",
+        __version__,
+        settings.operating_mode,
         transport,
+        settings.workers,
     )
+    _log_inventory(registry)
     return server, health_service
 
 

@@ -1,3 +1,15 @@
+"""The research CLI: download candles, train the barrier model, ask it about one bet.
+
+The default commands drive the **barrier-conditional** pipeline — the model the gRPC engine serves. The
+`-legacy` variants drive the original close-to-close model, which is kept only as the baseline its
+successor is measured against. They are separate commands rather than a flag because they train different
+models with different labels into different directories, and a single `train --legacy` would make the
+question "which model is in artifacts?" depend on shell history.
+
+Training runs on the host, never in the container: only `testnet.binance.vision` is reachable from inside
+the compose network, and the mainnet history these models learn from is not.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -8,12 +20,22 @@ from typing import Any
 
 from .config import load_config
 from .human_output import (
+    format_barrier_download_summary,
+    format_barrier_signal_summary,
+    format_barrier_training_summary,
     format_download_summary,
     format_signal_summary,
     format_training_summary,
 )
 from .log_setup import configure_logging, get_logger
-from .pipeline import download_data, latest_signal, train_and_backtest
+from .training import (
+    download_barrier_candles,
+    download_data,
+    latest_barrier_signal,
+    latest_signal,
+    train_and_backtest,
+    train_barrier_model,
+)
 
 
 def _print_json(payload: dict[str, Any]) -> None:
@@ -33,25 +55,64 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    subparsers.add_parser("download", help="Download closed historical Binance candles")
-    train_parser = subparsers.add_parser("train", help="Train, validate, and backtest")
+    download_parser = subparsers.add_parser(
+        "download", help="Download closed historical candles for every configured symbol"
+    )
+    download_parser.add_argument(
+        "--refresh", action="store_true", help="Redownload even when a CSV already exists"
+    )
+
+    train_parser = subparsers.add_parser(
+        "train", help="Train the barrier-conditional model and write the serving registry"
+    )
     train_parser.add_argument(
         "--refresh", action="store_true", help="Redownload historical data first"
     )
-    signal_parser = subparsers.add_parser("signal", help="Generate the newest signal")
+
+    signal_parser = subparsers.add_parser(
+        "signal", help="Ask the trained model about one requested bet"
+    )
+    signal_parser.add_argument(
+        "--symbol", help="Market to ask about; defaults to the configured primary symbol"
+    )
+    signal_parser.add_argument(
+        "--take-profit",
+        type=float,
+        default=2.0,
+        help="Requested take-profit distance, in percent of the entry price",
+    )
+    signal_parser.add_argument(
+        "--stop-loss",
+        type=float,
+        default=1.0,
+        help="Requested stop-loss distance, in percent of the entry price",
+    )
     signal_parser.add_argument(
         "--offline",
         action="store_true",
         help="Use the local CSV instead of requesting recent candles",
     )
-    subparsers.add_parser(
-        "demo", help="Train on bundled synthetic data and generate an offline signal"
+
+    legacy_train = subparsers.add_parser(
+        "train-legacy", help="Train the original close-to-close model into artifacts/legacy"
     )
-    run_parser = subparsers.add_parser("run-all", help="Download, train, and signal")
-    run_parser.add_argument(
-        "--offline-signal",
+    legacy_train.add_argument(
+        "--refresh", action="store_true", help="Redownload historical data first"
+    )
+    legacy_signal = subparsers.add_parser(
+        "signal-legacy", help="Generate the newest close-to-close signal"
+    )
+    legacy_signal.add_argument(
+        "--offline",
         action="store_true",
-        help="Use downloaded local data for the final signal",
+        help="Use the local CSV instead of requesting recent candles",
+    )
+    subparsers.add_parser(
+        "download-legacy", help="Download candles for the primary symbol only"
+    )
+    subparsers.add_parser(
+        "demo",
+        help="Train and signal on the bundled synthetic market, without touching the network",
     )
     return parser
 
@@ -70,49 +131,57 @@ def main(argv: list[str] | None = None) -> None:
     )
     try:
         if args.command == "download":
+            downloaded = download_barrier_candles(config, refresh=args.refresh)
+            if args.json:
+                _print_json(downloaded)
+            else:
+                print(format_barrier_download_summary(downloaded))
+        elif args.command == "train":
+            trained = train_barrier_model(config, refresh=args.refresh)
+            if args.json:
+                _print_json(trained)
+            else:
+                print(format_barrier_training_summary(trained))
+        elif args.command == "signal":
+            signal = latest_barrier_signal(
+                config,
+                symbol=args.symbol,
+                take_profit_percent=args.take_profit,
+                stop_loss_percent=args.stop_loss,
+                offline=args.offline,
+            )
+            if args.json:
+                _print_json(signal)
+            else:
+                print(format_barrier_signal_summary(signal))
+        elif args.command == "demo":
+            # Offline end to end, so the walkthrough works on a machine with no proxy and no exchange
+            # access. `config.demo.toml` points at bundled synthetic candles.
+            trained = train_barrier_model(config, refresh=False)
+            signal = latest_barrier_signal(config, offline=True)
+            if args.json:
+                _print_json({"training": trained, "latest_signal": signal})
+            else:
+                print(format_barrier_training_summary(trained))
+                print("\n")
+                print(format_barrier_signal_summary(signal))
+        elif args.command == "download-legacy":
             downloaded = download_data(config)
             if args.json:
                 _print_json(downloaded)
             else:
                 print(format_download_summary(downloaded))
-        elif args.command == "train":
+        elif args.command == "train-legacy":
             trained = train_and_backtest(config, refresh=args.refresh)
             if args.json:
                 _print_json(trained)
             else:
-                print(format_training_summary(trained, config.output.artifact_dir))
-        elif args.command == "signal":
+                print(format_training_summary(trained, config.output.legacy_dir))
+        elif args.command == "signal-legacy":
             signal = latest_signal(config, use_network=not args.offline)
             if args.json:
                 _print_json(signal)
             else:
-                print(format_signal_summary(signal))
-        elif args.command == "demo":
-            trained = train_and_backtest(config, refresh=False)
-            signal = latest_signal(config, use_network=False)
-            if args.json:
-                _print_json({"training": trained, "latest_signal": signal})
-            else:
-                print(format_training_summary(trained, config.output.artifact_dir))
-                print("\n")
-                print(format_signal_summary(signal))
-        elif args.command == "run-all":
-            downloaded = download_data(config)
-            trained = train_and_backtest(config, refresh=False)
-            signal = latest_signal(config, use_network=not args.offline_signal)
-            if args.json:
-                _print_json(
-                    {
-                        "download": downloaded,
-                        "training": trained,
-                        "latest_signal": signal,
-                    }
-                )
-            else:
-                print(format_download_summary(downloaded))
-                print("\n")
-                print(format_training_summary(trained, config.output.artifact_dir))
-                print("\n")
                 print(format_signal_summary(signal))
         else:
             raise AssertionError(f"Unknown command: {args.command}")

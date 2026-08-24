@@ -4,10 +4,33 @@ interval = "1h"
 start = "2022-01-01T00:00:00Z"
 end = ""
 raw_data_path = "data/DEMOUSDT_1h.csv"
+symbols = ["DEMOUSDT"]
+data_dir = "data"
 
 [features]
 prediction_horizon = 6
 label_threshold = 0.0035
+
+[barrier]
+# Deliberately smaller than the real run: the bundled market is 6,000 synthetic candles, and the point of
+# the demo is that it finishes offline in seconds on any machine.
+max_horizon = 12
+atr_window = 14
+grid_atr = [0.5, 1.0, 2.0]
+min_risk_reward = 0.4
+max_risk_reward = 4.0
+pairs_per_candle = 3
+holdout_fraction = 0.2
+calibration_blocks = [0.6, 0.2, 0.2]
+calibration_method = "isotonic"
+backtest_take_profit_atr = 1.5
+backtest_stop_loss_atr = 1.0
+backtest_minimum_confidence = 0.5
+
+# The barrier model answers both sides of a bet from one estimator, so the report measures both. This is
+# not `backtest.allow_short` below, which belongs to the legacy close-to-close model where SELL means exit
+# to cash. At serving time the caller decides per request.
+allow_short = true
 
 [model]
 test_fraction = 0.20
@@ -27,6 +50,8 @@ allow_short = false
 
 [output]
 artifact_dir = "artifacts/demo"
+model_dir = "artifacts/demo/models"
+legacy_dir = "artifacts/demo/legacy"
 
 [network]
 # The offline demo does not call the network, but real commands use this proxy.

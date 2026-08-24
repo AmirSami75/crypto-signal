@@ -30,9 +30,14 @@ WORKDIR /app
 
 COPY --from=build /wheels /wheels
 RUN python -m pip install --no-cache-dir --no-index --find-links=/wheels \
-        'crypto-ml-signal[grpc]==0.3.0' \
+        'crypto-ml-signal[grpc]==0.4.0' \
     && rm -rf /wheels
-COPY src/signal-ml/artifacts/model.joblib ./artifacts/model.joblib
+# The model registry, not a single artifact: the engine resolves `<SYMBOL>_<INTERVAL>.joblib` and a
+# pooled `_pooled_<INTERVAL>.joblib` per request, so which markets an image can answer for is decided by
+# what is in this directory. Copying the directory rather than a named file also means a build with no
+# trained bundle produces a container that starts, reports an empty inventory and refuses signals — not
+# one that fails to build, and not one that pretends a stale artifact is current.
+COPY src/signal-ml/artifacts/models ./artifacts/models
 RUN addgroup --system app && adduser --system --ingroup app --home /app app \
     && chown -R app:app /app
 USER app

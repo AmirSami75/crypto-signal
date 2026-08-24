@@ -26,7 +26,24 @@ if _version_not_supported:
 
 
 class MlEngineServiceStub:
-    """Private, versioned contract between the .NET orchestrator and Python ML engine.
+    """Private, versioned contract between the .NET orchestrator and the Python ML engine.
+
+    The engine is an advisor. It answers two questions — "what is the signal for this market at these
+    barriers" (GetSignal) and "given this bot's configuration and its open position, what now"
+    (EvaluateBotDecision) — and nothing it returns is an instruction to trade. Authorization,
+    position sizing, order submission and all durable state belong to the .NET service; see
+    docs/ARCHITECTURE.md and docs/LIVE_TRADING_SAFETY.md.
+
+    RETIRED, DO NOT REINTRODUCE: `enum Signal { SIGNAL_SELL, SIGNAL_HOLD, SIGNAL_BUY }` and
+    `message SignalProbabilities`, along with the `PredictSignal` RPC that carried them. In that
+    contract SELL meant "exit to cash", not "open a short". Reusing those names for directional
+    trading would silently invert the meaning of a stored decision, so they are gone rather than
+    redefined. Directional intent is `TradeDirection`.
+
+    PRICES AND PERCENTAGES CROSS THIS BOUNDARY AS DECIMAL STRINGS, never as `double`. The .NET side
+    holds money as `decimal` and the audit chain requires that the price the engine computed is the
+    same price the database records, byte for byte. Only dimensionless quantities — probabilities,
+    ratios, ATR multiples, timings — are floating point.
     """
 
     def __init__(self, channel):
@@ -45,15 +62,37 @@ class MlEngineServiceStub:
                 request_serializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetModelInfoRequest.SerializeToString,
                 response_deserializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetModelInfoResponse.FromString,
                 _registered_method=True)
-        self.PredictSignal = channel.unary_unary(
-                '/crypto_signal.ml.v1.MlEngineService/PredictSignal',
-                request_serializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.PredictSignalRequest.SerializeToString,
-                response_deserializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.PredictSignalResponse.FromString,
+        self.GetSignal = channel.unary_unary(
+                '/crypto_signal.ml.v1.MlEngineService/GetSignal',
+                request_serializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetSignalRequest.SerializeToString,
+                response_deserializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetSignalResponse.FromString,
+                _registered_method=True)
+        self.EvaluateBotDecision = channel.unary_unary(
+                '/crypto_signal.ml.v1.MlEngineService/EvaluateBotDecision',
+                request_serializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.EvaluateBotDecisionRequest.SerializeToString,
+                response_deserializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.EvaluateBotDecisionResponse.FromString,
                 _registered_method=True)
 
 
 class MlEngineServiceServicer:
-    """Private, versioned contract between the .NET orchestrator and Python ML engine.
+    """Private, versioned contract between the .NET orchestrator and the Python ML engine.
+
+    The engine is an advisor. It answers two questions — "what is the signal for this market at these
+    barriers" (GetSignal) and "given this bot's configuration and its open position, what now"
+    (EvaluateBotDecision) — and nothing it returns is an instruction to trade. Authorization,
+    position sizing, order submission and all durable state belong to the .NET service; see
+    docs/ARCHITECTURE.md and docs/LIVE_TRADING_SAFETY.md.
+
+    RETIRED, DO NOT REINTRODUCE: `enum Signal { SIGNAL_SELL, SIGNAL_HOLD, SIGNAL_BUY }` and
+    `message SignalProbabilities`, along with the `PredictSignal` RPC that carried them. In that
+    contract SELL meant "exit to cash", not "open a short". Reusing those names for directional
+    trading would silently invert the meaning of a stored decision, so they are gone rather than
+    redefined. Directional intent is `TradeDirection`.
+
+    PRICES AND PERCENTAGES CROSS THIS BOUNDARY AS DECIMAL STRINGS, never as `double`. The .NET side
+    holds money as `decimal` and the audit chain requires that the price the engine computed is the
+    same price the database records, byte for byte. Only dimensionless quantities — probabilities,
+    ratios, ATR multiples, timings — are floating point.
     """
 
     def GetCapabilities(self, request, context):
@@ -68,8 +107,16 @@ class MlEngineServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def PredictSignal(self, request, context):
-        """Missing associated documentation comment in .proto file."""
+    def GetSignal(self, request, context):
+        """One-off signal for a requested market at requested barriers.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def EvaluateBotDecision(self, request, context):
+        """Stateless bot advice. Everything the engine is allowed to know arrives in the request.
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -87,10 +134,15 @@ def add_MlEngineServiceServicer_to_server(servicer, server):
                     request_deserializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetModelInfoRequest.FromString,
                     response_serializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetModelInfoResponse.SerializeToString,
             ),
-            'PredictSignal': grpc.unary_unary_rpc_method_handler(
-                    servicer.PredictSignal,
-                    request_deserializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.PredictSignalRequest.FromString,
-                    response_serializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.PredictSignalResponse.SerializeToString,
+            'GetSignal': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetSignal,
+                    request_deserializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetSignalRequest.FromString,
+                    response_serializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetSignalResponse.SerializeToString,
+            ),
+            'EvaluateBotDecision': grpc.unary_unary_rpc_method_handler(
+                    servicer.EvaluateBotDecision,
+                    request_deserializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.EvaluateBotDecisionRequest.FromString,
+                    response_serializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.EvaluateBotDecisionResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -101,7 +153,24 @@ def add_MlEngineServiceServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class MlEngineService:
-    """Private, versioned contract between the .NET orchestrator and Python ML engine.
+    """Private, versioned contract between the .NET orchestrator and the Python ML engine.
+
+    The engine is an advisor. It answers two questions — "what is the signal for this market at these
+    barriers" (GetSignal) and "given this bot's configuration and its open position, what now"
+    (EvaluateBotDecision) — and nothing it returns is an instruction to trade. Authorization,
+    position sizing, order submission and all durable state belong to the .NET service; see
+    docs/ARCHITECTURE.md and docs/LIVE_TRADING_SAFETY.md.
+
+    RETIRED, DO NOT REINTRODUCE: `enum Signal { SIGNAL_SELL, SIGNAL_HOLD, SIGNAL_BUY }` and
+    `message SignalProbabilities`, along with the `PredictSignal` RPC that carried them. In that
+    contract SELL meant "exit to cash", not "open a short". Reusing those names for directional
+    trading would silently invert the meaning of a stored decision, so they are gone rather than
+    redefined. Directional intent is `TradeDirection`.
+
+    PRICES AND PERCENTAGES CROSS THIS BOUNDARY AS DECIMAL STRINGS, never as `double`. The .NET side
+    holds money as `decimal` and the audit chain requires that the price the engine computed is the
+    same price the database records, byte for byte. Only dimensionless quantities — probabilities,
+    ratios, ATR multiples, timings — are floating point.
     """
 
     @staticmethod
@@ -159,7 +228,7 @@ class MlEngineService:
             _registered_method=True)
 
     @staticmethod
-    def PredictSignal(request,
+    def GetSignal(request,
             target,
             options=(),
             channel_credentials=None,
@@ -172,9 +241,36 @@ class MlEngineService:
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/crypto_signal.ml.v1.MlEngineService/PredictSignal',
-            crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.PredictSignalRequest.SerializeToString,
-            crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.PredictSignalResponse.FromString,
+            '/crypto_signal.ml.v1.MlEngineService/GetSignal',
+            crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetSignalRequest.SerializeToString,
+            crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetSignalResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def EvaluateBotDecision(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/crypto_signal.ml.v1.MlEngineService/EvaluateBotDecision',
+            crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.EvaluateBotDecisionRequest.SerializeToString,
+            crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.EvaluateBotDecisionResponse.FromString,
             options,
             channel_credentials,
             insecure,

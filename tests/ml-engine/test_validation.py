@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from crypto_signal.config import ModelConfig
-from crypto_signal.model import walk_forward_validation
+from crypto_signal.modeling import walk_forward_validation
 
 
 class ValidationTests(unittest.TestCase):

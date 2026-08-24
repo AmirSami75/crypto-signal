@@ -6,8 +6,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from .data import interval_periods_per_year
-from .log_setup import get_logger
+from ..data import interval_periods_per_year
+from ..log_setup import get_logger
 
 
 logger = get_logger(__name__)

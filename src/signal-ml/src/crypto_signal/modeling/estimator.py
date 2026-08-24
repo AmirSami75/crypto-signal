@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 import time
-from typing import Any
+from typing import Any, Iterable
 
 import numpy as np
 import pandas as pd
@@ -16,8 +16,9 @@ from sklearn.metrics import (
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.utils.class_weight import compute_sample_weight
 
-from .config import ModelConfig
-from .log_setup import get_logger
+from ..config import ModelConfig
+from ..log_setup import get_logger
+from .splitting import TimeGroupedSplit, candles_between
 
 
 ALL_CLASSES = np.array([-1, 0, 1], dtype=int)
@@ -42,20 +43,37 @@ def fit_model(
     X: pd.DataFrame,
     y: pd.Series,
     config: ModelConfig,
+    class_weight: str | None = "balanced",
 ) -> HistGradientBoostingClassifier:
+    """Fit the estimator, optionally reweighting the classes.
+
+    `class_weight` is a real choice, not a knob, and the two callers want opposite things.
+
+    Reweighting buys balanced accuracy and macro F1 by making the scarce class as costly to miss as the
+    common one — right when the output is an argmax label, which is what the legacy close-to-close
+    pipeline reports. But it fits the model to a distribution that is not the one it will be asked
+    about, so the scores it returns are not probabilities of anything real, and a calibrator can only
+    partly undo the damage. Measured on BTCUSDT 1h: balanced weighting calibrates to an expected
+    calibration error of 0.039 and leaves **0.04%** of rows above 0.60 confidence — a model that would
+    never clear an operator's threshold. The same fit unweighted calibrates to 0.010 and keeps 9.4%.
+
+    So: `"balanced"` when you want labels, `None` when you want probabilities. `fit_calibrated_model`
+    passes None.
+    """
     if y.nunique() < 2:
         raise ValueError("Training data must contain at least two target classes")
     started = time.perf_counter()
     class_counts = y.value_counts().sort_index().to_dict()
     logger.info(
-        "Model fit started | rows=%s | features=%s | classes=%s | max_iter=%s",
+        "Model fit started | rows=%s | features=%s | classes=%s | max_iter=%s | class_weight=%s",
         f"{len(X):,}",
         f"{X.shape[1]:,}",
         class_counts,
         config.max_iter,
+        class_weight or "none",
     )
     model = build_model(config)
-    weights = compute_sample_weight(class_weight="balanced", y=y)
+    weights = compute_sample_weight(class_weight=class_weight, y=y) if class_weight else None
     model.fit(X, y, sample_weight=weights)
     logger.info(
         "Model fit finished | iterations=%s | elapsed=%.2fs",
@@ -115,19 +133,57 @@ def walk_forward_validation(
     config: ModelConfig,
     gap: int,
 ) -> dict[str, Any]:
+    """Row-positional chronological folds — correct when one row is one observation.
+
+    This is the legacy horizon-return path, where each candle contributes exactly one row. The
+    barrier-augmented dataset emits many rows per candle and must use
+    `walk_forward_validation_by_time` instead; see `modeling.splitting`.
+    """
+    splitter = TimeSeriesSplit(n_splits=config.cv_splits, gap=gap)
+    return _run_folds(X, y, config, gap, splitter.split(X), unit="rows")
+
+
+def walk_forward_validation_by_time(
+    X: pd.DataFrame,
+    y: pd.Series,
+    times: np.ndarray,
+    config: ModelConfig,
+    gap: int,
+) -> dict[str, Any]:
+    """Chronological folds whose boundaries and purge gap are counted in candles, not rows.
+
+    The path for the barrier-augmented dataset: `times` is one candle open per row, and every row sharing
+    an open lands on the same side of every boundary. `gap` is the label's maximum look-ahead in candles.
+    """
+    if len(times) != len(X):
+        raise ValueError(f"times has {len(times)} entries for {len(X)} rows; they must line up")
+    splitter = TimeGroupedSplit(n_splits=config.cv_splits, gap=gap)
+    return _run_folds(X, y, config, gap, splitter.split(times), unit="candles", times=times)
+
+
+def _run_folds(
+    X: pd.DataFrame,
+    y: pd.Series,
+    config: ModelConfig,
+    gap: int,
+    splits: Iterable[tuple[np.ndarray, np.ndarray]],
+    unit: str,
+    times: np.ndarray | None = None,
+) -> dict[str, Any]:
+    """Fit and score one estimator per fold. Shared so the two split strategies cannot drift apart."""
     started = time.perf_counter()
     logger.info(
-        "Walk-forward validation started | rows=%s | folds=%s | purge_gap=%s",
+        "Walk-forward validation started | rows=%s | folds=%s | purge_gap=%s %s",
         f"{len(X):,}",
         config.cv_splits,
         gap,
+        unit,
     )
-    splitter = TimeSeriesSplit(n_splits=config.cv_splits, gap=gap)
     fold_metrics: list[dict[str, Any]] = []
     all_true: list[int] = []
     all_probabilities: list[np.ndarray] = []
 
-    for fold, (train_indices, validation_indices) in enumerate(splitter.split(X), start=1):
+    for fold, (train_indices, validation_indices) in enumerate(splits, start=1):
         X_train = X.iloc[train_indices]
         y_train = y.iloc[train_indices]
         X_valid = X.iloc[validation_indices]
@@ -151,6 +207,11 @@ def walk_forward_validation(
                 "validation_rows": len(validation_indices),
                 "train_end": int(train_indices[-1]),
                 "validation_start": int(validation_indices[0]),
+                "purged_candles": (
+                    candles_between(times, train_indices, validation_indices)
+                    if times is not None
+                    else None
+                ),
                 "balanced_accuracy": metrics["balanced_accuracy"],
                 "macro_f1": metrics["macro_f1"],
                 "log_loss": metrics["log_loss"],
@@ -177,6 +238,7 @@ def walk_forward_validation(
     return {
         "config": asdict(config),
         "gap": gap,
+        "gap_unit": unit,
         "folds": fold_metrics,
         "combined": combined,
     }

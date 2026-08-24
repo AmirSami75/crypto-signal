@@ -26,6 +26,16 @@ src/signal-ml/artifacts/*
 !src/signal-ml/data/.gitkeep
 !src/signal-ml/artifacts/.gitkeep
 
+# The model registry directory itself is tracked, empty. The signal-ml image does
+# `COPY src/signal-ml/artifacts/models` — an untracked directory is present on the machine that
+# trained the model and absent on every fresh clone, which makes the container build fail somewhere
+# other than where the mistake is. The bundles inside stay ignored: they are large binaries, and an
+# artifact that reaches a deployment through a commit rather than through the training pipeline has no
+# recorded provenance.
+!src/signal-ml/artifacts/models/
+src/signal-ml/artifacts/models/*
+!src/signal-ml/artifacts/models/.gitkeep
+
 # Local overrides and secrets
 .env
 .env.*

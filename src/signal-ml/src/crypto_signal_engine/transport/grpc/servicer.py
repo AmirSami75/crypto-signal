@@ -1,184 +1,145 @@
+"""The gRPC surface: four RPCs, each of which parses, delegates, and maps a status code.
+
+Deliberately thin. No barrier arithmetic, no model resolution, no validation beyond what parsing a
+protobuf message requires — those live in `application/`, where they can be tested without a wire and
+where the bot advisor and the signal service share one implementation. What this layer owns is the
+translation of a Python exception into a status code, and that is a real decision rather than plumbing:
+
+| Exception | Status | What the caller should do |
+| --- | --- | --- |
+| `InvalidInferenceRequest`, `ValueError` | `INVALID_ARGUMENT` | fix the request; retrying is pointless |
+| `ModelUnavailable` | `FAILED_PRECONDITION` | the engine is up, this market is not answerable |
+| anything else | `INTERNAL` | a bug here; the detail is deliberately generic |
+
+`ValueError` maps to `INVALID_ARGUMENT` because that is what the domain validators and `parse_money`
+raise. Letting those fall through to `INTERNAL` would tell an orchestrator to retry a malformed price
+forever, and would put a stack trace in the log for what is a client error.
+
+The `INTERNAL` detail is a fixed string while the traceback goes to the log. An unexpected exception's
+message can contain a file path or a fragment of the model bundle, and a private contract is still not
+a place to leak the server's internals.
+"""
+
 from __future__ import annotations
 
-from datetime import UTC
+from dataclasses import replace
 import logging
 import time
+from typing import Callable, NoReturn, TypeVar
 import uuid
 
 import grpc
-from google.protobuf.timestamp_pb2 import Timestamp
 
-from crypto_signal_engine import __version__
+from crypto_signal_engine.application.bot_advisor import BotAdvisorService
 from crypto_signal_engine.application.errors import (
     InvalidInferenceRequest,
     ModelUnavailable,
 )
-from crypto_signal_engine.application.inference import InferenceService
-from crypto_signal_engine.application.models import CandleInput, PredictionInput
-from crypto_signal_engine.contracts.v1 import ml_engine_pb2, ml_engine_pb2_grpc
+from crypto_signal_engine.application.signal_service import SignalService
+from crypto_signal_engine.contracts.v1 import ml_engine_pb2_grpc
+from crypto_signal_engine.transport.grpc import mappers
 
 
 logger = logging.getLogger(__name__)
 SERVICE_NAME = "crypto_signal.ml.v1.MlEngineService"
-PROTOCOL_VERSION = "v1"
-WARNING = "Advisory ML output only; never an exchange execution instruction."
 
-
-def _timestamp(value) -> Timestamp:
-    result = Timestamp()
-    result.FromDatetime(value.astimezone(UTC))
-    return result
+Response = TypeVar("Response")
+Request = TypeVar("Request")
 
 
 def _request_id(value: str) -> str:
-    normalized = value.strip()
-    return normalized if normalized else str(uuid.uuid4())
+    """The caller's correlation id, or a fresh one.
+
+    Generated rather than left blank so that every log line and every response can be joined back to a
+    request. .NET always sends one; `grpcurl` and the health prober do not.
+    """
+    normalised = value.strip()
+    return normalised if normalised else str(uuid.uuid4())
 
 
 class MlEngineServicer(ml_engine_pb2_grpc.MlEngineServiceServicer):
-    def __init__(
-        self,
-        inference: InferenceService,
-        minimum_candles: int,
-        maximum_candles: int,
-    ) -> None:
-        self._inference = inference
-        self._minimum_candles = minimum_candles
-        self._maximum_candles = maximum_candles
+    def __init__(self, signals: SignalService, advisor: BotAdvisorService) -> None:
+        self._signals = signals
+        self._advisor = advisor
 
     def GetCapabilities(self, request, context):
         request_id = _request_id(request.request_id)
-        started = time.perf_counter()
-        response = ml_engine_pb2.GetCapabilitiesResponse(
-            request_id=request_id,
-            service="python-ml-engine",
-            service_version=__version__,
-            protocol_version=PROTOCOL_VERSION,
-            capabilities=[
-                "causal-feature-engineering",
-                "version-pinned-model-inference",
-                "model-artifact-inspection",
-                "input-and-model-audit-digests",
-            ],
-            supported_operations=[
-                "GET_CAPABILITIES",
-                "GET_MODEL_INFO",
-                "PREDICT_SIGNAL",
-            ],
-            model_ready=self._inference.model_ready,
-            minimum_candles=self._minimum_candles,
-            maximum_candles=self._maximum_candles,
+        return self._dispatch(
+            "GetCapabilities",
+            request_id,
+            context,
+            lambda: mappers.capabilities_to_proto(self._signals.get_capabilities(request_id)),
         )
-        self._log_success("GetCapabilities", request_id, started)
-        return response
 
     def GetModelInfo(self, request, context):
         request_id = _request_id(request.request_id)
-        started = time.perf_counter()
-        try:
-            info = self._inference.model_info()
-            response = ml_engine_pb2.GetModelInfoResponse(
-                request_id=request_id,
-                ready=True,
-                model_id=info.model_id,
-                model_version=info.model_version,
-                project_version=info.project_version,
-                symbol=info.symbol,
-                interval=info.interval,
-                trained_at=_timestamp(info.trained_at),
-                feature_count=info.feature_count,
-                probability_threshold=info.probability_threshold,
-                sell_semantics=info.sell_semantics,
-            )
-            self._log_success("GetModelInfo", request_id, started)
-            return response
-        except ModelUnavailable as exc:
-            self._abort(context, grpc.StatusCode.FAILED_PRECONDITION, str(exc), request_id)
-
-    def PredictSignal(self, request, context):
-        request_id = request.request_id.strip()
-        started = time.perf_counter()
-        try:
-            prediction = self._inference.predict(
-                PredictionInput(
+        return self._dispatch(
+            "GetModelInfo",
+            request_id,
+            context,
+            lambda: mappers.model_info_to_proto(
+                self._signals.get_model_info(
                     request_id=request_id,
                     symbol=request.symbol,
                     interval=request.interval,
-                    candles=tuple(
-                        CandleInput(
-                            open_time=candle.open_time.ToDatetime(tzinfo=UTC),
-                            open=candle.open,
-                            high=candle.high,
-                            low=candle.low,
-                            close=candle.close,
-                            volume=candle.volume,
-                        )
-                        for candle in request.candles
-                    ),
-                    expected_model_version=(
-                        request.expected_model_version.strip() or None
-                    ),
                 )
-            )
-            signal = {
-                "SELL": ml_engine_pb2.SIGNAL_SELL,
-                "HOLD": ml_engine_pb2.SIGNAL_HOLD,
-                "BUY": ml_engine_pb2.SIGNAL_BUY,
-            }[prediction.signal_name]
-            response = ml_engine_pb2.PredictSignalResponse(
-                request_id=prediction.request_id,
-                signal=signal,
-                numeric_signal=prediction.numeric_signal,
-                probabilities=ml_engine_pb2.SignalProbabilities(
-                    sell=prediction.probability_sell,
-                    hold=prediction.probability_hold,
-                    buy=prediction.probability_buy,
-                ),
-                confidence=prediction.confidence,
-                close_price=prediction.close_price,
-                candle_open_time=_timestamp(prediction.candle_open_time),
-                symbol=prediction.symbol,
-                interval=prediction.interval,
-                model_id=prediction.model.model_id,
-                model_version=prediction.model.model_version,
-                model_trained_at=_timestamp(prediction.model.trained_at),
-                probability_threshold=prediction.model.probability_threshold,
-                input_digest_sha256=prediction.input_digest_sha256,
-                sell_semantics=prediction.model.sell_semantics,
-                warning=WARNING,
-                processing_milliseconds=prediction.processing_milliseconds,
-            )
-            self._log_success("PredictSignal", request_id, started)
-            return response
-        except InvalidInferenceRequest as exc:
-            self._abort(context, grpc.StatusCode.INVALID_ARGUMENT, str(exc), request_id)
-        except ModelUnavailable as exc:
-            self._abort(context, grpc.StatusCode.FAILED_PRECONDITION, str(exc), request_id)
+            ),
+        )
+
+    def GetSignal(self, request, context):
+        request_id = _request_id(request.request_id)
+
+        def work():
+            # `_with_request_id` substitutes only the correlation id. Everything else is the caller's
+            # request verbatim — in particular the candle tuple, which the audit digest is computed over
+            # and which nothing between parsing and hashing may touch.
+            parsed = _with_request_id(mappers.signal_request_from_proto(request), request_id)
+            return mappers.signal_to_proto(self._signals.get_signal(parsed))
+
+        return self._dispatch("GetSignal", request_id, context, work)
+
+    def EvaluateBotDecision(self, request, context):
+        request_id = _request_id(request.request_id)
+
+        def work():
+            parsed = _with_request_id(mappers.bot_decision_request_from_proto(request), request_id)
+            return mappers.bot_decision_to_proto(self._advisor.evaluate(parsed))
+
+        return self._dispatch("EvaluateBotDecision", request_id, context, work)
+
+    # ── error handling ────────────────────────────────────────────────────────────
+
+    def _dispatch(
+        self,
+        method: str,
+        request_id: str,
+        context,
+        work: Callable[[], Response],
+    ) -> Response:
+        """Run one RPC's body under the single error policy documented at the top of this module.
+
+        A callable rather than a context manager so there is no question about what the RPC returns on
+        the failure paths: `_abort` never returns, and every success path returns `work()`.
+        """
+        started = time.perf_counter()
+        try:
+            result = work()
+        except (InvalidInferenceRequest, ValueError) as error:
+            self._abort(context, grpc.StatusCode.INVALID_ARGUMENT, str(error), method, request_id)
+        except ModelUnavailable as error:
+            self._abort(context, grpc.StatusCode.FAILED_PRECONDITION, str(error), method, request_id)
         except Exception:
             logger.exception(
-                "Unhandled prediction failure",
-                extra={"request_id": request_id, "rpc_method": "PredictSignal"},
+                "Unhandled ML engine failure",
+                extra={"request_id": request_id, "rpc_method": method, "status": "INTERNAL"},
             )
             self._abort(
                 context,
                 grpc.StatusCode.INTERNAL,
-                "The ML engine could not complete inference",
+                "The ML engine could not complete the request",
+                method,
                 request_id,
             )
-
-    @staticmethod
-    def _abort(context, status: grpc.StatusCode, detail: str, request_id: str):
-        logger.warning(
-            "gRPC request rejected",
-            extra={
-                "request_id": request_id or "missing",
-                "status": status.name,
-            },
-        )
-        context.abort(status, detail)
-
-    @staticmethod
-    def _log_success(method: str, request_id: str, started: float) -> None:
         logger.info(
             "gRPC request completed",
             extra={
@@ -188,3 +149,38 @@ class MlEngineServicer(ml_engine_pb2_grpc.MlEngineServiceServicer):
                 "duration_ms": round((time.perf_counter() - started) * 1_000, 3),
             },
         )
+        return result
+
+    @staticmethod
+    def _abort(
+        context,
+        status: grpc.StatusCode,
+        detail: str,
+        method: str,
+        request_id: str,
+    ) -> NoReturn:
+        logger.warning(
+            "gRPC request rejected",
+            extra={
+                "request_id": request_id or "missing",
+                "rpc_method": method,
+                "status": status.name,
+                "detail": detail,
+            },
+        )
+        context.abort(status, detail)
+        # Unreachable: `abort` raises. Present so a reader — and a type checker — can see that this
+        # function never falls through to a caller expecting a response.
+        raise AssertionError("grpc context.abort did not raise")
+
+
+def _with_request_id(request: Request, request_id: str) -> Request:
+    """The same request carrying a non-empty correlation id.
+
+    `dataclasses.replace` rather than mutation because the request shapes are frozen, which is itself
+    deliberate: the candle tuple is what the audit digest is computed over.
+    """
+    return replace(request, request_id=request_id)
+
+
+__all__ = ["SERVICE_NAME", "MlEngineServicer"]

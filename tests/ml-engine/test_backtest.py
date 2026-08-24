@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from crypto_signal.backtest import run_backtest, signals_to_positions
+from crypto_signal.evaluation import run_backtest, signals_to_positions
 
 
 class BacktestTests(unittest.TestCase):
