@@ -16,6 +16,13 @@
     <PackageReference Include="Google.Protobuf" Version="3.35.1" />
     <PackageReference Include="Grpc.Net.ClientFactory" Version="2.80.0" />
     <PackageReference Include="Grpc.Tools" Version="2.80.0" PrivateAssets="All" />
+
+    <!-- `dotnet ef` lives here, not in Infra: the design-time tooling has to see the DbContext and
+         every entity assembly at once, and the startup project is the only place that already does.
+         PrivateAssets="All" keeps it out of the published output - it is a build-time authoring tool,
+         and shipping a migration generator into a container that must never alter its own schema
+         would contradict devops/README.md. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11" PrivateAssets="All" />
   </ItemGroup>
 
   <ItemGroup>

@@ -12,12 +12,15 @@ using Microsoft.AspNetCore.Mvc;
 namespace CryptoSignal.Api.API.Controllers.v1.Ml;
 
 /// <summary>
-/// Read-only access to the Python ML engine: capabilities, model metadata and signal predictions.
+/// Read-only access to the Python ML engine: its advertised capabilities and model metadata.
 /// </summary>
 /// <remarks>
-/// This controller does not authorize exchange orders — the orchestrator owns that decision.
-/// Exceptions are thrown rather than returned so <c>UnifiedExceptionHandlerMiddleware</c> renders
-/// the same envelope every other endpoint uses.
+/// Nothing here authorizes or places an order. A signal is evidence, not authorization — see
+/// <c>docs/LIVE_TRADING_SAFETY.md</c> — and order submission happens only inside the bot scheduler,
+/// never inside an HTTP request. Signals themselves live on <c>SignalController</c>, which carries its
+/// own <c>Signal.*</c> permissions: inspecting the engine and asking it for a trade are different
+/// privileges. Exceptions are thrown rather than returned so
+/// <c>UnifiedExceptionHandlerMiddleware</c> renders the same envelope every other endpoint uses.
 /// </remarks>
 [ApiVersion("1")]
 [CustomAuthorize]
@@ -25,7 +28,8 @@ namespace CryptoSignal.Api.API.Controllers.v1.Ml;
 public class MlController(IMlServiceClient mlService) : BaseController
 {
     /// <summary>
-    /// Capabilities advertised by the ML engine, including the candle-count window it accepts.
+    /// Capabilities advertised by the ML engine: the candle window it accepts, the markets it has
+    /// models for, and whether the pooled cross-symbol model can answer everything else.
     /// </summary>
     [HttpGet("capabilities")]
     [Permission(PermissionType.Custom, nameof(GetCapabilities), "مشاهده قابلیت های موتور یادگیری ماشین")]
@@ -40,48 +44,25 @@ public class MlController(IMlServiceClient mlService) : BaseController
     }
 
     /// <summary>
-    /// Metadata for the model currently loaded by the ML engine.
+    /// Metadata for the model that answers a given market.
     /// </summary>
+    /// <remarks>
+    /// Leaving both parameters empty resolves the pooled model. The response reports which model
+    /// actually answered via <c>isWildcard</c>, so a caller asking about a symbol with no dedicated
+    /// model can tell that it was answered by the pooled one rather than assuming a bespoke fit.
+    /// </remarks>
     [HttpGet("model")]
     [Permission(PermissionType.Custom, nameof(GetModel), "مشاهده اطلاعات مدل یادگیری ماشین")]
-    public async Task<ApiResult<MlModelInfo>> GetModel(CancellationToken ct)
+    public async Task<ApiResult<MlModelInfo>> GetModel(
+        CancellationToken ct,
+        [FromQuery] string? symbol = null,
+        [FromQuery] string? interval = null)
     {
-        var model = await mlService.GetModelInfoAsync(ct);
+        var model = await mlService.GetModelInfoAsync(symbol ?? string.Empty, interval ?? string.Empty, ct);
 
         if (model is null)
             throw new ServiceUnavailableException("مدل یادگیری ماشین بارگذاری نشده است");
 
         return Ok(model);
-    }
-
-    /// <summary>
-    /// Requests a trading signal for a window of completed candles.
-    /// </summary>
-    /// <remarks>
-    /// Only closed candles may be submitted; including the in-progress candle leaks future
-    /// information into the features and invalidates the prediction.
-    /// </remarks>
-    [HttpPost("predictions")]
-    [Permission(PermissionType.Custom, nameof(PredictSignal), "دریافت سیگنال از موتور یادگیری ماشین")]
-    public async Task<ApiResult<MlPrediction>> PredictSignal(
-        [FromBody] MlPredictionRequest request,
-        CancellationToken ct)
-    {
-        if (request.Candles is null || request.Candles.Count == 0)
-            throw new BadRequestException("ارسال حداقل یک کندل بسته شده الزامی است");
-
-        try
-        {
-            var prediction = await mlService.PredictSignalAsync(request, ct);
-            return Ok(prediction);
-        }
-        catch (MlServiceException exception) when (exception.ErrorCode == "InvalidArgument")
-        {
-            throw new BadRequestException(exception.Message);
-        }
-        catch (MlServiceException exception)
-        {
-            throw new ServiceUnavailableException(exception.Message);
-        }
     }
 }

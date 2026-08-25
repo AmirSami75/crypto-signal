@@ -7,25 +7,48 @@ using Microsoft.Extensions.Options;
 
 namespace CryptoSignal.Api.Clients;
 
+/// <summary>
+/// Translates between the .NET contract types and the generated gRPC messages, and nowhere else in
+/// the codebase does that translation happen.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Two rules govern every line here, both inherited from the proto's own header:
+/// </para>
+/// <para>
+/// <b>Prices cross as decimal strings.</b> A price never becomes a <c>double</c> on this boundary —
+/// it is read straight into <see cref="decimal"/> by <see cref="MlWire.Money(string, string)"/> and
+/// written back by <see cref="MlWire.Money(decimal)"/>. The audit chain depends on the stored price
+/// being byte-for-byte the price the engine computed.
+/// </para>
+/// <para>
+/// <b>An unset message is not a zeroed message.</b> proto3 gives an absent submessage or timestamp
+/// the same reading as one full of zeros, so every message-typed field is null-checked before it is
+/// read. An absent <c>ModelTrainedAt</c> is "not known", which is a different fact from 1970-01-01,
+/// and an absent <c>Levels</c> (a HOLD carries none) must stay null rather than become a bracket of
+/// zeros.
+/// </para>
+/// </remarks>
 public sealed class MlServiceClient(
     MlEngineService.MlEngineServiceClient client,
     IOptions<MlServiceOptions> options,
     ILogger<MlServiceClient> logger)
     : IMlServiceClient
 {
-    public async Task<DependencyHealth> GetHealthAsync(
-        CancellationToken cancellationToken)
+    public async Task<DependencyHealth> GetHealthAsync(CancellationToken cancellationToken)
     {
         try
         {
-            var response = await client.GetModelInfoAsync(
-                new GetModelInfoRequest { RequestId = Guid.NewGuid().ToString() },
+            var response = await client.GetCapabilitiesAsync(
+                new GetCapabilitiesRequest { RequestId = Guid.NewGuid().ToString() },
                 deadline: Deadline(),
                 cancellationToken: cancellationToken);
             return new DependencyHealth(
                 "python-ml",
-                response.Ready ? "healthy" : "unhealthy",
-                response.Ready ? $"model={response.ModelId}" : "model not ready");
+                response.ModelReady ? "healthy" : "unhealthy",
+                response.ModelReady
+                    ? $"mode={response.OperatingMode}, markets={response.SupportedMarkets.Count}"
+                    : "no model loaded");
         }
         catch (RpcException exception)
         {
@@ -37,8 +60,7 @@ public sealed class MlServiceClient(
         }
     }
 
-    public async Task<MlServiceCapabilities?> GetCapabilitiesAsync(
-        CancellationToken cancellationToken)
+    public async Task<MlServiceCapabilities?> GetCapabilitiesAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -54,7 +76,13 @@ public sealed class MlServiceClient(
                 response.SupportedOperations.ToArray(),
                 response.ModelReady,
                 response.MinimumCandles,
-                response.MaximumCandles);
+                response.MaximumCandles,
+                response.SupportedMarkets
+                    .Select(m => new MlSupportedMarket(
+                        m.Symbol, m.Interval, m.ModelId, m.ModelVersion, m.IsWildcard))
+                    .ToArray(),
+                response.WildcardModelReady,
+                response.OperatingMode);
         }
         catch (RpcException exception)
         {
@@ -64,12 +92,19 @@ public sealed class MlServiceClient(
     }
 
     public async Task<MlModelInfo?> GetModelInfoAsync(
+        string symbol,
+        string interval,
         CancellationToken cancellationToken)
     {
         try
         {
             var response = await client.GetModelInfoAsync(
-                new GetModelInfoRequest { RequestId = Guid.NewGuid().ToString() },
+                new GetModelInfoRequest
+                {
+                    RequestId = Guid.NewGuid().ToString(),
+                    Symbol = symbol ?? string.Empty,
+                    Interval = interval ?? string.Empty,
+                },
                 deadline: Deadline(),
                 cancellationToken: cancellationToken);
             return new MlModelInfo(
@@ -79,10 +114,18 @@ public sealed class MlServiceClient(
                 response.ProjectVersion,
                 response.Symbol,
                 response.Interval,
-                response.TrainedAt.ToDateTimeOffset(),
+                OptionalTime(response.TrainedAt),
                 response.FeatureCount,
-                response.ProbabilityThreshold,
-                response.SellSemantics);
+                response.IsWildcard,
+                response.LabelScheme,
+                response.CalibrationMethod,
+                response.DefaultMaxHoldingPeriods,
+                response.MinimumBarrierAtr,
+                response.MaximumBarrierAtr,
+                response.ConfidenceCeiling,
+                response.ConfidenceReach
+                    .Select(r => new MlConfidenceReach(r.Threshold, r.Share))
+                    .ToArray());
         }
         catch (RpcException exception)
         {
@@ -91,70 +134,192 @@ public sealed class MlServiceClient(
         }
     }
 
-    public async Task<MlPrediction> PredictSignalAsync(
-        MlPredictionRequest request,
+    public async Task<MlSignal> GetSignalAsync(
+        MlSignalRequest request,
         CancellationToken cancellationToken)
     {
-        var grpcRequest = new PredictSignalRequest
+        var grpcRequest = new GetSignalRequest
         {
-            RequestId = string.IsNullOrWhiteSpace(request.RequestId)
-                ? Guid.NewGuid().ToString()
-                : request.RequestId,
+            RequestId = RequestId(request.RequestId),
             Symbol = request.Symbol,
             Interval = request.Interval,
+            Parameters = ToProto(request.Parameters),
             ExpectedModelVersion = request.ExpectedModelVersion ?? string.Empty,
         };
-        grpcRequest.Candles.AddRange(request.Candles.Select(candle => new Candle
-        {
-            OpenTime = Timestamp.FromDateTimeOffset(candle.OpenTime),
-            Open = candle.Open,
-            High = candle.High,
-            Low = candle.Low,
-            Close = candle.Close,
-            Volume = candle.Volume,
-        }));
+        grpcRequest.Candles.AddRange(request.Candles.Select(ToProto));
 
         try
         {
-            var response = await client.PredictSignalAsync(
-                grpcRequest,
-                deadline: Deadline(),
-                cancellationToken: cancellationToken);
-            return new MlPrediction(
+            var response = await client.GetSignalAsync(
+                grpcRequest, deadline: Deadline(), cancellationToken: cancellationToken);
+            return new MlSignal(
                 response.RequestId,
-                response.Signal.ToString().ToUpperInvariant(),
-                response.NumericSignal,
-                new MlProbabilities(
-                    response.Probabilities.Sell,
-                    response.Probabilities.Hold,
-                    response.Probabilities.Buy),
+                (MlDirection)(int)response.Direction,
+                OptionalLevels(response.Levels),
                 response.Confidence,
-                response.ClosePrice,
-                response.CandleOpenTime.ToDateTimeOffset(),
+                Probabilities(response.Probabilities),
+                response.ExpectedValue,
+                response.LongConfidence,
+                response.ShortConfidence,
                 response.Symbol,
                 response.Interval,
+                OptionalTime(response.CandleOpenTime),
+                OptionalTime(response.ValidUntil),
                 response.ModelId,
                 response.ModelVersion,
-                response.ModelTrainedAt.ToDateTimeOffset(),
-                response.ProbabilityThreshold,
+                OptionalTime(response.ModelTrainedAt),
+                response.UsedWildcardModel,
                 response.InputDigestSha256,
-                response.SellSemantics,
+                response.Rationale.ToArray(),
                 response.Warning,
-                response.ProcessingMilliseconds);
+                response.ProcessingMilliseconds,
+                response.BarrierExtrapolated);
         }
         catch (RpcException exception)
         {
-            logger.LogWarning(
-                exception,
-                "Python ML gRPC prediction failed with {StatusCode}",
-                exception.StatusCode);
-            throw new MlServiceException(
-                exception.StatusCode.ToString(),
-                exception.Status.Detail,
-                exception);
+            throw Translate(exception, "signal");
         }
     }
 
-    private DateTime Deadline() =>
-        DateTime.UtcNow.AddSeconds(options.Value.DeadlineSeconds);
+    public async Task<MlBotDecision> EvaluateBotDecisionAsync(
+        MlBotDecisionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var grpcRequest = new EvaluateBotDecisionRequest
+        {
+            RequestId = RequestId(request.RequestId),
+            BotId = request.BotId ?? string.Empty,
+            Symbol = request.Symbol,
+            Interval = request.Interval,
+            Parameters = ToProto(request.Parameters),
+            ExpectedModelVersion = request.ExpectedModelVersion ?? string.Empty,
+        };
+        grpcRequest.Candles.AddRange(request.Candles.Select(ToProto));
+
+        // Left unset when the bot is flat. A zeroed OpenPosition is a valid protobuf message that the
+        // engine would read as a position of zero size — a flat bot being told it holds something.
+        if (request.Position is { } position)
+        {
+            grpcRequest.Position = ToProto(position);
+        }
+
+        try
+        {
+            var response = await client.EvaluateBotDecisionAsync(
+                grpcRequest, deadline: Deadline(), cancellationToken: cancellationToken);
+            return new MlBotDecision(
+                response.RequestId,
+                (MlBotAction)(int)response.Action,
+                (MlDirection)(int)response.Direction,
+                OptionalLevels(response.Levels),
+                response.Confidence,
+                Probabilities(response.Probabilities),
+                response.ExpectedValue,
+                response.ReasonCode,
+                response.Rationale.ToArray(),
+                response.Symbol,
+                response.Interval,
+                OptionalTime(response.CandleOpenTime),
+                OptionalTime(response.ValidUntil),
+                response.ModelId,
+                response.ModelVersion,
+                OptionalTime(response.ModelTrainedAt),
+                response.UsedWildcardModel,
+                response.InputDigestSha256,
+                response.Warning,
+                response.ProcessingMilliseconds,
+                response.BarrierExtrapolated);
+        }
+        catch (RpcException exception)
+        {
+            throw Translate(exception, "bot decision");
+        }
+    }
+
+    // ── outbound ────────────────────────────────────────────────────────────────
+
+    private static Candle ToProto(MlCandle candle) => new()
+    {
+        OpenTime = Timestamp.FromDateTimeOffset(candle.OpenTime),
+        Open = MlWire.Money(candle.Open),
+        High = MlWire.Money(candle.High),
+        Low = MlWire.Money(candle.Low),
+        Close = MlWire.Money(candle.Close),
+        Volume = MlWire.Money(candle.Volume),
+    };
+
+    private static TradeParameters ToProto(MlTradeParameters parameters) => new()
+    {
+        TakeProfitPercent = MlWire.Money(parameters.TakeProfitPercent),
+        StopLossPercent = MlWire.Money(parameters.StopLossPercent),
+        AllowShort = parameters.AllowShort,
+        MaxHoldingPeriods = parameters.MaxHoldingPeriods,
+        MinimumConfidence = parameters.MinimumConfidence,
+    };
+
+    private static OpenPosition ToProto(MlOpenPosition position)
+    {
+        var message = new OpenPosition
+        {
+            Direction = (TradeDirection)(int)position.Direction,
+            EntryPrice = MlWire.Money(position.EntryPrice),
+            Quantity = MlWire.Money(position.Quantity),
+            BarsHeld = position.BarsHeld,
+            // Empty string is the wire's "not supplied"; the engine falls back to the configured
+            // percentage for whichever half of the bracket is absent.
+            TakeProfitPrice = position.TakeProfitPrice is { } tp ? MlWire.Money(tp) : string.Empty,
+            StopLossPrice = position.StopLossPrice is { } sl ? MlWire.Money(sl) : string.Empty,
+        };
+        if (position.OpenedAt is { } openedAt)
+        {
+            message.OpenedAt = Timestamp.FromDateTimeOffset(openedAt);
+        }
+
+        return message;
+    }
+
+    // ── inbound ─────────────────────────────────────────────────────────────────
+
+    /// <summary>A timestamp, or null when the submessage is unset — never the epoch.</summary>
+    private static DateTimeOffset? OptionalTime(Timestamp? value) =>
+        value is null ? null : value.ToDateTimeOffset();
+
+    /// <summary>Levels, or null when the response carries none (a HOLD does not).</summary>
+    private static MlTradeLevels? OptionalLevels(TradeLevels? levels) =>
+        levels is null
+            ? null
+            : new MlTradeLevels(
+                MlWire.Money(levels.EntryPrice, "levels.entry_price"),
+                MlWire.Money(levels.TakeProfitPrice, "levels.take_profit_price"),
+                MlWire.Money(levels.StopLossPrice, "levels.stop_loss_price"),
+                MlWire.Money(levels.Atr, "levels.atr"),
+                levels.RiskRewardRatio,
+                levels.TakeProfitAtr,
+                levels.StopLossAtr);
+
+    private static MlBarrierProbabilities Probabilities(BarrierProbabilities? probabilities) =>
+        probabilities is null
+            ? new MlBarrierProbabilities(0, 0, 0)
+            : new MlBarrierProbabilities(
+                probabilities.TakeProfitFirst,
+                probabilities.StopLossFirst,
+                probabilities.Timeout);
+
+    private static string RequestId(string? requestId) =>
+        string.IsNullOrWhiteSpace(requestId) ? Guid.NewGuid().ToString() : requestId;
+
+    private MlServiceException Translate(RpcException exception, string operation)
+    {
+        logger.LogWarning(
+            exception,
+            "Python ML gRPC {Operation} failed with {StatusCode}",
+            operation,
+            exception.StatusCode);
+        return new MlServiceException(
+            exception.StatusCode.ToString(),
+            exception.Status.Detail,
+            exception);
+    }
+
+    private DateTime Deadline() => DateTime.UtcNow.AddSeconds(options.Value.DeadlineSeconds);
 }

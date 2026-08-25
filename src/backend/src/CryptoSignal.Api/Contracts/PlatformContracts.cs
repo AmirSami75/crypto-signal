@@ -9,7 +9,7 @@ public sealed record ApiIndexLinks(
     string Permissions,
     string MlCapabilities,
     string MlModel,
-    string MlPrediction,
+    string MlSignal,
     string Swagger,
     string LiveHealth,
     string ReadyHealth);

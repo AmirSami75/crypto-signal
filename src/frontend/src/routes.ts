@@ -10,6 +10,13 @@ export const ROUTES = {
   changePassword: '/change-password',
 
   overview: '/overview',
+
+  signal: '/signal',
+  bots: '/bots',
+  /** Parameterised. Build a concrete path with {@link botDetailPath} rather than interpolating here. */
+  botDetail: '/bots/:botId',
+  killSwitches: '/kill-switches',
+
   users: '/users',
   roles: '/roles',
   permissions: '/permissions',
@@ -18,3 +25,17 @@ export const ROUTES = {
 } as const
 
 export type RoutePath = (typeof ROUTES)[keyof typeof ROUTES]
+
+/** Route parameter name for {@link ROUTES.botDetail}, so the page's `useParams` cannot drift from it. */
+export const BOT_ID_PARAM = 'botId'
+
+/**
+ * Path to one bot's detail screen.
+ *
+ * Bot ids are GUIDs, so no escaping is needed — but going through a function means the `:botId`
+ * segment is named in exactly one place. A hand-built `/bots/${id}` elsewhere would keep working right
+ * up until the segment moves.
+ */
+export function botDetailPath(botId: string): string {
+  return ROUTES.botDetail.replace(`:${BOT_ID_PARAM}`, botId)
+}

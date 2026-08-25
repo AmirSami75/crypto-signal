@@ -79,6 +79,12 @@ POOLED_STEM = "_pooled"
 #: quietly started to mean "timeout". `OutcomeProbabilities.from_class_probabilities` reads the same row the
 #: same way, and `_expected_values` checks the two against each other on every call.
 WIN_CLASS_INDEX = int(np.flatnonzero(ALL_CLASSES == 1)[0])
+
+#: The expected-value floor a backtest decision has to clear, in ATR units. Zero, and the same number
+#: `choose_direction` defaults `minimum_expected_value_atr` to: a bet that does not pay for how often
+#: it loses is not a bet either path takes. Named here rather than written as a bare `0.0` so the two
+#: floors are visibly the same decision rather than coincidentally equal literals.
+MINIMUM_EXPECTED_VALUE_ATR = 0.0
 LOSS_CLASS_INDEX = int(np.flatnonzero(ALL_CLASSES == -1)[0])
 
 #: Features are fitted at single precision. The estimator bins its inputs to `uint8` before it splits on
@@ -803,9 +809,20 @@ def _decide_window(
     long_confidence = long_probabilities[:, WIN_CLASS_INDEX]
     short_confidence = short_probabilities[:, WIN_CLASS_INDEX]
 
+    # Both floors, because `choose_direction` applies both and this is the same rule. Its
+    # `minimum_expected_value_atr` defaults to 0.0, so a bet whose confidence clears the floor while its
+    # expected value does not is FLAT on the serving path — and a backtest that took it would be grading
+    # trades the engine refuses to place. Not reachable at the shipped 1.5/1.0 bracket, where a 0.5
+    # confidence is worth +0.25 ATR or better; immediately reachable at a lower `backtest_minimum_
+    # confidence` (0.3 prices a 1.5/1.0 long at -0.20 ATR) or at any sub-1 reward-to-risk bracket, both
+    # of which the config permits. `test_direction_selection_matches_the_vectorised_backtest` pins it.
     floor = config.barrier.backtest_minimum_confidence
-    long_ok = long_confidence >= floor
-    short_ok = (short_confidence >= floor) & config.barrier.allow_short
+    long_ok = (long_confidence >= floor) & (long_value >= MINIMUM_EXPECTED_VALUE_ATR)
+    short_ok = (
+        (short_confidence >= floor)
+        & (short_value >= MINIMUM_EXPECTED_VALUE_ATR)
+        & config.barrier.allow_short
+    )
     # Expected value decides; a tie goes to the higher confidence, exactly as `choose_direction` does.
     take_long = long_ok & (
         ~short_ok | (long_value > short_value) | ((long_value == short_value) & (long_confidence >= short_confidence))

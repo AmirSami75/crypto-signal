@@ -72,6 +72,14 @@ export function DashboardLayout() {
 
   const mainNav: NavEntry[] = [
     { to: ROUTES.overview, label: fa.nav.overview, icon: <GridIcon /> },
+    { to: ROUTES.signal, label: fa.nav.signal, icon: <PulseIcon />, permission: PERMISSIONS.signalGet },
+    { to: ROUTES.bots, label: fa.nav.bots, icon: <BotIcon />, permission: PERMISSIONS.botGet },
+    {
+      to: ROUTES.killSwitches,
+      label: fa.nav.killSwitches,
+      icon: <StopIcon />,
+      permission: PERMISSIONS.killSwitchGet,
+    },
     { to: ROUTES.ml, label: fa.nav.ml, icon: <ChipIcon />, permission: PERMISSIONS.mlGetModel },
   ]
 
@@ -446,6 +454,35 @@ function ChipIcon() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={iconClass} aria-hidden="true">
       <rect x="6.5" y="6.5" width="11" height="11" rx="2.5" />
       <path d="M10 3.5v3M14 3.5v3M10 17.5v3M14 17.5v3M3.5 10h3M3.5 14h3M17.5 10h3M17.5 14h3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function PulseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={iconClass} aria-hidden="true">
+      <path d="M3 12.5h3.5l2-5.5 3 11 2.5-7 1.8 4h5.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function BotIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={iconClass} aria-hidden="true">
+      <rect x="4" y="8" width="16" height="11" rx="3" />
+      <path d="M12 4.5V8" strokeLinecap="round" />
+      <circle cx="9" cy="13" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="13" r="1.15" fill="currentColor" stroke="none" />
+      <path d="M9.5 16.2h5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function StopIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={iconClass} aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" />
+      <rect x="9" y="9" width="6" height="6" rx="1.2" />
     </svg>
   )
 }

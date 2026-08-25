@@ -37,7 +37,7 @@ public class PlatformController(IConfiguration configuration) : BaseController
             Permissions: "/api/v1/permission",
             MlCapabilities: "/api/v1/ml/capabilities",
             MlModel: "/api/v1/ml/model",
-            MlPrediction: "/api/v1/ml/predictions",
+            MlSignal: "/api/v1/ml/signals",
             Swagger: "/swagger",
             LiveHealth: "/health/live",
             ReadyHealth: "/health/ready")));

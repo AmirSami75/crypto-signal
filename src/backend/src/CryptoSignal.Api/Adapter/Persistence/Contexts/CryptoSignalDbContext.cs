@@ -29,6 +29,10 @@ public class CryptoSignalDbContext(DbContextOptions<CryptoSignalDbContext> opts)
         // above so it also covers entities registered by reflection without a config class.
         modelBuilder.ConfigureXminConcurrencyTokens();
 
+        // Give every decimal an explicit numeric(28,10) unless its configuration chose otherwise.
+        // Trading money must never reach the schema at a provider default precision.
+        modelBuilder.ConfigureDecimalPrecision();
+
         base.OnModelCreating(modelBuilder);
     }
 }

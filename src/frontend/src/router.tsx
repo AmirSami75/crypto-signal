@@ -4,7 +4,10 @@ import { PERMISSIONS } from './auth/permissions'
 import { RequireAnonymous, RequireAuth, RequirePermission } from './auth/RequireAuth'
 import { AuthLayout } from './layouts/AuthLayout'
 import { DashboardLayout } from './layouts/DashboardLayout'
+import { BotsPage } from './pages/BotsPage'
+import { BotDetailPage } from './pages/BotDetailPage'
 import { ChangePasswordPage } from './pages/ChangePasswordPage'
+import { KillSwitchesPage } from './pages/KillSwitchesPage'
 import { LoginHistoryPage } from './pages/LoginHistoryPage'
 import { LoginPage } from './pages/LoginPage'
 import { NotFoundPage } from './pages/NotFoundPage'
@@ -13,6 +16,7 @@ import { PermissionsPage } from './pages/PermissionsPage'
 import { PlaceholderPage } from './pages/PlaceholderPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { RolesPage } from './pages/RolesPage'
+import { SignalPage } from './pages/SignalPage'
 import { UsersPage } from './pages/UsersPage'
 import { ROUTES } from './routes'
 
@@ -63,10 +67,34 @@ export const router = createBrowserRouter([
     children: [
       { path: ROUTES.overview, element: <OverviewPage /> },
       {
-        path: ROUTES.ml,
+        path: ROUTES.signal,
         element: (
-          <RequirePermission permission={PERMISSIONS.mlGetModel}>
-            <PlaceholderPage title={fa.nav.ml} />
+          <RequirePermission permission={PERMISSIONS.signalGet}>
+            <SignalPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: ROUTES.bots,
+        element: (
+          <RequirePermission permission={PERMISSIONS.botGet}>
+            <BotsPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: ROUTES.botDetail,
+        element: (
+          <RequirePermission permission={PERMISSIONS.botGetById}>
+            <BotDetailPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: ROUTES.killSwitches,
+        element: (
+          <RequirePermission permission={PERMISSIONS.killSwitchGet}>
+            <KillSwitchesPage />
           </RequirePermission>
         ),
       },

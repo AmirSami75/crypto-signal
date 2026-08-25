@@ -284,3 +284,542 @@ export type Readiness = {
   /** Absent rather than empty when the report carries no dependency detail. */
   dependencies?: Array<{ name: string; status: string; detail?: string | null }> | null
 }
+
+// ─── Trading ──────────────────────────────────────────────────────────────────────────────────────
+//
+// Every enum below arrives as a *string*, not a number. The MVC pipeline is Newtonsoft with
+// `StringEnumConverter`, so `OperatingMode.Paper` serialises as `"Paper"` — which is why these are
+// string unions rather than numeric ones, and why a widened server enum shows up as a type error here
+// instead of as a mystery integer on screen.
+//
+// Money is a `decimal` on the server and arrives as a JSON number. That is a lossy channel in
+// principle, and it is tolerable in exactly one direction: these values are *displayed*, never summed
+// into a stored total and never compared for equality. Anything that must be exact stays server-side.
+
+export type OperatingModeName = 'Paper' | 'Sandbox' | 'Live'
+export type MarketVenueName = 'Replay' | 'BinanceTestnet' | 'BinanceMainnet'
+export type BotStatusName = 'Draft' | 'Active' | 'Paused' | 'Stopped' | 'Faulted'
+export type TradeDirectionName = 'Long' | 'Short' | 'Flat'
+export type BotDecisionActionName = 'Hold' | 'Open' | 'Close' | 'AdjustBracket'
+export type PositionStatusName = 'Open' | 'Closed'
+export type KillSwitchScopeName = 'Global' | 'OperatingMode' | 'Exchange' | 'Bot' | 'Symbol'
+export type OrderSideName = 'Buy' | 'Sell'
+export type OrderTypeName = 'Market' | 'Limit' | 'StopLoss' | 'StopLossLimit' | 'TakeProfit' | 'TakeProfitLimit'
+export type TimeInForceName = 'GoodTillCancel' | 'ImmediateOrCancel' | 'FillOrKill'
+
+export type PositionCloseReasonName =
+  | 'TakeProfitTouched'
+  | 'StopLossTouched'
+  | 'MaxHoldingPeriodsReached'
+  | 'DirectionReversed'
+  | 'ManualClose'
+  | 'KillSwitch'
+  | 'BotStopped'
+  | 'Liquidation'
+
+export type OrderIntentStatusName =
+  | 'Draft'
+  | 'RiskApproved'
+  | 'RiskDenied'
+  | 'Submitting'
+  | 'Submitted'
+  | 'PartiallyFilled'
+  | 'Filled'
+  | 'Cancelled'
+  | 'Rejected'
+  | 'Expired'
+  | 'Ambiguous'
+
+export type ExchangeOrderStatusName =
+  | 'New'
+  | 'PartiallyFilled'
+  | 'Filled'
+  | 'Cancelled'
+  | 'Rejected'
+  | 'Expired'
+  | 'PendingCancel'
+  | 'Unknown'
+
+export type BotAuditEventTypeName =
+  | 'CandleWindowRecorded'
+  | 'ModelConsulted'
+  | 'DecisionRecorded'
+  | 'IntentCreated'
+  | 'RiskEvaluated'
+  | 'OrderSubmitted'
+  | 'OrderAcknowledged'
+  | 'OrderRejected'
+  | 'FillRecorded'
+  | 'PositionOpened'
+  | 'PositionUpdated'
+  | 'PositionClosed'
+  | 'KillSwitchEngaged'
+  | 'BotFaulted'
+  | 'ConfigurationChanged'
+
+// ─── Signals (capability 2) ───────────────────────────────────────────────────────────────────────
+
+/**
+ * `POST /api/v1/ml/signals`.
+ *
+ * The candle window is deliberately absent: the server fetches it from the configured venue, so the
+ * browser cannot influence what the model was shown. `venue` is an override for the same reason it is
+ * optional — the default is configured server-side, and a caller naming a different one is asking a
+ * question about that venue, not switching the platform's source.
+ */
+export type SignalRequest = {
+  symbol: string
+  interval: string
+  takeProfitPercent: number
+  stopLossPercent: number
+  allowShort: boolean
+  /** 0 means "use the model's configured default", which is the normal case. */
+  maxHoldingPeriods?: number
+  /** 0 means "use the engine default". A floor above the model's ceiling filters out everything. */
+  minimumConfidence?: number
+  venue?: MarketVenueName
+}
+
+export type SignalLevels = {
+  entryPrice: number
+  takeProfitPrice: number
+  stopLossPrice: number
+  atr: number
+  riskRewardRatio: number
+  takeProfitAtr: number
+  stopLossAtr: number
+}
+
+/** Probability each barrier is reached *first*, for the reported direction. Sums to 1. */
+export type SignalProbabilities = {
+  takeProfitFirst: number
+  stopLossFirst: number
+  timeout: number
+}
+
+/**
+ * `levels` is null when the direction is `Flat` — there is no bracket for a bet nobody is placing.
+ *
+ * `barrierExtrapolated` matters more than it looks: it means the requested distance fell outside the
+ * ATR span the model was fitted across, so `expectedValue` is an extension of the fitted surface
+ * rather than a measurement on it. It gets its own warning in the UI, separate from `warning`, because
+ * a percent-denominated request becomes a wide ATR bracket whenever the market is quiet.
+ */
+export type Signal = {
+  symbol: string
+  interval: string
+  venue: MarketVenueName
+  candleCount: number
+  takeProfitPercent: number
+  stopLossPercent: number
+  allowShort: boolean
+  direction: TradeDirectionName
+  levels: SignalLevels | null
+  confidence: number
+  longConfidence: number
+  shortConfidence: number
+  probabilities: SignalProbabilities
+  expectedValue: number
+  candleOpenTime: string | null
+  validUntil: string | null
+  modelId: string
+  modelVersion: string
+  modelTrainedAt: string | null
+  usedWildcardModel: boolean
+  inputDigestSha256: string
+  rationale: string[]
+  warning: string
+  barrierExtrapolated: boolean
+  processingMilliseconds: number
+}
+
+// ─── Bots (capability 1) ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * The bot form's payload.
+ *
+ * Every risk limit here **denies at zero** — none of them means "unlimited". The form says so next to
+ * each field, because the natural reading of a blank number box is the opposite of what the server
+ * does with it.
+ *
+ * `symbol`, `interval` and `operatingMode` are create-only. The server refuses to change them on an
+ * existing bot: editing them in place would leave a paper bot's fills attached to a sandbox bot.
+ */
+export type BotInput = {
+  name: string
+  description?: string | null
+  symbol: string
+  interval: string
+  venue: MarketVenueName
+  operatingMode: OperatingModeName
+  takeProfitPercent: number
+  stopLossPercent: number
+  allowShort: boolean
+  quoteNotionalPerTrade: number
+  minimumConfidence: number
+  maxHoldingPeriods: number
+  cadenceSeconds: number
+  maxOrderNotional: number
+  maxPositionNotional: number
+  maxDailyLoss: number
+  maxDrawdown: number
+  maxConcurrentPositions: number
+  maxOrdersPerDay: number
+  maxConsecutiveFailures: number
+  maxSlippageBps: number
+  expectedModelVersion?: string | null
+}
+
+export type BotSummary = {
+  id: string
+  name: string
+  symbol: string
+  interval: string
+  venue: MarketVenueName
+  operatingMode: OperatingModeName
+  status: BotStatusName
+  statusReason: string | null
+  takeProfitPercent: number
+  stopLossPercent: number
+  allowShort: boolean
+  quoteNotionalPerTrade: number
+  cadenceSeconds: number
+  lastTickAt: string | null
+  lastEvaluatedCandleOpenTime: string | null
+  faultedAt: string | null
+  createdAt: string
+  openPositionCount: number
+  realizedPnl: number
+  /** Engaged switch covering this bot. It still shows as Active — the switch blocks new intents. */
+  isBlockedByKillSwitch: boolean
+}
+
+export type BotRun = {
+  id: string
+  leaseOwner: string
+  startedAt: string
+  lastHeartbeatAt: string
+  endedAt: string | null
+  tickCount: number
+  decisionCount: number
+  orderCount: number
+  errorCount: number
+  consecutiveFailureCount: number
+  lastError: string | null
+  lastErrorAt: string | null
+  lastTickAt: string | null
+}
+
+export type BotPosition = {
+  id: string
+  operatingMode: OperatingModeName
+  venue: MarketVenueName
+  symbol: string
+  direction: TradeDirectionName
+  status: PositionStatusName
+  averageEntryPrice: number
+  quantity: number
+  entryNotional: number
+  takeProfitPrice: number | null
+  stopLossPrice: number | null
+  openedAt: string
+  closedAt: string | null
+  barsHeld: number
+  averageExitPrice: number | null
+  closeReason: PositionCloseReasonName | null
+  realizedPnl: number
+  feesPaid: number
+  unrealizedPnl: number | null
+  lastMarkPrice: number | null
+  lastMarkedAt: string | null
+  maxAdverseExcursion: number
+}
+
+export type BotDetail = {
+  id: string
+  name: string
+  description: string | null
+  symbol: string
+  interval: string
+  venue: MarketVenueName
+  operatingMode: OperatingModeName
+  takeProfitPercent: number
+  stopLossPercent: number
+  allowShort: boolean
+  quoteNotionalPerTrade: number
+  minimumConfidence: number
+  maxHoldingPeriods: number
+  cadenceSeconds: number
+  status: BotStatusName
+  statusReason: string | null
+  faultedAt: string | null
+  lastEvaluatedCandleOpenTime: string | null
+  lastTickAt: string | null
+  maxOrderNotional: number
+  maxPositionNotional: number
+  maxDailyLoss: number
+  maxDrawdown: number
+  maxConcurrentPositions: number
+  maxOrdersPerDay: number
+  maxConsecutiveFailures: number
+  maxSlippageBps: number
+  expectedModelVersion: string | null
+  createdAt: string
+  updatedAt: string | null
+  currentRun: BotRun | null
+  openPositions: BotPosition[]
+  realizedPnl: number
+  closedPositionCount: number
+  isBlockedByKillSwitch: boolean
+}
+
+/** Start, pause and stop all take a reason. It lands in the audit trail as the actor's own words. */
+export type BotStatusChange = { reason: string }
+
+// ─── The causal chain ─────────────────────────────────────────────────────────────────────────────
+
+export type BotDecision = {
+  id: string
+  botId: string
+  operatingMode: OperatingModeName
+  symbol: string
+  interval: string
+  candleOpenTime: string
+  candleWindowDigest: string
+  action: BotDecisionActionName
+  direction: TradeDirectionName
+  reasonCode: string
+  confidence: number
+  longConfidence: number
+  shortConfidence: number
+  expectedValue: number
+  probabilityTakeProfitFirst: number
+  probabilityStopLossFirst: number
+  probabilityTimeout: number
+  entryPrice: number | null
+  takeProfitPrice: number | null
+  stopLossPrice: number | null
+  atr: number | null
+  riskRewardRatio: number | null
+  modelId: string
+  modelVersion: string
+  modelTrainedAt: string | null
+  usedWildcardModel: boolean
+  barrierExtrapolated: boolean
+  warning: string | null
+  validUntil: string | null
+  processingMilliseconds: number
+  createdAt: string
+}
+
+/**
+ * The risk engine's verdict, kept whether it allowed or denied.
+ *
+ * `failedChecks` is the server's CSV already split. A denial is evidence, not an error to hide, which
+ * is why the orders view renders these rows rather than filtering them out.
+ */
+export type RiskDecision = {
+  id: string
+  allowed: boolean
+  failedChecks: string[]
+  detail: string | null
+  snapshotJson: string | null
+  evaluatedAt: string
+}
+
+export type OrderFill = {
+  id: string
+  venue: MarketVenueName
+  venueTradeId: string
+  price: number
+  quantity: number
+  fee: number
+  feeAsset: string
+  isMaker: boolean | null
+  executedAt: string
+}
+
+export type ExchangeOrder = {
+  id: string
+  venue: MarketVenueName
+  venueOrderId: string | null
+  clientOrderId: string
+  status: ExchangeOrderStatusName
+  filledQuantity: number
+  averageFillPrice: number | null
+  requestHash: string | null
+  responseHash: string | null
+  submittedAt: string
+  venueUpdatedAt: string | null
+  lastReconciledAt: string | null
+  fills: OrderFill[]
+}
+
+export type OrderIntent = {
+  id: string
+  botId: string
+  strategyDecisionId: string
+  operatingMode: OperatingModeName
+  clientOrderId: string
+  symbol: string
+  direction: TradeDirectionName
+  side: OrderSideName
+  type: OrderTypeName
+  quantity: number
+  limitPrice: number | null
+  takeProfitPrice: number | null
+  stopLossPrice: number | null
+  timeInForce: TimeInForceName | null
+  referencePrice: number
+  estimatedNotional: number
+  status: OrderIntentStatusName
+  statusReason: string | null
+  submittedAt: string | null
+  completedAt: string | null
+  createdAt: string
+  riskDecision: RiskDecision | null
+  exchangeOrders: ExchangeOrder[]
+}
+
+/**
+ * One link in the audit chain. Ordered by `occurredAt` *then* `sequence` — a tick writes several
+ * events inside one transaction, so timestamps alone cannot order them.
+ */
+export type BotAuditEvent = {
+  id: string
+  botId: string | null
+  operatingMode: OperatingModeName
+  eventType: BotAuditEventTypeName
+  correlationId: string
+  sequence: number
+  summary: string
+  detailJson: string | null
+  symbol: string | null
+  candleOpenTime: string | null
+  modelVersion: string | null
+  strategyDecisionId: string | null
+  orderIntentId: string | null
+  riskDecisionId: string | null
+  exchangeOrderId: string | null
+  orderFillId: string | null
+  botPositionId: string | null
+  killSwitchId: string | null
+  actorUserName: string | null
+  occurredAt: string
+}
+
+// ─── Kill switches ────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Engaging blocks *new* intents. It does not cancel resting orders and it does not close positions —
+ * cancelling a working stop-loss would leave an open position unprotected. The UI says this on the
+ * confirmation, because "kill switch" reads like "flatten everything" and here it does not.
+ */
+export type KillSwitchInput = {
+  scope: KillSwitchScopeName
+  scopeOperatingMode?: OperatingModeName | null
+  scopeVenue?: MarketVenueName | null
+  scopeBotId?: string | null
+  scopeSymbol?: string | null
+  reason: string
+}
+
+export type KillSwitch = {
+  id: string
+  scope: KillSwitchScopeName
+  scopeOperatingMode: OperatingModeName | null
+  scopeVenue: MarketVenueName | null
+  scopeBotId: string | null
+  scopeSymbol: string | null
+  isEngaged: boolean
+  reason: string
+  isAutomatic: boolean
+  triggerDetail: string | null
+  engagedAt: string | null
+  engagedByUserName: string | null
+  disengagedAt: string | null
+  disengagedByUserName: string | null
+  createdAt: string
+}
+
+// ─── Query shapes ─────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Trading listings page by *query parameter*, not by the `/{page}/{pageSize}/{desc}` path segments
+ * the auth listings use. Two shapes in one client is a wart; inventing a third by making these look
+ * like the others would be worse.
+ */
+export type TradingPageQuery = {
+  pageNumber: number
+  pageSize: number
+}
+
+export type BotFilters = {
+  operatingMode?: OperatingModeName | ''
+  status?: BotStatusName | ''
+  symbol?: string
+}
+
+export type BotDecisionFilters = { action?: BotDecisionActionName | '' }
+export type KillSwitchFilters = { engagedOnly?: boolean }
+
+// ─── ML engine ────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One market the engine has a model for.
+ *
+ * `isWildcard` true means this row is answered by the pooled cross-symbol model rather than a
+ * dedicated fit. That is not a defect — every feature the model reads is scale-free, which is what
+ * makes one estimator generalise to a pair it never saw — but it is a fact the reader is entitled to,
+ * so it is reported rather than smoothed over.
+ */
+export type MlSupportedMarket = {
+  symbol: string
+  interval: string
+  modelId: string
+  modelVersion: string
+  isWildcard: boolean
+}
+
+export type MlCapabilities = {
+  service: string
+  serviceVersion: string
+  protocolVersion: string
+  capabilities: string[]
+  supportedOperations: string[]
+  modelReady: boolean
+  minimumCandles: number
+  maximumCandles: number
+  supportedMarkets: MlSupportedMarket[]
+  wildcardModelReady: boolean
+  operatingMode: string
+}
+
+/** One point on a model's measured confidence distribution: the share of held-out candles at or above a threshold. */
+export type MlConfidenceReach = { threshold: number; share: number }
+
+/**
+ * Model metadata.
+ *
+ * `confidenceCeiling` is the highest confidence the model produced on held-out data, or `0` when the
+ * training run did not measure it. A minimum-confidence floor above that ceiling can never be met, so
+ * what it filters out is every signal — silence, not safety.
+ */
+export type MlModelInfo = {
+  ready: boolean
+  modelId: string
+  modelVersion: string
+  projectVersion: string
+  symbol: string
+  interval: string
+  trainedAt: string | null
+  featureCount: number
+  isWildcard: boolean
+  labelScheme: string
+  calibrationMethod: string
+  defaultMaxHoldingPeriods: number
+  minimumBarrierAtr: number
+  maximumBarrierAtr: number
+  confidenceCeiling: number
+  confidenceReach: MlConfidenceReach[]
+}

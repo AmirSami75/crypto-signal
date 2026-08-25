@@ -2,22 +2,40 @@ import { fa } from '../i18n/fa'
 import type {
   ApiStatusCode,
   ApiStatusName,
+  BotAuditEvent,
+  BotDecision,
+  BotDecisionFilters,
+  BotDetail,
+  BotFilters,
+  BotInput,
+  BotPosition,
+  BotStatusChange,
+  BotSummary,
   ChangePasswordRequest,
   DevErrorPayload,
+  KillSwitch,
+  KillSwitchFilters,
+  KillSwitchInput,
   LoginHistoryEntry,
   LoginHistoryFilters,
   LoginRequest,
+  MlCapabilities,
+  MlModelInfo,
+  OrderIntent,
   PagedResult,
   PageQuery,
-  PlatformInfo,
   Permission,
-  Readiness,
+  PlatformInfo,
   RawEnvelope,
+  Readiness,
   RegisterRequest,
   Role,
   RoleInput,
   SessionUser,
+  Signal,
+  SignalRequest,
   TitleFilter,
+  TradingPageQuery,
   User,
   UserFilters,
   UserInput,
@@ -506,6 +524,122 @@ export const api = {
         `${pagedPath('/api/v1/login-history', query)}${queryString(filters)}`,
         { signal },
       ),
+  },
+
+  /**
+   * `POST /api/v1/ml/signals` — one calibrated answer for one requested market.
+   *
+   * A POST that reads rather than writes, which is deliberate: the request carries the barrier pair
+   * the model is being asked about, and putting a bet's parameters in a query string would make it
+   * cacheable and loggable as a URL. Nothing is stored server-side by this call, and it places no
+   * order — the endpoint that could is not reachable over HTTP at all.
+   */
+  signals: {
+    get: (payload: SignalRequest, signal?: AbortSignal) =>
+      request<Signal>('/api/v1/ml/signals', { method: 'POST', body: payload, signal }),
+  },
+
+  /**
+   * Read-only introspection of the engine itself.
+   *
+   * Separate from `signals` because it is a separate privilege: `Ml.GetCapabilities` describes the
+   * engine, `Signal.Get` asks it for a trade. An operator may hold the second without the first, so
+   * anything that reads these must treat a denial as "no suggestions available" and carry on — never
+   * as a failure of the screen it is on.
+   */
+  ml: {
+    capabilities: (signal?: AbortSignal) =>
+      request<MlCapabilities>('/api/v1/ml/capabilities', { signal }),
+
+    /** Both parameters omitted resolves the pooled model; the response reports which one answered. */
+    model: (query: { symbol?: string; interval?: string } = {}, signal?: AbortSignal) =>
+      request<MlModelInfo>(`/api/v1/ml/model${queryString(query)}`, { signal }),
+  },
+
+  bots: {
+    paged: (query: TradingPageQuery, filters: BotFilters = {}, signal?: AbortSignal) =>
+      request<PagedResult<BotSummary>>(`/api/v1/bot${queryString({ ...filters, ...query })}`, { signal }),
+
+    byId: (id: string, signal?: AbortSignal) => request<BotDetail>(`/api/v1/bot/${id}`, { signal }),
+
+    /** Born `Draft` whatever the payload says — a bot that could be created running would bypass
+     *  the platform gates that only run at start. */
+    create: (payload: BotInput, signal?: AbortSignal) =>
+      request<BotDetail>('/api/v1/bot', { method: 'POST', body: payload, signal }),
+
+    /** Refused while the bot is Active, and refused for `symbol`/`interval`/`operatingMode`. */
+    update: (id: string, payload: BotInput, signal?: AbortSignal) =>
+      request<BotDetail>(`/api/v1/bot/${id}`, { method: 'PUT', body: payload, signal }),
+
+    /** Refused while Active or Paused, and refused while any position is open. */
+    remove: (id: string, signal?: AbortSignal) =>
+      request<void>(`/api/v1/bot/${id}`, { method: 'DELETE', signal }),
+
+    // Start is the authorization moment: the platform allowlists, the zero-limit refusals and the
+    // kill-switch check all run here, not at create time. So a 'Unauthorized'/'BadRequest' envelope
+    // from this call is the normal way a misconfigured bot is refused, and its message is the answer.
+    start: (id: string, payload: BotStatusChange, signal?: AbortSignal) =>
+      request<BotDetail>(`/api/v1/bot/${id}/start`, { method: 'POST', body: payload, signal }),
+
+    pause: (id: string, payload: BotStatusChange, signal?: AbortSignal) =>
+      request<BotDetail>(`/api/v1/bot/${id}/pause`, { method: 'POST', body: payload, signal }),
+
+    /** Ends every open run and clears the fault, so a faulted bot is restartable from the UI. */
+    stop: (id: string, payload: BotStatusChange, signal?: AbortSignal) =>
+      request<BotDetail>(`/api/v1/bot/${id}/stop`, { method: 'POST', body: payload, signal }),
+  },
+
+  /**
+   * The read side of the causal chain: candle → model → decision → intent → risk → order → fill →
+   * position. Refusals are first-class — a denied intent and its `riskDecision` come back alongside
+   * the filled ones rather than being filtered out.
+   */
+  botHistory: {
+    decisions: (
+      botId: string,
+      query: TradingPageQuery,
+      filters: BotDecisionFilters = {},
+      signal?: AbortSignal,
+    ) =>
+      request<PagedResult<BotDecision>>(
+        `/api/v1/bot/${botId}/decisions${queryString({ ...filters, ...query })}`,
+        { signal },
+      ),
+
+    orders: (botId: string, query: TradingPageQuery, signal?: AbortSignal) =>
+      request<PagedResult<OrderIntent>>(`/api/v1/bot/${botId}/orders${queryString({ ...query })}`, {
+        signal,
+      }),
+
+    positions: (botId: string, query: TradingPageQuery, signal?: AbortSignal) =>
+      request<PagedResult<BotPosition>>(`/api/v1/bot/${botId}/positions${queryString({ ...query })}`, {
+        signal,
+      }),
+
+    audit: (botId: string, query: TradingPageQuery, signal?: AbortSignal) =>
+      request<PagedResult<BotAuditEvent>>(`/api/v1/bot/${botId}/audit${queryString({ ...query })}`, {
+        signal,
+      }),
+  },
+
+  killSwitches: {
+    // Kebab-cased by the route transformer, like login-history: `/kill-switch`.
+    paged: (query: TradingPageQuery, filters: KillSwitchFilters = {}, signal?: AbortSignal) =>
+      request<PagedResult<KillSwitch>>(`/api/v1/kill-switch${queryString({ ...filters, ...query })}`, {
+        signal,
+      }),
+
+    /** Idempotent: engaging a scope that is already engaged returns the existing switch. */
+    engage: (payload: KillSwitchInput, signal?: AbortSignal) =>
+      request<KillSwitch>('/api/v1/kill-switch', { method: 'POST', body: payload, signal }),
+
+    /** Needs its own reason. It is appended to the trigger detail, never written over `reason`. */
+    disengage: (id: string, payload: { reason: string }, signal?: AbortSignal) =>
+      request<KillSwitch>(`/api/v1/kill-switch/${id}/disengage`, {
+        method: 'POST',
+        body: payload,
+        signal,
+      }),
   },
 
   platform: {

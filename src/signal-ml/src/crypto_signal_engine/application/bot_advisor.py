@@ -143,8 +143,15 @@ class BotAdvisorService:
         working = self._working_bracket(assessment, position)
 
         # 1. The bracket, before any opinion about the market.
+        #
+        # The predicate is the outcome, not `touch.resolved`. On this path the scan window *is* the
+        # horizon — `_resolve_bracket` passes `max_horizon=len(high)` because it asks what already
+        # happened over the held span — so `resolved` comes back True by construction, TIMEOUT included.
+        # TIMEOUT here means "neither barrier touched", which is exactly the position that must stay
+        # open, and it carries `exit_price=nan`. Reading `resolved` instead would close every held
+        # position on its next tick and report a stop-loss at a price of nan.
         touch = self._resolve_bracket(assessment, position, working)
-        if touch.resolved:
+        if touch.outcome is not Outcome.TIMEOUT:
             reason = (
                 "take_profit_touched"
                 if touch.outcome is Outcome.TAKE_PROFIT_FIRST

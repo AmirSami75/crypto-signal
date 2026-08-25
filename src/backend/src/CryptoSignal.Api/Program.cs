@@ -1,4 +1,9 @@
 using Asp.Versioning;
+using System.Net;
+using CryptoSignal.Api.Domain.Enums.Trading;
+using CryptoSignal.Api.Application.Trading.Execution;
+using CryptoSignal.Api.Application.Trading.MarketData;
+using CryptoSignal.Api.Application.Trading.Risk;
 using CryptoSignal.Api.Adapter.Persistence.Contexts;
 using CryptoSignal.Api.Adapter.Persistence.Contexts.Dapper;
 using CryptoSignal.Api.Application.DTOs.Auth;
@@ -137,6 +142,123 @@ services
     });
 
 services.AddSingleton<IMlServiceClient, MlServiceClient>();
+
+// ── Trading: exchange & market-data options ──────────────────────────────────────
+// Credentials are bound from the environment only (Exchange__BinanceTestnet__ApiKey /
+// __ApiSecret). An empty key is not a validation failure: a venue with no credentials is one this
+// deployment cannot trade, and that must be a normal, quiet state rather than a startup crash.
+services
+    .AddOptions<ExchangeOptions>()
+    .Bind(config.GetSection(ExchangeOptions.SectionName))
+    .Validate(value => value.RecvWindowMs is >= 1000 and <= 60_000,
+        "Exchange:RecvWindowMs must be between 1000 and 60000")
+    .Validate(value => value.RequestTimeoutSeconds is >= 1 and <= 120,
+        "Exchange:RequestTimeoutSeconds must be between 1 and 120")
+    .ValidateOnStart();
+
+services
+    .AddOptions<MarketDataOptions>()
+    .Bind(config.GetSection(MarketDataOptions.SectionName))
+    .ValidateOnStart();
+
+services
+    .AddOptions<PaperBrokerOptions>()
+    .Bind(config.GetSection(PaperBrokerOptions.SectionName))
+    .Validate(value => value.SlippageBps is >= 0 and <= 1000,
+        "Trading:Paper:SlippageBps must be between 0 and 1000")
+    .Validate(value => value.FeeBps is >= 0 and <= 1000,
+        "Trading:Paper:FeeBps must be between 0 and 1000")
+    .Validate(value => value.QuoteBalance >= 0,
+        "Trading:Paper:QuoteBalance cannot be negative")
+    .ValidateOnStart();
+
+// The bot loop, and the only place in this application that submits an order. It is a hosted
+// service rather than anything reachable over HTTP because an HTTP request can be replayed by a
+// refresh or a retrying proxy, and a replayed submit is a duplicate trade
+// (docs/LIVE_TRADING_SAFETY.md). Registered unconditionally: the service reads
+// Trading:SchedulerEnabled itself and idles when it is false, which keeps "why is nothing running"
+// answerable from a log line instead of from the absence of one.
+services.AddHostedService<BotSchedulerService>();
+
+// ── Trading: scheduler & platform risk ceilings ──────────────────────────────────
+// Two sections, deliberately: "Trading" decides when a bot is looked at, "Trading:Risk" decides
+// whether an order may be placed. Keeping them apart means a cadence change cannot widen a limit.
+//
+// Neither is validated into existence. Every risk default already denies — empty allowlists, zero
+// maxima, live execution off — so a missing or misnamed section produces a deployment that trades
+// nothing rather than one that refuses to start. Validation here only rejects values that are
+// incoherent rather than merely restrictive: a negative limit, or a poll interval of zero.
+services
+    .AddOptions<TradingOptions>()
+    .Bind(config.GetSection(TradingOptions.SectionName))
+    .Validate(value => value.PollSeconds is >= 1 and <= 3600,
+        "Trading:PollSeconds must be between 1 and 3600")
+    .Validate(value => value.MaxBotsPerCycle is >= 1 and <= 1000,
+        "Trading:MaxBotsPerCycle must be between 1 and 1000")
+    .Validate(value => value.CandleWindowSize is >= 50 and <= 1500,
+        "Trading:CandleWindowSize must be between 50 and 1500")
+    .Validate(value => value.TickTimeoutSeconds is >= 5 and <= 600,
+        "Trading:TickTimeoutSeconds must be between 5 and 600")
+    .Validate(value => value.LeaseStaleSeconds >= value.PollSeconds * 2,
+        "Trading:LeaseStaleSeconds must be at least twice Trading:PollSeconds, or a healthy worker's lease expires under it")
+    .ValidateOnStart();
+
+services
+    .AddOptions<TradingRiskOptions>()
+    .Bind(config.GetSection(TradingRiskOptions.SectionName))
+    .Validate(value => value.MaxOrderNotional >= 0
+                       && value.MaxPositionNotional >= 0
+                       && value.MaxDailyLoss >= 0
+                       && value.MaxOrdersPerDay >= 0
+                       && value.MaxConcurrentPositions >= 0
+                       && value.MaxCandleAgeIntervals >= 0
+                       && value.MaxConsecutiveFailures >= 0,
+        "No Trading:Risk limit may be negative — zero already denies, and a negative value would only obscure that")
+    .Validate(value => value.MaxLeverage >= 1, "Trading:Risk:MaxLeverage must be at least 1")
+
+    // Spot cannot borrow to sell what it does not hold. A config claiming both is not restrictive,
+    // it is contradictory, and the contradiction must surface at startup rather than as a broker
+    // rejection on the first short.
+    .Validate(value => !(value.SpotOnly && value.AllowShorting),
+        "Trading:Risk cannot set both SpotOnly and AllowShorting — a spot account cannot short")
+    .Validate(value => !(value.AllowLiveExecution && !value.EnabledOperatingModes.Contains(
+                             nameof(OperatingMode.Live), StringComparer.OrdinalIgnoreCase)),
+        "Trading:Risk:AllowLiveExecution is true but LIVE is not in EnabledOperatingModes")
+    .ValidateOnStart();
+
+// One named client per venue, shared by that venue's kline source, rule provider and broker, so a
+// sandbox broker can never borrow the mainnet channel. The handler lifetime is short because the
+// venue rotates DNS; the timeout is what turns an unanswered write into an explicit ambiguous
+// outcome rather than a hung tick.
+AddVenueClient(MarketVenue.BinanceTestnet);
+AddVenueClient(MarketVenue.BinanceMainnet);
+
+void AddVenueClient(MarketVenue venue)
+{
+    var exchange = config.GetSection(ExchangeOptions.SectionName).Get<ExchangeOptions>() ?? new ExchangeOptions();
+
+    var httpBuilder = services
+        .AddHttpClient(TradingHttpClients.ForVenue(venue), client =>
+        {
+            client.BaseAddress = new Uri(exchange.RestBaseUrl(venue), UriKind.Absolute);
+            client.Timeout = TimeSpan.FromSeconds(exchange.RequestTimeoutSeconds);
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
+        })
+        .SetHandlerLifetime(TimeSpan.FromMinutes(5));
+
+    // Mainnet is unreachable from inside the containers without one. Configured per venue and never
+    // inherited from the environment: an order silently leaving through an unexpected proxy is a
+    // worse failure than one that does not leave at all.
+    var proxyUrl = exchange.For(venue).ProxyUrl;
+    httpBuilder.ConfigurePrimaryHttpMessageHandler(() =>
+        string.IsNullOrWhiteSpace(proxyUrl)
+            ? new HttpClientHandler { UseProxy = false }
+            : new HttpClientHandler
+            {
+                UseProxy = true,
+                Proxy = new WebProxy(proxyUrl),
+            });
+}
 
 services.AddHttpContextAccessor();
 
@@ -293,6 +415,34 @@ services.AddRateLimiter(options =>
 
                 // No queue: a caller over the limit should be told so immediately rather than have
                 // the request held open.
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            }));
+
+    // Bot start / pause / stop. Bounded because each transition writes an audit row and ends or opens
+    // a lease, so a hammered endpoint pollutes the chain an incident review has to read. Loose enough
+    // that an operator managing a fleet by hand never meets it.
+    options.AddPolicy(RateLimitPolicies.BotControl, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = RateLimitPolicies.BotControlPermitLimit,
+                Window = TimeSpan.FromMinutes(RateLimitPolicies.BotControlWindowMinutes),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            }));
+
+    // The kill switch is deliberately the loosest policy here. Engaging one is the safe action, and an
+    // operator stopping trading in an emergency must never be told to wait — a limit that could delay
+    // an emergency stop would be a safety defect dressed as a load control.
+    options.AddPolicy(RateLimitPolicies.KillSwitchControl, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = RateLimitPolicies.KillSwitchPermitLimit,
+                Window = TimeSpan.FromMinutes(RateLimitPolicies.KillSwitchWindowMinutes),
                 QueueLimit = 0,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
             }));

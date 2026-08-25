@@ -4,11 +4,16 @@ import type { Permission } from './apiTypes'
 /**
  * Grouping for the permission catalogue.
  *
- * Permission names are `Resource.Action` — `User.Get`, `Role.Delete`, `Ml.PredictSignal` — because
+ * Permission names are `Resource.Action` — `User.Get`, `Role.Delete`, `Bot.Start` — because
  * `PermissionSeeder` builds each one from a controller's `[ControllerInfo]` name and its `[Permission]`
  * action. That prefix is the only structure the catalogue has, and it is the structure a person
- * reading it expects: sixteen rows in a flat alphabetical list is a wall, while five labelled groups
- * of three or four is a picker you can use.
+ * reading it expects: thirty-odd rows in a flat alphabetical list is a wall, while nine labelled
+ * groups of two to five is a picker you can use.
+ *
+ * Trading resources come first because they are the ones an operator grants and revokes; the auth
+ * resources are set up once. `Bot.Start` and `KillSwitch.Engage` are the two rows most worth finding
+ * quickly, and burying them under four sections of user administration is how a grant gets made by
+ * scrolling rather than by reading.
  *
  * The group order is fixed here rather than taken from the response. `GET /api/v1/permission` orders
  * by creation date descending, so today the list happens to start with `Role.*` and the order would
@@ -17,7 +22,17 @@ import type { Permission } from './apiTypes'
  */
 
 /** Group order, most-used first. Anything the server sends that is not listed sorts to the end. */
-const GROUP_ORDER = ['User', 'Role', 'Permission', 'LoginHistory', 'Ml'] as const
+const GROUP_ORDER = [
+  'Bot',
+  'BotHistory',
+  'Signal',
+  'KillSwitch',
+  'Ml',
+  'User',
+  'Role',
+  'Permission',
+  'LoginHistory',
+] as const
 
 /** The resource half of a permission name. Returns the whole name when there is no dot to split on. */
 export function permissionResource(name: string): string {

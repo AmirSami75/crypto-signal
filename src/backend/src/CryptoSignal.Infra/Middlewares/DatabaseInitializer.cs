@@ -23,9 +23,14 @@ public static class DatabaseInitializer
 
         try
         {
-            logger.LogInformation("Creating database...");
-            await dbContext.Database.EnsureCreatedAsync();
-            logger.LogInformation("Database has been created.");
+            // MigrateAsync, not EnsureCreatedAsync: the latter is a no-op on a database that already
+            // exists, so a new entity would never reach the running dev DB. Migrating applies every
+            // pending migration in order and bootstraps __EFMigrationsHistory on a fresh database. An
+            // existing database predating migrations must have the Baseline row inserted as already
+            // applied (see docs) so its live Auth tables are not re-created underneath it.
+            logger.LogInformation("Applying database migrations...");
+            await dbContext.Database.MigrateAsync();
+            logger.LogInformation("Database migrations are up to date.");
 
             var customInitializers = scope.ServiceProvider
                 .GetServices<IDbObjectInitializer>()

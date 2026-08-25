@@ -309,17 +309,26 @@ class MarketEvaluator:
                 f"{parameters.minimum_confidence}; a threshold of 1 can never be met"
             )
 
-    def _is_extrapolated(self, barriers: BarrierPair) -> bool:
-        """Whether either barrier sits outside the span the model was fitted across.
+    def _barriers_outside_bounds(self, barriers: BarrierPair) -> tuple[tuple[str, float], ...]:
+        """Which of the two requested barriers sit outside the span the model was fitted across.
 
-        Its own method so the flag and the warning clause below are the same test rather than two copies
-        of one inequality — the failure mode of two copies is a response whose bool says "measured" and
-        whose prose says "extrapolated", and a caller that believes whichever it read first.
+        The single source for both the `barrier_extrapolated` flag and the extrapolation clause of
+        `warning`. Deliberately one method rather than the same inequality written twice: the failure
+        mode of two copies is a response whose bool says "measured" and whose prose says "extrapolated",
+        and a caller that believes whichever of the two it happened to read first.
         """
         low, high = self._barrier_atr_bounds
-        return not (
-            low <= barriers.take_profit_atr <= high and low <= barriers.stop_loss_atr <= high
+        return tuple(
+            (name, value)
+            for name, value in (
+                ("take_profit_atr", barriers.take_profit_atr),
+                ("stop_loss_atr", barriers.stop_loss_atr),
+            )
+            if not low <= value <= high
         )
+
+    def _is_extrapolated(self, barriers: BarrierPair) -> bool:
+        return bool(self._barriers_outside_bounds(barriers))
 
     def _warning(
         self,
@@ -333,14 +342,7 @@ class MarketEvaluator:
         notes: list[str] = list(window.warnings)
 
         low, high = self._barrier_atr_bounds
-        outside = [
-            f"{name}={value:.2f}"
-            for name, value in (
-                ("take_profit_atr", barriers.take_profit_atr),
-                ("stop_loss_atr", barriers.stop_loss_atr),
-            )
-            if not low <= value <= high
-        ]
+        outside = [f"{name}={value:.2f}" for name, value in self._barriers_outside_bounds(barriers)]
         if outside:
             notes.append(
                 f"barrier extrapolation: {', '.join(outside)} lies outside the {low:g}-{high:g} ATR "

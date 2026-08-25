@@ -4,8 +4,8 @@ import type { SessionUser } from '../lib/apiTypes'
  * Permission names as the server mints them, from `[Permission]` attributes via `PermissionSeeder`.
  * Listed as constants so a typo is a compile error rather than a nav entry that silently never shows.
  *
- * These are the sixteen rows `GET /api/v1/permission` returns today. If the catalogue grows, this
- * list is the place to mirror it.
+ * These are the rows `GET /api/v1/permission` returns today. If the catalogue grows, this list is the
+ * place to mirror it.
  */
 export const PERMISSIONS = {
   userGet: 'User.Get',
@@ -26,7 +26,32 @@ export const PERMISSIONS = {
 
   mlGetModel: 'Ml.GetModel',
   mlGetCapabilities: 'Ml.GetCapabilities',
-  mlPredictSignal: 'Ml.PredictSignal',
+
+  // Asking the engine for a trade is a different privilege from inspecting the engine, which is why
+  // this is `Signal.*` and not a third `Ml.*` entry. It authorizes a *question*: the endpoint behind
+  // it places no order, and no endpoint on the platform does.
+  signalGet: 'Signal.Get',
+
+  botGet: 'Bot.Get',
+  botGetById: 'Bot.GetById',
+  botCreate: 'Bot.Create',
+  botUpdate: 'Bot.Update',
+  botDelete: 'Bot.Delete',
+
+  // Separate from create/update on purpose: authoring a bot's configuration and turning it loose on a
+  // venue are different acts, and an operator may reasonably hold one without the other.
+  botStart: 'Bot.Start',
+  botPause: 'Bot.Pause',
+  botStop: 'Bot.Stop',
+
+  botHistoryGetDecisions: 'BotHistory.GetDecisions',
+  botHistoryGetOrders: 'BotHistory.GetOrders',
+  botHistoryGetPositions: 'BotHistory.GetPositions',
+  botHistoryGetAudit: 'BotHistory.GetAudit',
+
+  killSwitchGet: 'KillSwitch.Get',
+  killSwitchEngage: 'KillSwitch.Engage',
+  killSwitchDisengage: 'KillSwitch.Disengage',
 } as const
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS]

@@ -41,6 +41,9 @@ services:
     volumes:
       - ../src/backend:/workspace/src/backend
       - ../contracts:/workspace/contracts:ro
+      # The same recordings the ML engine trains on, so a replayed bot and a trained model see
+      # byte-identical candles. Read-only: the API replays this data, it never writes it.
+      - ../src/signal-ml/data:/workspace/data/replay:ro
 
   dashboard:
     build:
