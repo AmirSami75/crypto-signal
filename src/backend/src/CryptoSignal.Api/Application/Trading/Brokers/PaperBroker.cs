@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
 using CryptoSignal.Api.Application.Markers;
+using CryptoSignal.Api.Application.Security;
 using CryptoSignal.Api.Application.Options;
 using CryptoSignal.Api.Application.Trading.Abstractions;
 using CryptoSignal.Api.Application.Trading.Models;
@@ -50,7 +51,10 @@ public sealed class PaperBroker(
     /// </remarks>
     public bool Supports(OperatingMode mode, MarketVenue venue) => mode == OperatingMode.Paper;
 
-    public Task<BrokerPlacement> PlaceAsync(BrokerOrderRequest request, CancellationToken cancellationToken)
+    public Task<BrokerPlacement> PlaceAsync(
+        BrokerOrderRequest request,
+        VenueCredentials? credentials = null,
+        CancellationToken cancellationToken = default)
     {
         var rejection = Validate(request);
         if (rejection is not null)
@@ -112,7 +116,8 @@ public sealed class PaperBroker(
     public Task<BrokerPlacement> ReconcileAsync(
         string symbol,
         string clientOrderId,
-        CancellationToken cancellationToken) =>
+        VenueCredentials? credentials = null,
+        CancellationToken cancellationToken = default) =>
         Task.FromResult(new BrokerPlacement(
             BrokerOutcome.Rejected, ExchangeOrderStatus.Unknown, VenueOrderId: null,
             FilledQuantity: 0m, AverageFillPrice: null, Fills: [],
@@ -127,7 +132,8 @@ public sealed class PaperBroker(
     /// this figure deliberately does not move with it: a paper run that stops when a notional wallet empties
     /// stops testing the strategy and starts testing the wallet.
     /// </remarks>
-    public Task<decimal?> GetAvailableBalanceAsync(string quoteAsset, CancellationToken cancellationToken) =>
+    public Task<decimal?> GetAvailableBalanceAsync(
+        string quoteAsset, VenueCredentials? credentials = null, CancellationToken cancellationToken = default) =>
         Task.FromResult<decimal?>(options.Value.QuoteBalance);
 
     /// <summary>The venue's own refusals, applied to the grid the order was sized against.</summary>

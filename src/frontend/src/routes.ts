@@ -16,6 +16,7 @@ export const ROUTES = {
   /** Parameterised. Build a concrete path with {@link botDetailPath} rather than interpolating here. */
   botDetail: '/bots/:botId',
   killSwitches: '/kill-switches',
+  connections: '/connections',
 
   users: '/users',
   roles: '/roles',

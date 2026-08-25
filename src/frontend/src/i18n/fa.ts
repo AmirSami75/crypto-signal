@@ -169,6 +169,7 @@ export const fa = {
     signal: 'سیگنال لحظه‌ای',
     bots: 'ربات‌های معاملاتی',
     killSwitches: 'توقف اضطراری',
+    connections: 'اتصالات صرافی',
     users: 'کاربران',
     roles: 'نقش‌ها',
     permissions: 'سطوح دسترسی',
@@ -719,6 +720,58 @@ export const fa = {
     disengagedSuccess: 'توقف اضطراری غیرفعال شد',
   },
 
+  connections: {
+    title: 'اتصالات صرافی',
+    subtitle: 'کلیدهای API صرافی‌ها؛ ربات‌ها از اینجا مجوز معامله می‌گیرند',
+
+    createButton: 'اتصال جدید',
+    editTitle: 'ویرایش اتصال',
+    createTitle: 'اتصال جدید',
+
+    securityNote:
+      'کلیدها روی سرور رمزنگاری و ذخیره می‌شوند و هرگز دوباره نمایش داده نمی‌شوند. فقط چهار کاراکتر آخر کلید برای تشخیص دیده می‌شود.',
+
+    colLabel: 'نام اتصال',
+    colState: 'وضعیت',
+    stateActive: 'فعال',
+    stateInactive: 'غیرفعال',
+    colValidated: 'آخرین تایید صرافی',
+    neverValidated: 'تایید نشده',
+
+    apiKey: 'کلید API',
+    apiSecret: 'مقدار مخفی API',
+    apiSecretHint: 'رمزنگاری‌شده ذخیره می‌شود؛ هرگز نمایش داده نمی‌شود',
+    labelHint: 'مثلا «حساب اصلی» برای تشخیص در فهرست',
+    reenterHint: 'برای ویرایش، هر دو مقدار باید دوباره وارد شوند',
+    labelRequired: 'وارد کردن نام اتصال اجباری است',
+    secretsRequired: 'وارد کردن کلید و مقدار مخفی اجباری است',
+
+    writeOnceNote:
+      'این مقادیر پس از ذخیره قابل مشاهده نیستند. اگر اشتباه وارد شده باشند، باید دوباره از صرافی کپی شوند.',
+
+    activate: 'فعال کردن',
+    deactivate: 'غیرفعال کردن',
+    confirmActivateTitle: 'فعال کردن این اتصال',
+    confirmActivateBody: 'ربات‌هایی که به این اتصال متصل هستند دوباره می‌توانند سفارش ثبت کنند.',
+    confirmDeactivateTitle: 'غیرفعال کردن این اتصال',
+    confirmDeactivateBody:
+      'از همین لحظه هیچ سفارشی با این کلید ثبت نمی‌شود. ربات‌های متصل به آن تا فعال شدن دوباره خطا می‌گیرند.',
+    confirmDeleteTitle: 'حذف اتصال',
+    confirmDeleteBody: 'این اتصال حذف می‌شود. ربات‌های متصل به آن باید به اتصال دیگری متصل شوند.',
+    activatedSuccess: 'اتصال فعال شد',
+    deactivatedSuccess: 'اتصال غیرفعال شد',
+    createdSuccess: 'اتصال جدید ذخیره شد',
+    updatedSuccess: 'اتصال به‌روزرسانی شد',
+    deletedSuccess: 'اتصال حذف شد',
+
+    pinLabel: 'اتصال صرافی این ربات',
+    pinHint: 'خالی بماند، کلید سرور استفاده می‌شود',
+    pinNone: 'کلید سرور (پیشفرض)',
+
+    emptyTitle: 'اتصالی ثبت نشده است',
+    emptyBody: 'برای معامله در یک صرافی، کلید API همان صرافی را اینجا ثبت کنید.',
+  },
+
   placeholder: {
     title: 'این بخش هنوز ساخته نشده است',
     body: 'زیرساخت احراز هویت و چیدمان داشبورد آماده است. این صفحه در گام‌های بعدی تکمیل می‌شود.',
@@ -726,6 +779,7 @@ export const fa = {
 
   /** Shared table chrome: the pager, the filter bar, and the states a listing can be in. */
   table: {
+    createdAt: 'تاریخ ایجاد',
     rowsPerPage: 'تعداد در صفحه',
     noRecords: 'موردی برای نمایش نیست',
     // Assembled around Latin numerals as «۱ تا ۱۰ از ۶۲»; the spaces are part of the strings so the

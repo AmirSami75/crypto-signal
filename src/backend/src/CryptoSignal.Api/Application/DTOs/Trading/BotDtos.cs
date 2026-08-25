@@ -30,6 +30,12 @@ public sealed record BotInputDto
 
     public MarketVenue Venue { get; init; }
 
+    /// <summary>
+    /// Optional credential pin. Must name an active connection owned by the caller; null resolves the
+    /// operator's environment credentials at tick time.
+    /// </summary>
+    public Guid? ExchangeConnectionId { get; init; }
+
     /// <summary>Ignored on update — the mode is fixed for the bot's lifetime.</summary>
     public OperatingMode OperatingMode { get; init; } = OperatingMode.Paper;
 
@@ -192,6 +198,8 @@ public sealed record BotDetailDto
     public int MaxSlippageBps { get; init; }
 
     public string? ExpectedModelVersion { get; init; }
+
+    public Guid? ExchangeConnectionId { get; init; }
 
     public DateTime CreatedAt { get; init; }
     public DateTime? UpdatedAt { get; init; }

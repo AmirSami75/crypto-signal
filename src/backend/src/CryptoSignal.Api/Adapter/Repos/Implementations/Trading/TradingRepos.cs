@@ -52,3 +52,6 @@ public sealed class BotAuditEventRepo(CryptoSignalDbContext ctx) : Repo<BotAudit
 
 /// <inheritdoc cref="TradingBotRepo"/>
 public sealed class MarketCandleRepo(CryptoSignalDbContext ctx) : Repo<MarketCandle>(ctx);
+
+/// <summary>Per-user exchange API credentials. Secrets are stored AES-GCM sealed; never logged.</summary>
+public sealed class ExchangeConnectionRepo(CryptoSignalDbContext ctx) : Repo<ExchangeConnection>(ctx);

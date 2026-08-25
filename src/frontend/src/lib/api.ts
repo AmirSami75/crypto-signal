@@ -13,6 +13,8 @@ import type {
   BotSummary,
   ChangePasswordRequest,
   DevErrorPayload,
+  ExchangeConnection,
+  ExchangeConnectionInput,
   KillSwitch,
   KillSwitchFilters,
   KillSwitchInput,
@@ -620,6 +622,29 @@ export const api = {
       request<PagedResult<BotAuditEvent>>(`/api/v1/bot/${botId}/audit${queryString({ ...query })}`, {
         signal,
       }),
+  },
+
+  /** Per-user exchange connections. Secrets are write-only: no endpoint returns them. */
+  exchangeConnections: {
+    paged: (query: TradingPageQuery, signal?: AbortSignal) =>
+      request<PagedResult<ExchangeConnection>>('/api/v1/exchange-connection' + queryString({ ...query }), {
+        signal,
+      }),
+
+    list: (signal?: AbortSignal) =>
+      request<PagedResult<ExchangeConnection>>('/api/v1/exchange-connection?pageSize=200', { signal }),
+
+    create: (payload: ExchangeConnectionInput, signal?: AbortSignal) =>
+      request<string>('/api/v1/exchange-connection', { method: 'POST', body: payload, signal }),
+
+    update: (id: string, payload: ExchangeConnectionInput, signal?: AbortSignal) =>
+      request<boolean>(`/api/v1/exchange-connection/${id}`, { method: 'PUT', body: payload, signal }),
+
+    toggleActive: (id: string, signal?: AbortSignal) =>
+      request<boolean>(`/api/v1/exchange-connection/${id}/toggle-active`, { method: 'POST', signal }),
+
+    remove: (id: string, signal?: AbortSignal) =>
+      request<boolean>(`/api/v1/exchange-connection/${id}`, { method: 'DELETE', signal }),
   },
 
   killSwitches: {

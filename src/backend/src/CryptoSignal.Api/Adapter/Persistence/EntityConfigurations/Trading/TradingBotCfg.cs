@@ -60,6 +60,17 @@ public sealed class TradingBotCfg : BaseEntityTypeConfiguration<TradingBot>
 
         #endregion
 
+        #region Relationships
+
+        // Optional pin to one stored credential. Set null when the connection row is deleted — the
+        // bot keeps running on environment credentials rather than being orphaned with it.
+        builder.HasOne<Domain.Models.Trading.ExchangeConnection>()
+            .WithMany()
+            .HasForeignKey(x => x.ExchangeConnectionId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        #endregion
+
         #region Constraints - Data Quality
 
         builder.ToTable(tb =>

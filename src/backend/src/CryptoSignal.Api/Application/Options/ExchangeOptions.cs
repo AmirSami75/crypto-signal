@@ -28,6 +28,8 @@ public sealed class ExchangeOptions
 
     public BinanceVenueOptions BinanceMainnet { get; init; } = new();
 
+    public BinanceVenueOptions Bitunix { get; init; } = new();
+
     /// <summary>
     /// How long a signed request stays valid at the venue, in milliseconds. Binance rejects anything
     /// older, which is what stops a replayed request from executing late.
@@ -42,16 +44,18 @@ public sealed class ExchangeOptions
     {
         MarketVenue.BinanceTestnet => Or(BinanceTestnet.RestBaseUrl, BinanceEndpoints.BinanceTestnet),
         MarketVenue.BinanceMainnet => Or(BinanceMainnet.RestBaseUrl, BinanceEndpoints.BinanceMainnet),
+        MarketVenue.Bitunix => Or(Bitunix.RestBaseUrl, BinanceEndpoints.Bitunix),
         _ => throw new ArgumentOutOfRangeException(
-            nameof(venue), venue, "Only the Binance venues have a REST endpoint."),
+            nameof(venue), venue, "This venue has no REST endpoint configured here."),
     };
 
     public BinanceVenueOptions For(MarketVenue venue) => venue switch
     {
         MarketVenue.BinanceTestnet => BinanceTestnet,
         MarketVenue.BinanceMainnet => BinanceMainnet,
+        MarketVenue.Bitunix => Bitunix,
         _ => throw new ArgumentOutOfRangeException(
-            nameof(venue), venue, "Only the Binance venues are configured here."),
+            nameof(venue), venue, "This venue is not configured here."),
     };
 
     private static string Or(string? configured, string fallback) =>
@@ -85,4 +89,7 @@ public static class BinanceEndpoints
 {
     public const string BinanceTestnet = "https://testnet.binance.vision";
     public const string BinanceMainnet = "https://api.binance.com";
+
+    /// <summary>Bitunix's OpenAPI host (futures).</summary>
+    public const string Bitunix = "https://fapi.bitunix.com";
 }

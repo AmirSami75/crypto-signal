@@ -44,6 +44,14 @@ public class TradingBot : BaseEntity
     /// <summary>Which venue supplies candles and receives orders.</summary>
     public MarketVenue Venue { get; set; }
 
+    /// <summary>
+    /// The user's stored credential this bot trades with, when pinned. Null lets resolution fall
+    /// through to the operator's environment value, which is how a single-venue deployment works
+    /// without ever opening the connections screen. A pin binds the bot to that row for good: if the
+    /// connection is deactivated the bot faults on its next tick rather than trading on a revoked key.
+    /// </summary>
+    public Guid? ExchangeConnectionId { get; set; }
+
     /// <summary>Which venue class this bot's records belong to. Fixed for the bot's lifetime.</summary>
     public OperatingMode OperatingMode { get; set; } = OperatingMode.Paper;
 

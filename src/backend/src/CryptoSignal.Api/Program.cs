@@ -9,6 +9,7 @@ using CryptoSignal.Api.Adapter.Persistence.Contexts.Dapper;
 using CryptoSignal.Api.Application.DTOs.Auth;
 using CryptoSignal.Api.Application.Markers;
 using CryptoSignal.Api.Application.Options;
+using CryptoSignal.Api.Application.Security;
 using CryptoSignal.Api.Clients;
 using CryptoSignal.Api.Contracts;
 using CryptoSignal.Api.Domain;
@@ -172,6 +173,18 @@ services
         "Trading:Paper:QuoteBalance cannot be negative")
     .ValidateOnStart();
 
+// Exchange connections: keys stored AES-GCM sealed, resolved per user at tick time. The master key is
+// validated on start so a missing or malformed value surfaces as a startup failure — never as a
+// runtime surprise after an operator believes their key was saved.
+services
+    .AddOptions<KeyProtectionOptions>()
+    .Bind(config.GetSection(KeyProtectionOptions.SectionName))
+    .Validate(value => !string.IsNullOrWhiteSpace(value.KeyEncryptionKey),
+        "Sercurity:KeyEncryptionKey is required — exchange API keys cannot be stored without it")
+    .Validate(value => Convert.TryFromBase64String(value.KeyEncryptionKey, new byte[32], out _),
+        "Sercurity:KeyEncryptionKey must be a base64 32-byte value")
+    .ValidateOnStart();
+
 // The bot loop, and the only place in this application that submits an order. It is a hosted
 // service rather than anything reachable over HTTP because an HTTP request can be replayed by a
 // refresh or a retrying proxy, and a replayed submit is a duplicate trade
@@ -232,6 +245,7 @@ services
 // outcome rather than a hung tick.
 AddVenueClient(MarketVenue.BinanceTestnet);
 AddVenueClient(MarketVenue.BinanceMainnet);
+AddVenueClient(MarketVenue.Bitunix);
 
 void AddVenueClient(MarketVenue venue)
 {
@@ -332,6 +346,10 @@ services.Scan(scan => scan
     .AddClasses(c => c.AssignableTo<IScopedSvcMarker>())
     .AsSelf().AsImplementedInterfaces().WithScopedLifetime()
 );
+
+// Credential sealing and resolution for stored exchange connections.
+services.AddSingleton<SecretProtector>();
+services.AddScoped<ICredentialProvider, CredentialProvider>();
 
 // Rule engine — also registers IRuleEngine<> and ICrudRuleExecutor<,,>
 services.AddRuleEngines(typeof(IApiMarker).Assembly);

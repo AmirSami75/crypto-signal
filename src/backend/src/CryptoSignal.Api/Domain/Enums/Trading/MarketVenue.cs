@@ -21,4 +21,11 @@ public enum MarketVenue
 
     /// <summary>Binance production. Reachable only where egress exists.</summary>
     [Display(Name = "Binance mainnet")] BinanceMainnet = 3,
+
+    /// <summary>
+    /// Bitunix USDT-margined futures. Their public OpenAPI is futures-only
+    /// (<c>fapi.bitunix.com</c>), double-SHA-256 signed — a different protocol family from the
+    /// Binance venues, hence its own broker and kline source rather than a Binance subclass.
+    /// </summary>
+    [Display(Name = "Bitunix")] Bitunix = 4,
 }

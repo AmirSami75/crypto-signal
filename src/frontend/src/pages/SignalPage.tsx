@@ -140,7 +140,7 @@ export function SignalPage() {
       )}
 
       {/* Form */}
-      <Card className="space-y-4">
+      <Card className="space-y-4 p-5 sm:p-6">
         <h2 className="font-medium text-ink">{fa.signal.formLabel}</h2>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -272,7 +272,7 @@ export function SignalPage() {
 
       {/* Result */}
       {signal && (
-        <Card className="space-y-6">
+        <Card className="space-y-6 p-5 sm:p-6">
           <h2 className="font-medium text-ink">{fa.signal.resultLabel}</h2>
 
           {/* Direction */}

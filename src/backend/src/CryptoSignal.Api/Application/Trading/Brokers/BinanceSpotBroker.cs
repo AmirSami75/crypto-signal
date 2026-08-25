@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using CryptoSignal.Api.Application.Markers;
+using CryptoSignal.Api.Application.Security;
 using CryptoSignal.Api.Application.Options;
 using CryptoSignal.Api.Application.Trading.Abstractions;
 using CryptoSignal.Api.Application.Trading.MarketData;
@@ -56,7 +57,8 @@ public abstract class BinanceSpotBroker(
 
     public async Task<BrokerPlacement> PlaceAsync(
         BrokerOrderRequest request,
-        CancellationToken cancellationToken)
+        VenueCredentials? credentials = null,
+        CancellationToken cancellationToken = default)
     {
         var venueOptions = options.Value.For(Venue);
 
@@ -117,7 +119,8 @@ public abstract class BinanceSpotBroker(
     public async Task<BrokerPlacement> ReconcileAsync(
         string symbol,
         string clientOrderId,
-        CancellationToken cancellationToken)
+        VenueCredentials? credentials = null,
+        CancellationToken cancellationToken = default)
     {
         var venueOptions = options.Value.For(Venue);
 
@@ -147,7 +150,8 @@ public abstract class BinanceSpotBroker(
     /// Null means "unknown" and the risk engine denies on it. That is the intended reading: an unreachable
     /// venue is not an empty account, and it is certainly not an unlimited one.
     /// </remarks>
-    public async Task<decimal?> GetAvailableBalanceAsync(string quoteAsset, CancellationToken cancellationToken)
+    public async Task<decimal?> GetAvailableBalanceAsync(
+        string quoteAsset, VenueCredentials? credentials = null, CancellationToken cancellationToken = default)
     {
         var venueOptions = options.Value.For(Venue);
         if (!venueOptions.HasCredentials)

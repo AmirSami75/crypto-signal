@@ -196,6 +196,7 @@ public class BotController(
             MaxConsecutiveFailures = bot.MaxConsecutiveFailures,
             MaxSlippageBps = bot.MaxSlippageBps,
             ExpectedModelVersion = bot.ExpectedModelVersion,
+            ExchangeConnectionId = bot.ExchangeConnectionId,
             CreatedAt = bot.CreatedAt,
             UpdatedAt = bot.UpdatedAt,
             CurrentRun = run is null ? null : Project(run),
@@ -239,6 +240,7 @@ public class BotController(
             ExpectedModelVersion = string.IsNullOrWhiteSpace(dto.ExpectedModelVersion)
                 ? null
                 : dto.ExpectedModelVersion.Trim(),
+            ExchangeConnectionId = dto.ExchangeConnectionId,
 
             // Never Active on creation, whatever the caller sent. Starting is its own permission and its
             // own audited action; a bot that could be born running would bypass both.
@@ -306,6 +308,7 @@ public class BotController(
         bot.ExpectedModelVersion = string.IsNullOrWhiteSpace(dto.ExpectedModelVersion)
             ? null
             : dto.ExpectedModelVersion.Trim();
+        bot.ExchangeConnectionId = dto.ExchangeConnectionId;
 
         await bots.UpdateAsync(bot, saveNow: true, ct);
         await Record(bot, BotAuditEventType.ConfigurationChanged, "تنظیمات ربات ویرایش شد", ct);

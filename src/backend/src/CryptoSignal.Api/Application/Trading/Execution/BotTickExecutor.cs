@@ -1,4 +1,5 @@
 using CryptoSignal.Api.Application.Markers;
+using CryptoSignal.Api.Application.Security;
 using CryptoSignal.Api.Application.Trading.Abstractions;
 using CryptoSignal.Api.Application.Trading.Models;
 using CryptoSignal.Api.Clients;
@@ -51,6 +52,7 @@ public sealed class BotTickExecutor(
     IMlServiceClient engine,
     IRiskEngine riskEngine,
     IBrokerResolver brokers,
+    ICredentialProvider credentials,
     IBotAuditTrail audit,
     IOptions<TradingOptions> options,
     ILogger<BotTickExecutor> logger) : IScopedSvcMarker
@@ -245,7 +247,12 @@ public sealed class BotTickExecutor(
 
         // ── 7. risk (the one gate; nothing reaches a broker without it) ──────────
         var broker = brokers.Resolve(bot.OperatingMode, bot.Venue);
-        var balance = await broker.GetAvailableBalanceAsync(rules.QuoteAsset, cancellationToken);
+
+        // Credentials come from the bot's pinned connection when it names one, else the owner's
+        // active stored connection, else the environment. Resolved per tick so a deactivated
+        // connection stops feeding orders on its very next evaluation.
+        var creds = await ResolveCredentialsAsync(bot, cancellationToken);
+        var balance = await broker.GetAvailableBalanceAsync(rules.QuoteAsset, creds, cancellationToken);
 
         var verdict = await riskEngine.EvaluateAsync(
             new RiskEvaluationContext(bot, decision, intent, rules, candleOpenTime, balance),
@@ -285,7 +292,37 @@ public sealed class BotTickExecutor(
 
         // ── 8. place, record, and update the position ────────────────────────────
         return await PlaceAndRecordAsync(
-            bot, decision, intent, broker, rules, action, openPosition, correlationId, cancellationToken);
+            bot, decision, intent, broker, creds, rules, action, openPosition, correlationId, cancellationToken);
+    }
+
+
+    /// <summary>
+    /// Credentials for this tick: the bot's pinned connection if it names one (and it must belong to
+    /// the bot's owner and be active), else the owner's most recent active connection for the venue,
+    /// else null — which lets each broker apply its own environment fallback or fail closed.
+    /// </summary>
+    private async Task<VenueCredentials?> ResolveCredentialsAsync(
+        TradingBot bot, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (bot.ExchangeConnectionId is { } pinned)
+            {
+                return bot.UserCreatedId is { } ownerId
+                    ? await credentials.ForConnectionAsync(ownerId, pinned, cancellationToken)
+                    : null;
+            }
+
+            return bot.UserCreatedId is { } owner
+                ? await credentials.ResolveAsync(owner, bot.Venue, cancellationToken)
+                : null;
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            logger.LogError(exception, "Bot {BotId} is pinned to an exchange connection it does not own",
+                bot.Id);
+            return null;
+        }
     }
 
     // ── placement + position accounting ──────────────────────────────────────────
@@ -295,6 +332,7 @@ public sealed class BotTickExecutor(
         StrategyDecision decision,
         OrderIntent intent,
         IBroker broker,
+        VenueCredentials? creds,
         InstrumentRules rules,
         BotDecisionAction action,
         BotPosition? openPosition,
@@ -311,7 +349,7 @@ public sealed class BotTickExecutor(
                 intent.Direction, intent.Side, intent.Type,
                 intent.Quantity, intent.ReferencePrice, intent.LimitPrice,
                 intent.TakeProfitPrice, intent.StopLossPrice, intent.TimeInForce, bot.MaxSlippageBps),
-            cancellationToken);
+            creds, cancellationToken);
 
         var exchangeOrder = new ExchangeOrder
         {

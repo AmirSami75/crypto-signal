@@ -8,6 +8,7 @@ import { Alert } from '../ui/Alert'
 import { Modal } from '../ui/Modal'
 import { fa } from '../../i18n/fa'
 import { api, errorMessage } from '../../lib/api'
+import type { ExchangeConnection } from '../../lib/apiTypes'
 import type {
   BotDetail,
   BotInput,
@@ -57,6 +58,7 @@ type FormState = {
   maxConsecutiveFailures: string
   maxSlippageBps: string
   expectedModelVersion: string
+  exchangeConnectionId: string
 }
 
 const EMPTY_FORM: FormState = {
@@ -82,6 +84,7 @@ const EMPTY_FORM: FormState = {
   maxConsecutiveFailures: '',
   maxSlippageBps: '',
   expectedModelVersion: '',
+  exchangeConnectionId: '',
 }
 
 /** The form keys that render through `numberField` — every one is a numeric *string* field, and each
@@ -135,6 +138,7 @@ function fromDetail(bot: BotDetail): FormState {
     maxConsecutiveFailures: num(bot.maxConsecutiveFailures),
     maxSlippageBps: num(bot.maxSlippageBps),
     expectedModelVersion: bot.expectedModelVersion ?? '',
+    exchangeConnectionId: bot.exchangeConnectionId ?? '',
   }
 }
 
@@ -156,6 +160,25 @@ export function BotFormModal({
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [isLoading, setIsLoading] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
+  // The operator's stored connections, offered as the optional credential pin. Fetched once on open;
+  // an empty list just means the environment credentials remain the only source.
+  const [connections, setConnections] = useState<ExchangeConnection[]>([])
+
+  useEffect(() => {
+    if (!isOpen) return
+    let cancelled = false
+    api.exchangeConnections
+      .list()
+      .then(result => {
+        if (!cancelled) setConnections((result.items ?? []).filter(c => c.isActive))
+      })
+      .catch(() => {
+        /* a failed listing must not block the form; env credentials still work */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen])
 
   // The dialog unmounts its body when closed, so seeding from `bot` on open — not on mount — is what
   // makes editing a second bot show the second bot's values.
@@ -215,6 +238,7 @@ export function BotFormModal({
         form.maxConsecutiveFailures === '' ? 0 : parseInt(form.maxConsecutiveFailures, 10),
       maxSlippageBps: form.maxSlippageBps === '' ? 0 : parseInt(form.maxSlippageBps, 10),
       expectedModelVersion: form.expectedModelVersion.trim() || null,
+      exchangeConnectionId: form.exchangeConnectionId === '' ? null : form.exchangeConnectionId,
     }
 
     setIsLoading(true)
@@ -430,6 +454,28 @@ export function BotFormModal({
             description={fa.signal.allowShortHint}
             disabled={isLoading}
           />
+
+          {/* Optional credential pin. Empty = environment credentials; a pinned connection that is
+              later deactivated faults the bot rather than silently trading on a revoked key. */}
+          {connections.length > 0 && (
+            <Field label={fa.connections.pinLabel} hint={fa.connections.pinHint}>
+              {ids => (
+                <Select
+                  {...ids}
+                  value={form.exchangeConnectionId}
+                  onChange={e => set('exchangeConnectionId', e.target.value)}
+                  disabled={isLoading}
+                >
+                  <option value="">{fa.connections.pinNone}</option>
+                  {connections.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {(fa.trading.venue[c.venue] ?? c.venue) + ' — ' + c.label + ' (****' + c.keyPreview + ')'}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+          )}
         </section>
 
         {/* ── Risk limits ── */}

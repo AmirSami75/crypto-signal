@@ -49,6 +49,11 @@ export const PERMISSIONS = {
   botHistoryGetPositions: 'BotHistory.GetPositions',
   botHistoryGetAudit: 'BotHistory.GetAudit',
 
+  exchangeConnectionGet: 'ExchangeConnection.Get',
+  exchangeConnectionCreate: 'ExchangeConnection.Create',
+  exchangeConnectionUpdate: 'ExchangeConnection.Update',
+  exchangeConnectionDelete: 'ExchangeConnection.Delete',
+
   killSwitchGet: 'KillSwitch.Get',
   killSwitchEngage: 'KillSwitch.Engage',
   killSwitchDisengage: 'KillSwitch.Disengage',

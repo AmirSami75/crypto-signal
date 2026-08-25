@@ -1,3 +1,4 @@
+using CryptoSignal.Api.Application.Security;
 using CryptoSignal.Api.Application.Trading.Models;
 using CryptoSignal.Api.Domain.Enums.Trading;
 
@@ -29,7 +30,10 @@ public interface IBroker
     /// Submits the order. Must be idempotent on <c>ClientOrderId</c>: a retry of a request the venue
     /// already accepted reports that same order rather than placing a second one.
     /// </summary>
-    Task<BrokerPlacement> PlaceAsync(BrokerOrderRequest request, CancellationToken cancellationToken);
+    Task<BrokerPlacement> PlaceAsync(
+        BrokerOrderRequest request,
+        VenueCredentials? credentials = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Re-reads an order the venue may or may not hold, by the client id it was submitted under. This
@@ -38,7 +42,8 @@ public interface IBroker
     Task<BrokerPlacement> ReconcileAsync(
         string symbol,
         string clientOrderId,
-        CancellationToken cancellationToken);
+        VenueCredentials? credentials = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Free balance of <paramref name="quoteAsset"/>, already net of what open orders reserve, or null
@@ -51,7 +56,8 @@ public interface IBroker
     /// </remarks>
     Task<decimal?> GetAvailableBalanceAsync(
         string quoteAsset,
-        CancellationToken cancellationToken);
+        VenueCredentials? credentials = null,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>Picks the broker for a mode and venue. A miss is an error, never a silent default.</summary>

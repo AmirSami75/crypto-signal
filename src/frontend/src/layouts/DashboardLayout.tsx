@@ -80,6 +80,7 @@ export function DashboardLayout() {
       icon: <StopIcon />,
       permission: PERMISSIONS.killSwitchGet,
     },
+    { to: ROUTES.connections, label: fa.nav.connections, icon: <ChipIcon />, permission: PERMISSIONS.exchangeConnectionGet },
     { to: ROUTES.ml, label: fa.nav.ml, icon: <ChipIcon />, permission: PERMISSIONS.mlGetModel },
   ]
 

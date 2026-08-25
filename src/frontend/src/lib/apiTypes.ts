@@ -297,7 +297,7 @@ export type Readiness = {
 // into a stored total and never compared for equality. Anything that must be exact stays server-side.
 
 export type OperatingModeName = 'Paper' | 'Sandbox' | 'Live'
-export type MarketVenueName = 'Replay' | 'BinanceTestnet' | 'BinanceMainnet'
+export type MarketVenueName = 'Replay' | 'BinanceTestnet' | 'BinanceMainnet' | 'Bitunix'
 export type BotStatusName = 'Draft' | 'Active' | 'Paused' | 'Stopped' | 'Faulted'
 export type TradeDirectionName = 'Long' | 'Short' | 'Flat'
 export type BotDecisionActionName = 'Hold' | 'Open' | 'Close' | 'AdjustBracket'
@@ -445,6 +445,24 @@ export type Signal = {
  * `symbol`, `interval` and `operatingMode` are create-only. The server refuses to change them on an
  * existing bot: editing them in place would leave a paper bot's fills attached to a sandbox bot.
  */
+/** One stored exchange connection as the API returns it. No secret material, ever. */
+export type ExchangeConnection = {
+  id: string
+  venue: MarketVenueName
+  label: string
+  keyPreview: string
+  isActive: boolean
+  lastValidatedAt: string | null
+  createdAt: string
+}
+
+export type ExchangeConnectionInput = {
+  venue: MarketVenueName
+  label: string
+  apiKey: string
+  apiSecret: string
+}
+
 export type BotInput = {
   name: string
   description?: string | null
@@ -468,6 +486,7 @@ export type BotInput = {
   maxConsecutiveFailures: number
   maxSlippageBps: number
   expectedModelVersion?: string | null
+  exchangeConnectionId?: string | null
 }
 
 export type BotSummary = {
@@ -564,6 +583,7 @@ export type BotDetail = {
   maxConsecutiveFailures: number
   maxSlippageBps: number
   expectedModelVersion: string | null
+  exchangeConnectionId: string | null
   createdAt: string
   updatedAt: string | null
   currentRun: BotRun | null

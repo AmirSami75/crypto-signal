@@ -7,6 +7,7 @@ import { DashboardLayout } from './layouts/DashboardLayout'
 import { BotsPage } from './pages/BotsPage'
 import { BotDetailPage } from './pages/BotDetailPage'
 import { ChangePasswordPage } from './pages/ChangePasswordPage'
+import { ConnectionsPage } from './pages/ConnectionsPage'
 import { KillSwitchesPage } from './pages/KillSwitchesPage'
 import { LoginHistoryPage } from './pages/LoginHistoryPage'
 import { LoginPage } from './pages/LoginPage'
@@ -95,6 +96,14 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission permission={PERMISSIONS.killSwitchGet}>
             <KillSwitchesPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: ROUTES.connections,
+        element: (
+          <RequirePermission permission={PERMISSIONS.exchangeConnectionGet}>
+            <ConnectionsPage />
           </RequirePermission>
         ),
       },
