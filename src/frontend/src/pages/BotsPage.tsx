@@ -63,15 +63,23 @@ export function BotsPage() {
 
   const debouncedSymbol = useDebounced(symbolFilter)
 
-  const filters: BotFilters = {
-    ...(debouncedSymbol && { symbol: debouncedSymbol }),
-    ...(statusFilter && { status: statusFilter }),
-    ...(modeFilter && { operatingMode: modeFilter }),
-  }
+  // Serialized rather than an object literal in deps: a fresh `{}` every render would give the
+  // fetcher a new identity each render, and useResource would refetch on every render — the page
+  // would tick forever and the pagination controls would flicker enabled/disabled.
+  const filterKey = [debouncedSymbol, statusFilter, modeFilter].filter(Boolean).join('|')
 
   const fetcher = useCallback(
-    (signal?: AbortSignal) => api.bots.paged({ pageNumber: page, pageSize }, filters, signal),
-    [page, pageSize, filters]
+    (signal?: AbortSignal) =>
+      api.bots.paged(
+        { pageNumber: page, pageSize },
+        {
+          ...(debouncedSymbol && { symbol: debouncedSymbol }),
+          ...(statusFilter && { status: statusFilter }),
+          ...(modeFilter && { operatingMode: modeFilter }),
+        },
+        signal,
+      ),
+    [page, pageSize, filterKey]
   )
 
   const { data, error, isLoading, isRefreshing, refetch } = useResource(fetcher)
