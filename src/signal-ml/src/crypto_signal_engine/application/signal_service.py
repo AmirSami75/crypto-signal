@@ -77,17 +77,35 @@ class SignalService:
         # the prices to compare against.
         levels = assessment.levels(Direction.LONG if direction is Direction.FLAT else direction)
 
+        # On FLAT, report the best candidate's confidence/EV. Zero here had the same blinding
+        # effect as on the advisor: a signal that looked and found 28% is information — "0.0000"
+        # is not, and the calibration loop cannot grade an opinion that was erased.
+        best_confidence = (
+            assessment.confidence_of(direction)
+            if direction is not Direction.FLAT
+            else max(
+                (candidate.confidence for candidate in assessment.choice.candidates),
+                default=0.0,
+            )
+        )
+        best_ev = (
+            assessment.expected_value_of(direction)
+            if direction is not Direction.FLAT
+            else max(
+                (candidate.expected_value_atr for candidate in assessment.choice.candidates),
+                default=0.0,
+            )
+        )
+
         return SignalResult(
             request_id=request.request_id,
             symbol=window.symbol,
             interval=window.interval,
             direction=direction,
             levels=levels,
-            confidence=assessment.confidence_of(direction) if direction is not Direction.FLAT else 0.0,
+            confidence=best_confidence,
             probabilities=assessment.probabilities(direction),
-            expected_value=(
-                assessment.expected_value_of(direction) if direction is not Direction.FLAT else 0.0
-            ),
+            expected_value=best_ev,
             long_confidence=assessment.confidence_of(Direction.LONG),
             short_confidence=assessment.confidence_of(Direction.SHORT),
             candle_open_time=window.candle_open_time,
