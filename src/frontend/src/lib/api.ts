@@ -15,6 +15,7 @@ import type {
   DevErrorPayload,
   ExchangeConnection,
   ExchangeConnectionInput,
+  MlModelInfo,
   OutcomeReport,
   KillSwitch,
   KillSwitchFilters,
@@ -23,7 +24,6 @@ import type {
   LoginHistoryFilters,
   LoginRequest,
   MlCapabilities,
-  MlModelInfo,
   OrderIntent,
   PagedResult,
   PageQuery,
@@ -590,6 +590,12 @@ export const api = {
     /** Ends every open run and clears the fault, so a faulted bot is restartable from the UI. */
     stop: (id: string, payload: BotStatusChange, signal?: AbortSignal) =>
       request<BotDetail>(`/api/v1/bot/${id}/stop`, { method: 'POST', body: payload, signal }),
+  },
+
+  /** Live metadata for the model the engine currently serves. */
+  model: {
+    get: (signal?: AbortSignal) =>
+      request<MlModelInfo>('/api/v1/ml/model', { signal }),
   },
 
   /** Prediction-versus-actual over closed trades, powering the self-learning loop's read side. */

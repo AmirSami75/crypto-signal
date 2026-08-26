@@ -102,8 +102,11 @@ public sealed class MlServiceClient(
                 new GetModelInfoRequest
                 {
                     RequestId = Guid.NewGuid().ToString(),
-                    Symbol = symbol ?? string.Empty,
-                    Interval = interval ?? string.Empty,
+                    // The engine rejects an unknown interval outright, and an omitted query
+                    // parameter means "the default market" rather than "nothing" — resolve that
+                    // to the platform's working interval instead of failing the request.
+                    Symbol = string.IsNullOrWhiteSpace(symbol) ? "BTCUSDT" : symbol,
+                    Interval = string.IsNullOrWhiteSpace(interval) ? "1h" : interval,
                 },
                 deadline: Deadline(),
                 cancellationToken: cancellationToken);

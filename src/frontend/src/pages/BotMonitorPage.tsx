@@ -24,6 +24,7 @@ import { ROUTES } from '../routes'
 import {
   countText,
   dateTimeText,
+  digestText,
   priceText,
   quantityText,
   shareText,
@@ -172,6 +173,12 @@ export function BotMonitorPage() {
   )
   const outcomes = usePolled(fetchOutcomes)
 
+  const fetchModel = useCallback(
+    (signal?: AbortSignal) => api.model.get(signal),
+    [],
+  )
+  const model = usePolled(fetchModel)
+
   const canStop = can(session, PERMISSIONS.botStop)
   const bot = botResource.data
 
@@ -180,6 +187,7 @@ export function BotMonitorPage() {
   useInterval(() => decisions.refetch(), POLL_MS, !!botId)
   useInterval(() => audit.refetch(), POLL_MS, !!botId)
   useInterval(() => outcomes.refetch(), POLL_MS, !!botId)
+  useInterval(() => model.refetch(), POLL_MS * 12, !!botId)
 
   const stop = useCallback(async () => {
     if (!botId || !stopReason.trim()) return
@@ -216,6 +224,8 @@ export function BotMonitorPage() {
   const heartbeat = heartbeatOf(bot, now)
   const position = bot.openPositions[0]
   const alerts = (audit.data?.items ?? []).filter(e => ALERT_EVENTS.includes(e.eventType))
+  // The newest decision stamps which model produced it — the loop's "who am I grading" anchor.
+  const latestModelStamp = (decisions.data?.items ?? []).find(d => d.modelVersion)?.modelVersion
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -292,7 +302,21 @@ export function BotMonitorPage() {
       {/* Self-learning report */}
       {outcomes.data && outcomes.data.sampleSize > 0 && (
         <section className="space-y-3 rounded-xl border border-line bg-surface p-5">
-          <h2 className="micro-label">{fa.monitor.outcomesLabel}</h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="micro-label">{fa.monitor.outcomesLabel}</h2>
+            <div className="flex items-center gap-2 text-xs text-ink-faint">
+              {model.data?.ready && (
+                <span className="num" dir="ltr" title={fa.monitor.trainedTitle}>
+                  {fa.monitor.modelTrained}: {dateTimeText(model.data.trainedAt)}
+                </span>
+              )}
+              {latestModelStamp && (
+                <span className="num" dir="ltr" title={fa.monitor.modelStampTitle}>
+                  {fa.monitor.modelStamp}: {digestText(latestModelStamp)}
+                </span>
+              )}
+            </div>
+          </div>
           <p className="text-xs text-ink-muted">{fa.monitor.outcomesNote}</p>
 
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
@@ -344,6 +368,12 @@ export function BotMonitorPage() {
             </tbody>
           </table>
         </section>
+      )}
+
+      {model.data?.ready && latestModelStamp && model.data.modelVersion !== latestModelStamp && (
+        <Alert tone="info" title={fa.monitor.newerModelTitle}>
+          {fa.monitor.newerModelBody}
+        </Alert>
       )}
 
       {/* Alerts */}
