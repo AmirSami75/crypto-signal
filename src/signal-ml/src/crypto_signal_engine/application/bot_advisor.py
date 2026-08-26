@@ -64,6 +64,18 @@ class BotAdvisorService:
     def _decide_from_flat(self, request: BotDecisionRequest, assessment: Assessment) -> BotDecisionResult:
         direction = assessment.choice.direction
         if direction is Direction.FLAT:
+            # `measured` stays FLAT so probabilities/levels are not fabricated for a side the engine
+            # did not take — but confidence and expected value fall back to the best candidate.
+            # Reporting zero here blinded every consumer downstream: the dashboard read "0.0000"
+            # as if the model had no opinion, when it had actually looked and found e.g. 28%, and
+            # the outcome-join in the learning loop graded decisions against nothing.
+            best = max(
+                (candidate.confidence for candidate in assessment.choice.candidates),
+                default=None,
+            )
+            best_ev = (
+                max((candidate.expected_value_atr for candidate in assessment.choice.candidates), default=None)
+            )
             return self._result(
                 request,
                 assessment,
@@ -72,6 +84,8 @@ class BotAdvisorService:
                 reason_code=self._flat_reason(assessment),
                 levels=None,
                 measured=Direction.FLAT,
+                reported_confidence=best,
+                reported_expected_value_atr=best_ev,
             )
         # `no_edge` on an OPEN reads oddly out of context, and it is still the right token: the reason
         # codes are a fixed vocabulary .NET switches on, and every one of the others names a condition
@@ -405,6 +419,8 @@ class BotAdvisorService:
         levels: LevelsResult | None,
         measured: Direction,
         extra_rationale: tuple[str, ...] = (),
+        reported_confidence: float | None = None,
+        reported_expected_value_atr: float | None = None,
     ) -> BotDecisionResult:
         """One place that fills the response, so no branch can forget the model stamp or the digest."""
         window = assessment.window
@@ -415,9 +431,17 @@ class BotAdvisorService:
             action=action,
             direction=direction,
             reason_code=reason_code,
-            confidence=assessment.confidence_of(measured),
+            confidence=(
+                assessment.confidence_of(measured)
+                if reported_confidence is None
+                else reported_confidence
+            ),
             probabilities=assessment.probabilities(measured),
-            expected_value=assessment.expected_value_of(measured),
+            expected_value=(
+                assessment.expected_value_of(measured)
+                if reported_expected_value_atr is None
+                else reported_expected_value_atr
+            ),
             candle_open_time=window.candle_open_time,
             valid_until=window.valid_until,
             model=assessment.stamp,
