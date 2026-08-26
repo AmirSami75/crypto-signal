@@ -145,14 +145,26 @@ def main() -> int:
 
     incumbent_scores: dict[str, float] = {}
     incumbent_metadata_path = MODELS_DIR / "metadata.json.previous"
-    if incumbent_metadata_path.exists():
+    baseline_exists = incumbent_metadata_path.exists()
+    if baseline_exists:
         incumbent_scores = extract_scores(json.loads(incumbent_metadata_path.read_text()))
         for key, value in sorted(incumbent_scores.items()):
             log(f"  incumbent {key}: {value:.4f}")
-    else:
-        log("no incumbent recorded — first-generation model promotes unconditionally")
 
-    promoted, reason = (True, "first generation") if not incumbent_scores else gate(incumbent_scores, candidate_scores)
+    if not baseline_exists:
+        log("no incumbent recorded — first-generation model promotes unconditionally")
+        promoted, reason = True, "first generation"
+    elif not incumbent_scores:
+        # A baseline that exists but yields nothing is a broken baseline, not a fresh start.
+        # Treating it as "first generation" is how a gate silently stops gating — refuse instead,
+        # loudly, so the cause gets fixed rather than papered over by a free promotion.
+        promoted, reason = False, (
+            "baseline file exists but carries no comparable scores — refusing to promote against "
+            "an unreadable incumbent (delete metadata.json.previous to deliberately re-baseline)"
+        )
+    else:
+        promoted, reason = gate(incumbent_scores, candidate_scores)
+
     log(f"gate verdict: {'PROMOTE' if promoted else 'REJECT'} — {reason}")
 
     if args.dry_run:
@@ -167,9 +179,21 @@ def main() -> int:
                 archive_bundle(path, ARCHIVE_DIR, "incumbent")
         shutil.move(str(incumbent_metadata_path), ARCHIVE_DIR / f"{stamp}_incumbent_metadata.json")
 
-    # Record this run's scores as the next run's incumbent baseline.
+    # Record this run's scores as the next run's incumbent baseline. `result` IS the metadata
+    # structure — passing `result.get("metadata")` wrote a baseline with no bundles, which
+    # extract_scores then read as "no incumbent" and the gate waved through as a first
+    # generation. Every future retrain would have promoted unconditionally: a gate that cannot
+    # see the incumbent is not a gate.
     (MODELS_DIR / "metadata.json.previous").write_text(
-        json.dumps({"archived_at": datetime.now(timezone.utc).isoformat(), "promoted": promoted, **result.get("metadata", {})}, indent=2)
+        json.dumps(
+            {
+                "archived_at": datetime.now(timezone.utc).isoformat(),
+                "promoted": promoted,
+                **result,
+            },
+            indent=2,
+            default=str,
+        )
     )
 
     if not promoted:
