@@ -257,6 +257,10 @@ void AddVenueClient(MarketVenue venue)
             client.BaseAddress = new Uri(exchange.RestBaseUrl(venue), UriKind.Absolute);
             client.Timeout = TimeSpan.FromSeconds(exchange.RequestTimeoutSeconds);
             client.DefaultRequestHeaders.Add("Accept", "application/json");
+            // Bitunix sits behind Cloudflare: requests without a browser-ish User-Agent are 403'd
+            // before they reach the API, which would read as a venue failure and fault the bot.
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
+                "crypto-signal-bot/1.0 (compatible; +https://github.com/local/crypto-signal)");
         })
         .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 

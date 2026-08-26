@@ -152,15 +152,32 @@ public sealed class BitunixKlineSource(IHttpClientFactory httpClientFactory, ILo
             CultureInfo.InvariantCulture);
         var openTime = DateTimeOffset.FromUnixTimeMilliseconds(openMs);
 
+        var open = Decimal("open");
+        var high = Decimal("high");
+        var low = Decimal("low");
+        var close = Decimal("close");
+
+        // Bitunix occasionally emits candles whose own fields violate OHLC bounds (observed:
+        // low a tenth of a point above open, high a tick below open). The engine rightly rejects
+        // such a window, so the source normalizes instead of passing the glitch downstream:
+        // widen to cover, never shrink a real extreme.
+        high = Math.Max(high, Math.Max(open, close));
+        low = Math.Min(low, Math.Min(open, close));
+
+        // Bitunix labels these opposite to Binance: "baseVol" carries the USDT turnover and
+        // "quoteVol" the base-asset amount. Map by meaning, not by name — volume is base amount.
+        var quoteVol = Decimal("quoteVol");
+        var baseVol = Decimal("baseVol");
+
         return new MarketCandleData(
             OpenTime: openTime,
             CloseTime: openTime + duration,
-            Open: Decimal("open"),
-            High: Decimal("high"),
-            Low: Decimal("low"),
-            Close: Decimal("close"),
-            Volume: Decimal("baseVol"),
-            QuoteVolume: Decimal("quoteVol"));
+            Open: open,
+            High: high,
+            Low: low,
+            Close: close,
+            Volume: quoteVol,
+            QuoteVolume: baseVol);
     }
 
     private static void AssertContiguous(
