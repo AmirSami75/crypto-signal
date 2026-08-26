@@ -855,6 +855,14 @@ export type MlConfidenceReach = { threshold: number; share: number }
  * training run did not measure it. A minimum-confidence floor above that ceiling can never be met, so
  * what it filters out is every signal — silence, not safety.
  */
+export type ChartCandle = {
+  openTime: string
+  open: number
+  high: number
+  low: number
+  close: number
+}
+
 export type MlModelInfo = {
   ready: boolean
   modelId: string

@@ -8,7 +8,7 @@ import { Button } from '../components/ui/Button'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { Input } from '../components/ui/Input'
-import { BarChart, LineChart } from '../components/ui/Charts'
+import { BarChart, CandleChart, LineChart } from '../components/ui/Charts'
 import {
   ActionBadge,
   DirectionBadge,
@@ -17,6 +17,7 @@ import {
   normalizeMode,
   reasonCodeLabel,
 } from '../components/trading/TradingBadges'
+import { LivePriceCard } from '../components/trading/LivePriceCard'
 import { fa } from '../i18n/fa'
 import { useInterval } from '../lib/useInterval'
 import { api } from '../lib/api'
@@ -140,6 +141,7 @@ export function BotMonitorPage() {
   const { botId } = useParams<{ botId: string }>()
 
   const [now, setNow] = useState(() => Date.now())
+  const [chartInterval, setChartInterval] = useState<'15m' | '1h' | '4h'>('15m')
   const [stopOpen, setStopOpen] = useState(false)
   const [stopReason, setStopReason] = useState('')
 
@@ -283,6 +285,9 @@ export function BotMonitorPage() {
           {fa.monitor.deadBody(heartbeat.ageSeconds ?? 0)}
         </Alert>
       )}
+
+      {/* Live price for the bot's market */}
+      <LivePriceCard bot={bot} />
 
       {/* Position + run */}
       <section className="rounded-xl border border-line bg-surface p-5">

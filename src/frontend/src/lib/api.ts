@@ -15,6 +15,7 @@ import type {
   DevErrorPayload,
   ExchangeConnection,
   ExchangeConnectionInput,
+  ChartCandle,
   MlModelInfo,
   OutcomeReport,
   KillSwitch,
@@ -590,6 +591,12 @@ export const api = {
     /** Ends every open run and clears the fault, so a faulted bot is restartable from the UI. */
     stop: (id: string, payload: BotStatusChange, signal?: AbortSignal) =>
       request<BotDetail>(`/api/v1/bot/${id}/stop`, { method: 'POST', body: payload, signal }),
+  },
+
+  /** Venue candles routed through the API (the venue sends no CORS headers to browsers). */
+  charts: {
+    candles: (venue: string, symbol: string, interval: string, limit: number, signal?: AbortSignal) =>
+      request<ChartCandle[]>(`/api/v1/charts/${venue}/candles?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}`, { signal }),
   },
 
   /** Live metadata for the model the engine currently serves. */

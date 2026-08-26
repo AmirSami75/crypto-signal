@@ -166,3 +166,79 @@ export function BarChart({ values, labels, highlightIndex, ariaLabel }: BarChart
     </div>
   )
 }
+
+export type CandleChartProps = {
+  candles: { openTime: string; open: number; high: number; low: number; close: number }[]
+  height?: number
+  ariaLabel: string
+}
+
+/**
+ * Price chart: a close line over a translucent high-low band.
+ *
+ * Real candlesticks need one-pixel-per-candle widths that fall apart at 375px, and a close line
+ * with a wick band carries the same information at every width. Green/red follows the window's
+ * overall direction — up if the last close beats the first open.
+ */
+export function CandleChart({ candles, height = 120, ariaLabel }: CandleChartProps) {
+  const WIDTH = 300
+  const closes = candles.map(c => c.close)
+  const lows = candles.map(c => c.low)
+  const highs = candles.map(c => c.high)
+
+  if (closes.length < 2)
+    return (
+      <div
+        className="flex items-center justify-center rounded-lg border border-dashed border-line text-xs text-ink-faint"
+        style={{ height }}
+      >
+        —
+      </div>
+    )
+
+  const min = Math.min(...lows)
+  const max = Math.max(...highs)
+  const span = max - min || Math.abs(max) || 1
+  const pad = 4
+  const usable = height - pad * 2
+  const step = (WIDTH - pad * 2) / (candles.length - 1)
+  const yOf = (v: number) => pad + usable - ((v - min) / span) * usable
+
+  // Band polygon walks highs left-to-right then lows right-to-left.
+  const band =
+    highs.map((h, i) => `${i === 0 ? 'M' : 'L'}${(pad + i * step).toFixed(2)},${yOf(h).toFixed(2)}`).join(' ') +
+    ' ' +
+    lows
+      .map((l, i) => `L${(pad + i * step).toFixed(2)},${yOf(l).toFixed(2)}`)
+      .reverse()
+      .join(' ')
+      .replace(/^L/, 'L') + // keep explicit L commands for the reverse walk
+    ' Z'
+  const closePath = closes
+    .map((c, i) => `${i === 0 ? 'M' : 'L'}${(pad + i * step).toFixed(2)},${yOf(c).toFixed(2)}`)
+    .join(' ')
+
+  const rising = closes[closes.length - 1] >= candles[0].open
+  const tone = rising ? 'var(--success)' : 'var(--danger)'
+  const gradientId = `candle-${ariaLabel.replace(/\W/g, '')}`
+
+  return (
+    <svg
+      viewBox={`0 0 ${WIDTH} ${height}`}
+      preserveAspectRatio="none"
+      className="w-full"
+      style={{ height, direction: 'ltr' }}
+      role="img"
+      aria-label={ariaLabel}
+    >
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={tone} stopOpacity="0.18" />
+          <stop offset="100%" stopColor={tone} stopOpacity="0.04" />
+        </linearGradient>
+      </defs>
+      <path d={band} fill={`url(#${gradientId})`} stroke="none" />
+      <path d={closePath} fill="none" stroke={tone} strokeWidth="1.5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+    </svg>
+  )
+}
