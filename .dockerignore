@@ -14,4 +14,5 @@ src/signal-ml/data
 src/signal-ml/artifacts/*
 !src/signal-ml/artifacts/model.joblib
 !src/signal-ml/artifacts/metadata.json
+!src/signal-ml/artifacts/models
 tests

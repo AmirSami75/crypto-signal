@@ -2,6 +2,10 @@ name: crypto-signal
 
 x-service-defaults: &service-defaults
   init: true
+  # Local wall-clock in logs, charts, and audit summaries. Postgres data stays UTC internally;
+  # this only shapes what humans read.
+  environment:
+    TZ: Asia/Tehran
   networks:
     - application
 
@@ -9,6 +13,8 @@ services:
   db:
     image: postgres:18.3-alpine3.23
     shm_size: 128mb
+    environment:
+      TZ: Asia/Tehran
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
