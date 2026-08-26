@@ -19,7 +19,7 @@ import {
 import { fa } from '../i18n/fa'
 import { useInterval } from '../lib/useInterval'
 import { api } from '../lib/api'
-import type { BotAuditEvent, BotAuditEventTypeName, BotDecision, BotDetail } from '../lib/apiTypes'
+import type { BotAuditEvent, BotAuditEventTypeName, BotDecision, BotDetail, OutcomeReport } from '../lib/apiTypes'
 import { ROUTES } from '../routes'
 import {
   countText,
@@ -163,6 +163,15 @@ export function BotMonitorPage() {
   )
   const audit = usePolled(fetchAudit)
 
+  const fetchOutcomes = useCallback(
+    (signal?: AbortSignal) =>
+      botId
+        ? api.outcomes.forBot(botId, signal)
+        : Promise.reject(new Error('no id')),
+    [botId],
+  )
+  const outcomes = usePolled(fetchOutcomes)
+
   const canStop = can(session, PERMISSIONS.botStop)
   const bot = botResource.data
 
@@ -170,6 +179,7 @@ export function BotMonitorPage() {
   useInterval(() => botResource.refetch(), POLL_MS, !!botId)
   useInterval(() => decisions.refetch(), POLL_MS, !!botId)
   useInterval(() => audit.refetch(), POLL_MS, !!botId)
+  useInterval(() => outcomes.refetch(), POLL_MS, !!botId)
 
   const stop = useCallback(async () => {
     if (!botId || !stopReason.trim()) return
@@ -278,6 +288,63 @@ export function BotMonitorPage() {
           </Metric>
         </dl>
       </section>
+
+      {/* Self-learning report */}
+      {outcomes.data && outcomes.data.sampleSize > 0 && (
+        <section className="space-y-3 rounded-xl border border-line bg-surface p-5">
+          <h2 className="micro-label">{fa.monitor.outcomesLabel}</h2>
+          <p className="text-xs text-ink-muted">{fa.monitor.outcomesNote}</p>
+
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
+            <Metric label={fa.monitor.sampleSize}>
+              <span className="num font-medium">{countText(outcomes.data.sampleSize)}</span>
+            </Metric>
+            <Metric label={fa.monitor.winRate}>
+              <span className="num font-medium">
+                {shareText(outcomes.data.wins / Math.max(1, outcomes.data.sampleSize))}
+              </span>
+            </Metric>
+            <Metric label={fa.monitor.totalPnl}>
+              <span className={`num ${outcomes.data.totalRealizedPnl >= 0 ? 'text-success' : 'text-danger'}`}>
+                {signedMoneyText(outcomes.data.totalRealizedPnl)}
+              </span>
+            </Metric>
+            <Metric label={fa.monitor.avgPnl}>
+              <span className={`num ${outcomes.data.averageRealizedPnl >= 0 ? 'text-success' : 'text-danger'}`}>
+                {signedMoneyText(outcomes.data.averageRealizedPnl)}
+              </span>
+            </Metric>
+          </dl>
+
+          {/* Calibration: bucket win rate should rise with the bucket center. */}
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-line">
+                <th scope="col" className="micro-label py-2 text-start">{fa.monitor.bucket}</th>
+                <th scope="col" className="micro-label py-2 text-end">{fa.monitor.tradesCol}</th>
+                <th scope="col" className="micro-label py-2 text-end">{fa.monitor.winRateCol}</th>
+                <th scope="col" className="micro-label py-2 text-end">{fa.monitor.pnlCol}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {outcomes.data.calibrationBuckets.map(b => (
+                <tr key={b.lower} className="border-b border-line/50 last:border-0">
+                  <td className="py-2 num" dir="ltr">
+                    {b.lower.toFixed(2)}–{Math.min(b.upper, 1).toFixed(2)}
+                  </td>
+                  <td className="py-2 num text-end">{countText(b.trades)}</td>
+                  <td className="py-2 num text-end">
+                    {b.trades === 0 ? '—' : shareText(b.wins / b.trades)}
+                  </td>
+                  <td className={`py-2 num text-end ${b.totalPnl >= 0 ? 'text-success' : 'text-danger'}`}>
+                    {b.trades === 0 ? '—' : signedMoneyText(b.totalPnl)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
 
       {/* Alerts */}
       {alerts.length > 0 && (

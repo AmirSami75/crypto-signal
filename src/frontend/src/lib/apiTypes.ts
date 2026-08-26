@@ -445,6 +445,36 @@ export type Signal = {
  * `symbol`, `interval` and `operatingMode` are create-only. The server refuses to change them on an
  * existing bot: editing them in place would leave a paper bot's fills attached to a sandbox bot.
  */
+/**
+ * The self-learning loop's read side: closed positions joined to the decisions that opened them,
+ * aggregated. A calibrated model shows bucket win rates rising in step with their centers; flat or
+ * inverted rows are the earliest visible sign of drift.
+ */
+export type ConfidenceBucket = {
+  lower: number
+  upper: number
+  trades: number
+  wins: number
+  totalPnl: number
+}
+
+export type SymbolOutcome = {
+  symbol: string
+  trades: number
+  wins: number
+  totalPnl: number
+}
+
+export type OutcomeReport = {
+  sampleSize: number
+  wins: number
+  losses: number
+  totalRealizedPnl: number
+  averageRealizedPnl: number
+  calibrationBuckets: ConfidenceBucket[]
+  perSymbol: SymbolOutcome[]
+}
+
 /** One stored exchange connection as the API returns it. No secret material, ever. */
 export type ExchangeConnection = {
   id: string

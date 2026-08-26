@@ -72,7 +72,10 @@ public sealed class PermissionSeeder(IPermissionRepo repo) : IEntitySeedData
                                         permissionCaption = string.Format(attr?.ActionCaption, controllerInfo.Caption);
                                     }
 
-                                    if (!permissions.Any(p => p.name.Contains(permissionName)))
+                                    // Exact match. A substring check here made `Controller.Get` collide with
+                                    // `Controller.GetSomething` — whichever registered first suppressed the other,
+                                    // so a controller with both silently lost one of them.
+if (!permissions.Any(p => p.name == permissionName))
                                     {
                                         permissions.Add((permissionName, permissionCaption, attr.Type));
                                     }

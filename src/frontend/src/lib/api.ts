@@ -15,6 +15,7 @@ import type {
   DevErrorPayload,
   ExchangeConnection,
   ExchangeConnectionInput,
+  OutcomeReport,
   KillSwitch,
   KillSwitchFilters,
   KillSwitchInput,
@@ -589,6 +590,15 @@ export const api = {
     /** Ends every open run and clears the fault, so a faulted bot is restartable from the UI. */
     stop: (id: string, payload: BotStatusChange, signal?: AbortSignal) =>
       request<BotDetail>(`/api/v1/bot/${id}/stop`, { method: 'POST', body: payload, signal }),
+  },
+
+  /** Prediction-versus-actual over closed trades, powering the self-learning loop's read side. */
+  outcomes: {
+    all: (signal?: AbortSignal) =>
+      request<OutcomeReport>('/api/v1/model-outcomes/outcomes', { signal }),
+
+    forBot: (botId: string, signal?: AbortSignal) =>
+      request<OutcomeReport>(`/api/v1/model-outcomes/bot/${botId}/outcomes`, { signal }),
   },
 
   /**
