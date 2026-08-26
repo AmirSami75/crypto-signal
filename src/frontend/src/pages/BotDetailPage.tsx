@@ -30,7 +30,7 @@ import type {
   OrderIntent,
   TradingPageQuery,
 } from '../lib/apiTypes'
-import { ROUTES } from '../routes'
+import { ROUTES, botMonitorPath } from '../routes'
 import {
   countText,
   dateTimeText,
@@ -162,6 +162,11 @@ export function BotDetailPage() {
           <Badge tone={bot.status === 'Active' ? 'success' : bot.status === 'Faulted' ? 'danger' : 'neutral'}>
             {fa.trading.botStatus[bot.status] ?? bot.status}
           </Badge>
+          <Link to={botMonitorPath(bot.id)}>
+            <Button variant="outline" size="sm">
+              ◉ {fa.monitor.title}
+            </Button>
+          </Link>
           {canEngageKillSwitch && (
             <Button variant="danger" size="sm" onClick={() => setKillSwitchOpen(true)}>
               {fa.botDetail.engageForBot}

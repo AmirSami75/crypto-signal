@@ -15,6 +15,7 @@ export const ROUTES = {
   bots: '/bots',
   /** Parameterised. Build a concrete path with {@link botDetailPath} rather than interpolating here. */
   botDetail: '/bots/:botId',
+  botMonitor: '/bots/:botId/monitor',
   killSwitches: '/kill-switches',
   connections: '/connections',
 
@@ -29,6 +30,11 @@ export type RoutePath = (typeof ROUTES)[keyof typeof ROUTES]
 
 /** Route parameter name for {@link ROUTES.botDetail}, so the page's `useParams` cannot drift from it. */
 export const BOT_ID_PARAM = 'botId'
+
+/** Path to one bot's live monitor screen (same param, same builder discipline as {@link botDetailPath}). */
+export function botMonitorPath(botId: string): string {
+  return ROUTES.botMonitor.replace(`:${BOT_ID_PARAM}`, botId)
+}
 
 /**
  * Path to one bot's detail screen.

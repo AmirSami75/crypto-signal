@@ -18,7 +18,7 @@ import { BotFormModal } from '../components/trading/BotFormModal'
 import { fa } from '../i18n/fa'
 import { api } from '../lib/api'
 import type { BotDetail, BotSummary, BotFilters, BotStatusName, OperatingModeName } from '../lib/apiTypes'
-import { ROUTES, botDetailPath } from '../routes'
+import { ROUTES, botDetailPath, botMonitorPath } from '../routes'
 import { dateTimeText, signedMoneyText } from '../lib/tradingFormat'
 import { useDebounced } from '../lib/useDebounced'
 import { useResource } from '../lib/useResource'
@@ -268,6 +268,9 @@ export function BotsPage() {
 
         return (
           <div className="flex items-center gap-1">
+            <Link to={botMonitorPath(bot.id)} title={fa.monitor.title}>
+              <IconButton label={fa.monitor.title}>◉</IconButton>
+            </Link>
             {(isDraft || isPaused || isStopped) && canEdit && (
               <IconButton label={fa.common.edit} onClick={() => void openEdit(bot)}>
                 ✎

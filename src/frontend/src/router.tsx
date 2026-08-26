@@ -6,6 +6,7 @@ import { AuthLayout } from './layouts/AuthLayout'
 import { DashboardLayout } from './layouts/DashboardLayout'
 import { BotsPage } from './pages/BotsPage'
 import { BotDetailPage } from './pages/BotDetailPage'
+import { BotMonitorPage } from './pages/BotMonitorPage'
 import { ChangePasswordPage } from './pages/ChangePasswordPage'
 import { ConnectionsPage } from './pages/ConnectionsPage'
 import { KillSwitchesPage } from './pages/KillSwitchesPage'
@@ -88,6 +89,14 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission permission={PERMISSIONS.botGetById}>
             <BotDetailPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: ROUTES.botMonitor,
+        element: (
+          <RequirePermission permission={PERMISSIONS.botGetById}>
+            <BotMonitorPage />
           </RequirePermission>
         ),
       },
