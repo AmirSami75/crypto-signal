@@ -271,10 +271,20 @@ public sealed class BotSchedulerService(
             // A faulted bot is no longer Active, so this lease has nothing left to hold.
             run.EndedAt = run.LastTickAt;
         }
-        else if (outcome.Result is TickResult.Hold or TickResult.Traded or TickResult.RiskDenied)
+        else if (outcome.Result is TickResult.Hold
+                 or TickResult.Traded
+                 or TickResult.RiskDenied
+                 or TickResult.AlreadyEvaluated)
         {
             // The engine answered and the pipeline completed. A risk denial is a successful tick — the
             // platform asked and got a clear no — so it clears the failure streak rather than adding to it.
+            //
+            // `AlreadyEvaluated` clears it too, and must: on an hourly candle at a 60-second cadence it
+            // is 59 ticks out of 60, and every one of them proves the pipeline is healthy — the lease was
+            // taken, the venue answered, the window was read, and idempotency declined to decide twice.
+            // Leaving it out stranded a streak from one transient blip for a whole hour, so three
+            // unrelated blips across three hours tripped a breaker meant to catch three failures in a
+            // row. A breaker that counts recoveries as failures faults healthy bots.
             run.ConsecutiveFailureCount = 0;
         }
 
