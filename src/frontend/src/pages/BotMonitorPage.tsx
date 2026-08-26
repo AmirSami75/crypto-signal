@@ -8,6 +8,7 @@ import { Button } from '../components/ui/Button'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { Input } from '../components/ui/Input'
+import { BarChart, LineChart } from '../components/ui/Charts'
 import {
   ActionBadge,
   DirectionBadge,
@@ -151,7 +152,7 @@ export function BotMonitorPage() {
   const fetchDecisions = useCallback(
     (signal?: AbortSignal) =>
       botId
-        ? api.botHistory.decisions(botId, { pageNumber: 1, pageSize: 20 }, {}, signal)
+        ? api.botHistory.decisions(botId, { pageNumber: 1, pageSize: 120 }, {}, signal)
         : Promise.reject(new Error('no id')),
     [botId],
   )
@@ -226,6 +227,17 @@ export function BotMonitorPage() {
   const alerts = (audit.data?.items ?? []).filter(e => ALERT_EVENTS.includes(e.eventType))
   // The newest decision stamps which model produced it — the loop's "who am I grading" anchor.
   const latestModelStamp = (decisions.data?.items ?? []).find(d => d.modelVersion)?.modelVersion
+  // Which calibration bucket does the bot's floor sit in? Highlighting that row ties the chart to
+  // the threshold the operator actually chose, rather than an arbitrary middle band.
+  const latestConfidence = decisions.data?.items[0]?.confidence
+  // Which calibration bucket does the bot's floor sit in? Highlighting that bar ties the chart to
+  // the threshold the operator actually chose, rather than an arbitrary middle band.
+  const highlightedBucket =
+    latestConfidence === undefined
+      ? undefined
+      : outcomes.data?.calibrationBuckets.findIndex(
+          b => latestConfidence >= b.lower && latestConfidence < b.upper,
+        )
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -299,6 +311,27 @@ export function BotMonitorPage() {
         </dl>
       </section>
 
+      {/* Confidence trend: every graded opinion the engine has had, newest rightmost.
+          The dashed line is the bot's own confidence floor — points below it explain the Holds. */}
+      {(decisions.data?.items.length ?? 0) > 1 && (
+        <section className="space-y-2 rounded-xl border border-line bg-surface p-5">
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="micro-label">{fa.monitor.confidenceTrendLabel}</h2>
+            <span className="num text-xs text-ink-faint" dir="ltr">
+              {shareText(decisions.data!.items[0].confidence)} →{' '}
+              {shareText(decisions.data!.items[decisions.data!.items.length - 1].confidence)}
+            </span>
+          </div>
+          <LineChart
+            values={[...decisions.data!.items].map(d => d.confidence).reverse()}
+            threshold={bot.minimumConfidence}
+            ariaLabel={fa.monitor.confidenceTrendLabel}
+            height={72}
+          />
+          <p className="text-xs text-ink-faint">{fa.monitor.confidenceTrendNote}</p>
+        </section>
+      )}
+
       {/* Self-learning report */}
       {outcomes.data && outcomes.data.sampleSize > 0 && (
         <section className="space-y-3 rounded-xl border border-line bg-surface p-5">
@@ -339,6 +372,19 @@ export function BotMonitorPage() {
               </span>
             </Metric>
           </dl>
+
+          {/* Calibration at a glance: bar height is observed win rate; rising left-to-right is
+              what calibrated looks like. The highlighted bucket holds this bot's latest confidence. */}
+          <BarChart
+            values={outcomes.data.calibrationBuckets.map(b =>
+              b.trades === 0 ? null : b.wins / b.trades,
+            )}
+            labels={outcomes.data.calibrationBuckets.map(
+              b => `${b.lower.toFixed(2)}`,
+            )}
+            highlightIndex={highlightedBucket}
+            ariaLabel={fa.monitor.calibrationChartLabel}
+          />
 
           {/* Calibration: bucket win rate should rise with the bucket center. */}
           <table className="w-full text-sm">
