@@ -145,6 +145,23 @@ public sealed class BotTickExecutor(
         var newest = window[^1];
         var candleOpenTime = newest.OpenTime.UtcDateTime;
 
+        // ── freshness gate: refuse to think about a market we cannot see ─────────
+        // The risk engine denies intents on stale candles, but by then the engine has already
+        // been consulted and a decision recorded against data that may be hours old — and with no
+        // open position there is nothing for the denial to protect. Fail here instead: the tick
+        // faults, the audit trail says why, and consecutive-failure accounting treats it like any
+        // other fault. A venue serving frozen klines must not produce decisions that look live.
+        if (CandleInterval.TryToTimeSpan(bot.Interval, out var intervalSpan))
+        {
+            var candleAge = DateTime.UtcNow - newest.CloseTime.UtcDateTime;
+            var maxAge = TimeSpan.FromTicks((long)(intervalSpan.Ticks * options.Value.MaxCandleAgeIntervals));
+            if (candleAge > maxAge)
+                throw new BotFaultException(
+                    $"the newest closed {bot.Interval} candle for {bot.Symbol} closed " +
+                    $"{(int)candleAge.TotalMinutes} minutes ago, beyond the tolerated " +
+                    $"{(int)maxAge.TotalMinutes} — the venue feed looks stalled");
+        }
+
         // ── idempotency: has this candle already been decided on? ────────────────
         if (bot.LastEvaluatedCandleOpenTime == candleOpenTime)
             return new TickOutcome(TickResult.AlreadyEvaluated, correlationId, Message: "candle already evaluated");

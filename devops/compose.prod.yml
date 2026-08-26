@@ -1,8 +1,20 @@
+# Production overlay.
+#
+ # Hardening beyond the base compose: every service restarts unless explicitly stopped, resource
+# ceilings bound the blast radius of a runaway process, and nothing reads secrets from the image —
+# env files only, which the deploy host is expected to provision outside version control.
+#
+# The API port stays bound to loopback by design: TLS termination and real exposure belong to the
+# reverse proxy in front of it (Caddy/Nginx), not to Kestrel.
+
 services:
   db:
     env_file:
       - ./env/prod/db.env
     restart: unless-stopped
+    # Postgres owns its shared buffers; without a ceiling the kernel OOM killer picks victims
+    # at random under memory pressure, and the victim it usually picks first is the API.
+    mem_limit: 1g
     volumes:
       - postgres_prod_data:/var/lib/postgresql
 
@@ -10,6 +22,8 @@ services:
     env_file:
       - ./env/prod/ml.env
     restart: unless-stopped
+    # Model inference spikes on consult bursts; 2g keeps numpy/torch from starving the host.
+    mem_limit: 2g
 
   api:
     env_file:
@@ -18,11 +32,20 @@ services:
     ports:
       - "127.0.0.1:8000:8080"
     restart: unless-stopped
+    mem_limit: 1g
+    depends_on:
+      db:
+        condition: service_healthy
+      signal-ml:
+        condition: service_healthy
 
   dashboard:
     ports:
       - "127.0.0.1:8080:8080"
     restart: unless-stopped
+    mem_limit: 256m
+    depends_on:
+      - api
 
 volumes:
   postgres_prod_data:

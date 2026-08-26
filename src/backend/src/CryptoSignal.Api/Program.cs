@@ -4,6 +4,7 @@ using CryptoSignal.Api.Domain.Enums.Trading;
 using CryptoSignal.Api.Application.Trading.Execution;
 using CryptoSignal.Api.Application.Trading.MarketData;
 using CryptoSignal.Api.Application.Trading.Risk;
+using CryptoSignal.Api.Adapter.Health;
 using CryptoSignal.Api.Adapter.Persistence.Contexts;
 using CryptoSignal.Api.Adapter.Persistence.Contexts.Dapper;
 using CryptoSignal.Api.Application.DTOs.Auth;
@@ -499,7 +500,8 @@ services.AddCors(options =>
 #region Health Checks
 
 services.AddHealthChecks()
-    .AddCheck<PostgreSqlHealthCheck>("postgresql");
+    .AddCheck<PostgreSqlHealthCheck>("postgresql")
+    .AddCheck<MlEngineHealthCheck>("ml-engine");
 
 #endregion
 
@@ -522,6 +524,10 @@ try
     app.UseSwaggerAndUI(apiVersions);
 
     app.UseCors();
+
+    // First in the pipeline: everything after it — exception handler included — logs with the
+    // correlation id already pushed onto the log context.
+    app.UseMiddleware<CorrelationIdMiddleware>();
 
     app.UseMiddleware<UnifiedExceptionHandlerMiddleware>();
 

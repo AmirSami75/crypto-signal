@@ -28,6 +28,13 @@ public sealed class TradingOptions
     /// <summary>Closed candles requested per evaluation. Must satisfy the engine's minimum window.</summary>
     public int CandleWindowSize { get; init; } = 300;
 
+    /// <summary>
+    /// How stale the newest closed candle may be, in intervals, before a tick faults instead of
+    /// deciding. Mirrors Trading:Risk:MaxCandleAgeIntervals — that gate denies orders on stale data,
+    /// this one refuses to even consult the model with it. Default tolerates two missed candles.
+    /// </summary>
+    public double MaxCandleAgeIntervals { get; init; } = 2.0;
+
     /// <summary>Wall-clock budget for one bot's tick. Exceeding it abandons the tick, not the bot.</summary>
     public int TickTimeoutSeconds { get; init; } = 60;
 
