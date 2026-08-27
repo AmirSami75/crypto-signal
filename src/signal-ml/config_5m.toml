@@ -1,0 +1,55 @@
+[market]
+symbol = "BTCUSDT"
+# Start with one symbol to keep peak memory bounded. Expand to a pooled model only after this
+# single-symbol baseline has been scored and the host has enough headroom.
+symbols = ["BTCUSDT"]
+interval = "5m"
+start = "2024-01-01T00:00:00Z"
+end = ""
+raw_data_path = "data/BTCUSDT_5m.csv"
+data_dir = "data"
+
+[features]
+prediction_horizon = 12
+label_threshold = 0.0015
+
+[barrier]
+max_horizon = 72
+atr_window = 14
+grid_atr = [0.5, 1.0, 1.5, 2.0, 3.0]
+min_risk_reward = 0.4
+max_risk_reward = 4.0
+pairs_per_candle = 3
+holdout_fraction = 0.2
+calibration_blocks = [0.6, 0.2, 0.2]
+calibration_method = "isotonic"
+
+[model]
+test_fraction = 0.2
+cv_splits = 5
+probability_threshold = 0.5
+random_state = 42
+max_iter = 250
+learning_rate = 0.05
+max_leaf_nodes = 15
+min_samples_leaf = 40
+l2_regularization = 1.0
+
+[backtest]
+allow_short = false
+fee_rate = 0.001
+slippage_rate = 0.0005
+
+[output]
+artifact_dir = "artifacts_5m"
+model_dir = "artifacts_5m/models"
+legacy_dir = "artifacts_5m/legacy"
+
+[network]
+# Host-side proxy required by this environment for exchange history downloads.
+proxy_url = "http://127.0.0.1:10808"
+timeout_seconds = 30
+
+[logging]
+level = "INFO"
+log_file = "artifacts_5m/logs/crypto_signal_5m.log"

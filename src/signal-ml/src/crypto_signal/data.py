@@ -7,7 +7,20 @@ import time
 from typing import Any
 from urllib.parse import urlencode
 from urllib import request as urllib_request
+from urllib.error import HTTPError, URLError
 from urllib.request import Request
+
+
+TRANSIENT_HTTP_STATUS = {408, 425, 429, 500, 502, 503, 504}
+MAX_REQUEST_ATTEMPTS = 5
+
+
+def _is_transient(error: Exception) -> bool:
+    if isinstance(error, HTTPError):
+        return error.code in TRANSIENT_HTTP_STATUS
+    if isinstance(error, (URLError, TimeoutError)):
+        return True
+    return error.__class__.__name__ in {"RemoteDisconnected", "ConnectionResetError"}
 
 import numpy as np
 import pandas as pd
@@ -190,12 +203,29 @@ def fetch_historical_ohlcv(
             "endTime": effective_end,
             "limit": 1000,
         }
-        batch = _get_json(
-            BINANCE_KLINES_URL,
-            params,
-            timeout=timeout,
-            proxy_url=proxy_url,
-        )
+        batch = None
+        for attempt in range(1, MAX_REQUEST_ATTEMPTS + 1):
+            try:
+                batch = _get_json(
+                    BINANCE_KLINES_URL,
+                    params,
+                    timeout=timeout,
+                    proxy_url=proxy_url,
+                )
+                break
+            except Exception as error:
+                if attempt == MAX_REQUEST_ATTEMPTS or not _is_transient(error):
+                    raise
+                delay = min(8.0, 0.5 * (2 ** (attempt - 1)))
+                logger.warning(
+                    "Transient historical-download failure; retrying | symbol=%s | page=%s | attempt=%s/%s | delay=%.1fs | error=%s",
+                    symbol.upper(), page, attempt, MAX_REQUEST_ATTEMPTS, delay, error.__class__.__name__,
+                )
+                time.sleep(delay)
+
+        if batch is None:
+            raise RuntimeError("Historical download produced no response")
+
         if isinstance(batch, dict):
             raise RuntimeError(f"Binance API error: {batch}")
         if not batch:

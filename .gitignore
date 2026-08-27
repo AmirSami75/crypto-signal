@@ -45,3 +45,6 @@ devops/compose.override.yml
 # Serilog rolling file output. Written under the content root when the file sink is enabled, which
 # in the dev container is the bind-mounted source tree.
 Logs/
+
+# 5m research artifacts (experiment concluded unprofitable on this venue)
+src/signal-ml/artifacts_5m/
