@@ -46,6 +46,8 @@ public sealed record RiskSnapshot
     public decimal? LimitPrice { get; init; }
     public decimal ReferencePrice { get; init; }
     public decimal EstimatedNotional { get; init; }
+    public int Leverage { get; init; } = 1;
+    public decimal EstimatedMargin { get; init; }
 
     #endregion
 
@@ -120,6 +122,7 @@ public sealed record RiskSnapshot
     public bool SymbolAllowlisted { get; init; }
     public bool ShortingAllowed { get; init; }
     public bool SpotOnly { get; init; }
+    public int MaxPlatformLeverage { get; init; }
     public bool ModelVersionApproved { get; init; }
 
     public decimal EffectiveMaxOrderNotional { get; init; }

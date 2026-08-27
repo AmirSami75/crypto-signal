@@ -45,6 +45,9 @@ public sealed record BotInputDto
 
     public bool AllowShort { get; init; }
 
+    /// <summary>Requested futures leverage. Must be 1 on spot/replay venues.</summary>
+    public int Leverage { get; init; } = 1;
+
     public decimal QuoteNotionalPerTrade { get; init; }
 
     public double MinimumConfidence { get; init; }
@@ -142,6 +145,7 @@ public sealed record BotSummaryDto
     public decimal TakeProfitPercent { get; init; }
     public decimal StopLossPercent { get; init; }
     public bool AllowShort { get; init; }
+    public int Leverage { get; init; } = 1;
     public decimal QuoteNotionalPerTrade { get; init; }
     public int CadenceSeconds { get; init; }
     public DateTime? LastTickAt { get; init; }
@@ -177,6 +181,7 @@ public sealed record BotDetailDto
     public decimal TakeProfitPercent { get; init; }
     public decimal StopLossPercent { get; init; }
     public bool AllowShort { get; init; }
+    public int Leverage { get; init; } = 1;
     public decimal QuoteNotionalPerTrade { get; init; }
     public double MinimumConfidence { get; init; }
     public int MaxHoldingPeriods { get; init; }

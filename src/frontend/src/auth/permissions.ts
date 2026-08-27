@@ -49,6 +49,11 @@ export const PERMISSIONS = {
   botHistoryGetPositions: 'BotHistory.GetPositions',
   botHistoryGetAudit: 'BotHistory.GetAudit',
 
+  // Read side of the self-learning loop: closed positions joined back to the decisions that opened
+  // them. Inspection of model quality, not model invocation — which is why it sits beside the
+  // history reads rather than under `Ml.*`.
+  modelOutcomesGet: 'ModelOutcomes.Get',
+
   exchangeConnectionGet: 'ExchangeConnection.Get',
   exchangeConnectionCreate: 'ExchangeConnection.Create',
   exchangeConnectionUpdate: 'ExchangeConnection.Update',

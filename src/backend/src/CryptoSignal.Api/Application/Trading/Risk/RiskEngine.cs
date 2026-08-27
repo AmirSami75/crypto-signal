@@ -79,6 +79,7 @@ public sealed class RiskEngine(
         CheckSignalProvenance(snapshot, context, Deny);
         CheckSignalNotAlreadyActedOn(snapshot, Deny);
         CheckDataFreshness(snapshot, Deny);
+        CheckLeverage(snapshot, Deny);
         CheckMarket(snapshot, Deny);
         CheckOrderParameters(snapshot, Deny);
         CheckNotional(snapshot, Deny);
@@ -220,6 +221,8 @@ public sealed class RiskEngine(
             Quantity = intent.Quantity,
             LimitPrice = intent.LimitPrice,
             ReferencePrice = intent.ReferencePrice,
+            Leverage = intent.Leverage,
+            EstimatedMargin = intent.Leverage > 0 ? intent.EstimatedNotional / intent.Leverage : 0m,
             EstimatedNotional = intent.EstimatedNotional,
 
             ModelId = decision.ModelId,
@@ -270,6 +273,7 @@ public sealed class RiskEngine(
             SymbolAllowlisted = symbolAllowed,
             ShortingAllowed = limits.AllowShorting,
             SpotOnly = limits.SpotOnly,
+            MaxPlatformLeverage = limits.MaxLeverage,
             ModelVersionApproved = versionApproved,
 
             EffectiveMaxOrderNotional = Effective(bot.MaxOrderNotional, limits.MaxOrderNotional),
@@ -406,6 +410,17 @@ public sealed class RiskEngine(
 
         if (s.AvailableQuoteBalance is null)
             deny(check, "the account balance could not be read, so it is not fresh");
+    }
+
+    private static void CheckLeverage(RiskSnapshot s, Action<RiskCheck, string> deny)
+    {
+        const RiskCheck check = RiskCheck.OrderParametersSupported;
+        if (s.Leverage < 1)
+            deny(check, "leverage must be at least 1");
+        else if (s.SpotOnly && s.Leverage != 1)
+            deny(check, "spot-only configuration permits only 1x leverage");
+        else if (s.MaxPlatformLeverage <= 0 || s.Leverage > s.MaxPlatformLeverage)
+            deny(check, $"leverage {s.Leverage} exceeds the platform ceiling {s.MaxPlatformLeverage}");
     }
 
     private static void CheckMarket(RiskSnapshot s, Action<RiskCheck, string> deny)
@@ -576,10 +591,10 @@ public sealed class RiskEngine(
             return;
         }
 
-        // Only a buy spends quote currency. A sell is bounded by the base-asset position, which the
-        // exposure check already covers.
-        if (s.Side == OrderSide.Buy && available < s.EstimatedNotional)
-            deny(check, $"available balance {available} is below the required notional {s.EstimatedNotional}");
+        // Only a buy spends quote currency. A futures buy reserves margin, not full exposure; a sell
+        // is bounded by the base-asset/position checks. On spot leverage is 1, so this is unchanged.
+        if (s.Side == OrderSide.Buy && available < s.EstimatedMargin)
+            deny(check, $"available balance {available} is below the required margin {s.EstimatedMargin}");
     }
 
     private static void CheckConnectivity(RiskSnapshot s, Action<RiskCheck, string> deny)

@@ -276,7 +276,7 @@ export function BotsPage() {
                 ✎
               </IconButton>
             )}
-            {isDraft && canStart && (
+            {(isDraft || isPaused || isStopped || isFaulted) && canStart && (
               <IconButton
                 label={fa.bots.start}
                 onClick={() => setDialog({ kind: 'start', bot })}

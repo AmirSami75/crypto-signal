@@ -71,6 +71,9 @@ public class OrderIntent : BaseEntity
     /// <summary>Reference price the decision assumed, for the slippage guard at submission.</summary>
     public decimal ReferencePrice { get; set; }
 
+    /// <summary>The requested leverage. Always 1 for spot; explicitly applied by a futures broker.</summary>
+    public int Leverage { get; set; } = 1;
+
     /// <summary>Estimated quote notional, fees and slippage included. Counts toward limits.</summary>
     public decimal EstimatedNotional { get; set; }
 

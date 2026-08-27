@@ -297,7 +297,7 @@ export type Readiness = {
 // into a stored total and never compared for equality. Anything that must be exact stays server-side.
 
 export type OperatingModeName = 'Paper' | 'Sandbox' | 'Live'
-export type MarketVenueName = 'Replay' | 'BinanceTestnet' | 'BinanceMainnet' | 'Bitunix'
+export type MarketVenueName = 'Replay' | 'BinanceTestnet' | 'BinanceMainnet' | 'Bitunix' | 'Bybit'
 export type BotStatusName = 'Draft' | 'Active' | 'Paused' | 'Stopped' | 'Faulted'
 export type TradeDirectionName = 'Long' | 'Short' | 'Flat'
 export type BotDecisionActionName = 'Hold' | 'Open' | 'Close' | 'AdjustBracket'
@@ -503,6 +503,7 @@ export type BotInput = {
   takeProfitPercent: number
   stopLossPercent: number
   allowShort: boolean
+  leverage: number
   quoteNotionalPerTrade: number
   minimumConfidence: number
   maxHoldingPeriods: number
@@ -531,6 +532,7 @@ export type BotSummary = {
   takeProfitPercent: number
   stopLossPercent: number
   allowShort: boolean
+  leverage: number
   quoteNotionalPerTrade: number
   cadenceSeconds: number
   lastTickAt: string | null
@@ -595,6 +597,7 @@ export type BotDetail = {
   takeProfitPercent: number
   stopLossPercent: number
   allowShort: boolean
+  leverage: number
   quoteNotionalPerTrade: number
   minimumConfidence: number
   maxHoldingPeriods: number

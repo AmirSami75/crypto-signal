@@ -128,6 +128,7 @@ public class BotController(
                 TakeProfitPercent = bot.TakeProfitPercent,
                 StopLossPercent = bot.StopLossPercent,
                 AllowShort = bot.AllowShort,
+                Leverage = bot.Leverage,
                 QuoteNotionalPerTrade = bot.QuoteNotionalPerTrade,
                 CadenceSeconds = bot.CadenceSeconds,
                 LastTickAt = bot.LastTickAt,
@@ -178,6 +179,7 @@ public class BotController(
             TakeProfitPercent = bot.TakeProfitPercent,
             StopLossPercent = bot.StopLossPercent,
             AllowShort = bot.AllowShort,
+            Leverage = bot.Leverage,
             QuoteNotionalPerTrade = bot.QuoteNotionalPerTrade,
             MinimumConfidence = bot.MinimumConfidence,
             MaxHoldingPeriods = bot.MaxHoldingPeriods,
@@ -225,6 +227,7 @@ public class BotController(
             TakeProfitPercent = dto.TakeProfitPercent,
             StopLossPercent = dto.StopLossPercent,
             AllowShort = dto.AllowShort,
+            Leverage = dto.Leverage,
             QuoteNotionalPerTrade = dto.QuoteNotionalPerTrade,
             MinimumConfidence = dto.MinimumConfidence,
             MaxHoldingPeriods = dto.MaxHoldingPeriods,
@@ -293,6 +296,7 @@ public class BotController(
         bot.TakeProfitPercent = dto.TakeProfitPercent;
         bot.StopLossPercent = dto.StopLossPercent;
         bot.AllowShort = dto.AllowShort;
+        bot.Leverage = dto.Leverage;
         bot.QuoteNotionalPerTrade = dto.QuoteNotionalPerTrade;
         bot.MinimumConfidence = dto.MinimumConfidence;
         bot.MaxHoldingPeriods = dto.MaxHoldingPeriods;
@@ -399,6 +403,12 @@ public class BotController(
             throw new BadRequestException(
                 "این ربات مجاز به فروش استقراضی است، اما پلتفرم فقط معاملات نقدی را پشتیبانی می کند");
         }
+
+        var futuresVenue = bot.Venue == MarketVenue.Bybit;
+        if (bot.Leverage < 1 || (!futuresVenue && bot.Leverage != 1))
+            throw new BadRequestException("اهرم باید برای بازارهای نقدی برابر 1 باشد و برای معاملات آتی حداقل 1 باشد");
+        if (futuresVenue && (limits.SpotOnly || limits.MaxLeverage < bot.Leverage))
+            throw new BadRequestException("اهرم در تنظیمات پلتفرم فعال نیست یا از سقف مجاز بیشتر است");
 
         // Fail-closed limits: zero denies, so a bot with a zero ceiling would start and then refuse
         // every single intent. Reporting that here is the difference between "misconfigured" and

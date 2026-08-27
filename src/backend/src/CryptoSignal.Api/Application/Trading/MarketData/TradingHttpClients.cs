@@ -17,6 +17,7 @@ public static class TradingHttpClients
     public const string BinanceTestnet = "binance-testnet";
     public const string BinanceMainnet = "binance-mainnet";
     public const string Bitunix = "bitunix";
+    public const string Bybit = "bybit";
 
     /// <summary>The client name for a venue, or throws for a venue that speaks no HTTP.</summary>
     public static string ForVenue(MarketVenue venue) => venue switch
@@ -24,6 +25,7 @@ public static class TradingHttpClients
         MarketVenue.BinanceTestnet => BinanceTestnet,
         MarketVenue.BinanceMainnet => BinanceMainnet,
         MarketVenue.Bitunix => Bitunix,
+        MarketVenue.Bybit => Bybit,
         _ => throw new ArgumentOutOfRangeException(
             nameof(venue), venue, $"{venue} is not an HTTP venue; it has no configured client."),
     };

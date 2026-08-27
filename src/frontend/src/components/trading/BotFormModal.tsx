@@ -45,6 +45,7 @@ type FormState = {
   takeProfitPercent: string
   stopLossPercent: string
   allowShort: boolean
+  leverage: string
   quoteNotionalPerTrade: string
   minimumConfidence: string
   maxHoldingPeriods: string
@@ -71,6 +72,7 @@ const EMPTY_FORM: FormState = {
   takeProfitPercent: '',
   stopLossPercent: '',
   allowShort: false,
+  leverage: '1',
   quoteNotionalPerTrade: '',
   minimumConfidence: '',
   maxHoldingPeriods: '',
@@ -92,6 +94,7 @@ const EMPTY_FORM: FormState = {
 type NumericFieldKey =
   | 'takeProfitPercent'
   | 'stopLossPercent'
+  | 'leverage'
   | 'quoteNotionalPerTrade'
   | 'minimumConfidence'
   | 'maxHoldingPeriods'
@@ -125,6 +128,7 @@ function fromDetail(bot: BotDetail): FormState {
     takeProfitPercent: num(bot.takeProfitPercent),
     stopLossPercent: num(bot.stopLossPercent),
     allowShort: bot.allowShort,
+    leverage: num(bot.leverage ?? 1),
     quoteNotionalPerTrade: num(bot.quoteNotionalPerTrade),
     minimumConfidence: num(bot.minimumConfidence),
     maxHoldingPeriods: num(bot.maxHoldingPeriods),
@@ -223,6 +227,7 @@ export function BotFormModal({
       takeProfitPercent: parseFloat(form.takeProfitPercent),
       stopLossPercent: parseFloat(form.stopLossPercent),
       allowShort: form.allowShort,
+      leverage: parseInt(form.leverage, 10),
       quoteNotionalPerTrade: parseFloat(form.quoteNotionalPerTrade),
       minimumConfidence: form.minimumConfidence === '' ? 0 : parseFloat(form.minimumConfidence),
       maxHoldingPeriods: form.maxHoldingPeriods === '' ? 0 : parseInt(form.maxHoldingPeriods, 10),
@@ -427,6 +432,7 @@ export function BotFormModal({
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {numberField('takeProfitPercent', { required: true, step: '0.1' })}
             {numberField('stopLossPercent', { required: true, step: '0.1' })}
+            {numberField('leverage', { step: '1' })}
             {numberField('quoteNotionalPerTrade', { required: true })}
           </div>
 

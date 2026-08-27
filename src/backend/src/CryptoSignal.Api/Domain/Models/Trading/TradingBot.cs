@@ -44,6 +44,7 @@ public class TradingBot : BaseEntity
     /// <summary>Which venue supplies candles and receives orders.</summary>
     public MarketVenue Venue { get; set; }
 
+
     /// <summary>
     /// The user's stored credential this bot trades with, when pinned. Null lets resolution fall
     /// through to the operator's environment value, which is how a single-venue deployment works
@@ -70,6 +71,9 @@ public class TradingBot : BaseEntity
     /// can be shown the edge it declined — it only stops the direction from being SHORT.
     /// </summary>
     public bool AllowShort { get; set; }
+
+    /// <summary>Requested futures leverage. Spot venues are restricted to 1x.</summary>
+    public int Leverage { get; set; } = 1;
 
     /// <summary>Quote-currency notional committed per entry, e.g. 100 USDT.</summary>
     public decimal QuoteNotionalPerTrade { get; set; }

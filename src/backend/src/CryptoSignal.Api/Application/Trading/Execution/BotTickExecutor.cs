@@ -365,7 +365,7 @@ public sealed class BotTickExecutor(
                 intent.ClientOrderId, intent.Symbol, bot.Venue, rules,
                 intent.Direction, intent.Side, intent.Type,
                 intent.Quantity, intent.ReferencePrice, intent.LimitPrice,
-                intent.TakeProfitPrice, intent.StopLossPrice, intent.TimeInForce, bot.MaxSlippageBps),
+                intent.TakeProfitPrice, intent.StopLossPrice, intent.TimeInForce, bot.MaxSlippageBps, intent.Leverage),
             creds, cancellationToken);
 
         var exchangeOrder = new ExchangeOrder
@@ -620,6 +620,7 @@ public sealed class BotTickExecutor(
             StopLossPrice = action == BotDecisionAction.Open ? decision.StopLossPrice : null,
             TimeInForce = null,
             ReferencePrice = referencePrice,
+            Leverage = bot.Leverage,
             EstimatedNotional = estimatedNotional,
             Status = OrderIntentStatus.Draft,
         };

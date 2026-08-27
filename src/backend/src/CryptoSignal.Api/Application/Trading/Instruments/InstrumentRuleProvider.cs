@@ -53,6 +53,7 @@ public sealed class InstrumentRuleProvider(
             MarketVenue.Replay => ReplayInstrumentRules.For(key.Symbol),
             MarketVenue.BinanceTestnet or MarketVenue.BinanceMainnet =>
                 await FetchBinanceAsync(venue, key.Symbol, cancellationToken),
+            MarketVenue.Bybit => await FetchBybitAsync(key.Symbol, cancellationToken),
             _ => throw new InstrumentRulesUnavailableException(
                 $"No instrument-rule source is configured for venue {venue}."),
         };
@@ -195,6 +196,98 @@ public sealed class InstrumentRuleProvider(
             venue, symbol, tickSize, stepSize, minNotional, rules.IsTradable);
 
         return rules;
+    }
+
+    private async Task<InstrumentRules> FetchBybitAsync(
+        string symbol,
+        CancellationToken cancellationToken)
+    {
+        var client = httpClientFactory.CreateClient(TradingHttpClients.ForVenue(MarketVenue.Bybit));
+        JsonDocument document;
+        try
+        {
+            document = await client.GetFromJsonAsync<JsonDocument>(
+                           $"/v5/market/instruments-info?category=linear&symbol={Uri.EscapeDataString(symbol)}",
+                           cancellationToken)
+                       ?? throw new InstrumentRulesUnavailableException(
+                           $"Bybit returned an empty instrument-info body for {symbol}.");
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException
+                                             and not InstrumentRulesUnavailableException)
+        {
+            throw new InstrumentRulesUnavailableException(
+                $"Bybit could not be asked for {symbol}'s trading rules: {exception.Message}", exception);
+        }
+
+        using (document)
+        {
+            var root = document.RootElement;
+            if (!root.TryGetProperty("retCode", out var code) || code.GetInt32() != 0)
+            {
+                var message = root.TryGetProperty("retMsg", out var messageElement)
+                    ? messageElement.GetString()
+                    : "no message";
+                throw new InstrumentRulesUnavailableException(
+                    $"Bybit refused instrument info for {symbol}: {message}.");
+            }
+
+            if (!root.TryGetProperty("result", out var result)
+                || !result.TryGetProperty("list", out var list)
+                || list.ValueKind != JsonValueKind.Array
+                || list.GetArrayLength() == 0)
+            {
+                throw new InstrumentRulesUnavailableException($"Bybit does not list a linear symbol named '{symbol}'.");
+            }
+
+            var item = list[0];
+            var status = item.TryGetProperty("status", out var statusElement) ? statusElement.GetString() : null;
+            var baseAsset = item.TryGetProperty("baseCoin", out var baseElement) ? baseElement.GetString() : null;
+            var quoteAsset = item.TryGetProperty("quoteCoin", out var quoteElement) ? quoteElement.GetString() : null;
+            if (string.IsNullOrWhiteSpace(baseAsset) || string.IsNullOrWhiteSpace(quoteAsset))
+                throw new InstrumentRulesUnavailableException($"Bybit did not report base/quote assets for {symbol}.");
+
+            var priceFilter = item.GetProperty("priceFilter");
+            var lotFilter = item.GetProperty("lotSizeFilter");
+            var tickSize = DecimalProperty(priceFilter, "tickSize");
+            var stepSize = DecimalProperty(lotFilter, "qtyStep");
+            var minQuantity = DecimalProperty(lotFilter, "minOrderQty");
+            var maxQuantity = DecimalProperty(lotFilter, "maxOrderQty");
+            // Bybit linear contracts quote their minimum order in USDT under minNotionalValue;
+            // some account/category responses omit it, so zero means no venue-reported minimum here,
+            // not a fabricated permissive rule (the platform notional caps still apply).
+            var minNotional = DecimalProperty(lotFilter, "minNotionalValue");
+            if (tickSize <= 0m || stepSize <= 0m)
+                throw new InstrumentRulesUnavailableException(
+                    $"Bybit reported no usable price/lot grid for {symbol} (tick {tickSize}, step {stepSize}).");
+
+            var rules = new InstrumentRules(
+                Symbol: symbol,
+                BaseAsset: baseAsset,
+                QuoteAsset: quoteAsset,
+                TickSize: tickSize,
+                StepSize: stepSize,
+                MinQuantity: minQuantity,
+                MaxQuantity: maxQuantity,
+                MinNotional: minNotional,
+                IsTradable: string.Equals(status, "Trading", StringComparison.Ordinal),
+                SupportsMarketOrders: true,
+                PriceScale: BinanceJson.ScaleOf(tickSize),
+                QuantityScale: BinanceJson.ScaleOf(stepSize));
+
+            logger.LogDebug(
+                "Resolved Bybit linear rules for {Symbol}: tick {Tick}, step {Step}, minNotional {MinNotional}, tradable {Tradable}",
+                symbol, tickSize, stepSize, minNotional, rules.IsTradable);
+            return rules;
+        }
+
+        static decimal DecimalProperty(JsonElement element, string property)
+        {
+            if (!element.TryGetProperty(property, out var value))
+                return 0m;
+            var text = value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
+            return decimal.TryParse(text, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : 0m;
+        }
     }
 
     private sealed record CachedRules(InstrumentRules Rules, DateTimeOffset ExpiresAt);

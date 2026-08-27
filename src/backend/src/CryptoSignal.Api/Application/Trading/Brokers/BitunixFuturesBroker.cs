@@ -88,9 +88,12 @@ public sealed class BitunixFuturesBroker(
 
     public string Name => "bitunix-futures";
 
-    /// <summary>SANDBOX on Bitunix only — never PAPER, never LIVE (the live gates are unimplemented).</summary>
+    /// <summary>
+    /// Bitunix has no demo/testnet host. It therefore cannot claim SANDBOX: its only HTTP host is
+    /// production <c>fapi.bitunix.com</c>. PAPER is handled by the simulator; LIVE remains disabled.
+    /// </summary>
     public bool Supports(OperatingMode mode, MarketVenue venue) =>
-        mode == OperatingMode.Sandbox && venue == MarketVenue.Bitunix;
+        mode == OperatingMode.Live && venue == MarketVenue.Bitunix;
 
     public async Task<BrokerPlacement> PlaceAsync(
         BrokerOrderRequest request,

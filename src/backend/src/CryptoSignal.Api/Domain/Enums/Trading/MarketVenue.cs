@@ -28,4 +28,11 @@ public enum MarketVenue
     /// Binance venues, hence its own broker and kline source rather than a Binance subclass.
     /// </summary>
     [Display(Name = "Bitunix")] Bitunix = 4,
+
+    /// <summary>
+    /// Bybit USDT-margined futures, demo environment (<c>api-demo.bybit.com</c>). The v5 unified
+    /// API with a full order lifecycle and virtual funds — the venue leveraged-futures work runs
+    /// against, because it exercises real orders without real money.
+    /// </summary>
+    [Display(Name = "Bybit demo")] Bybit = 5,
 }

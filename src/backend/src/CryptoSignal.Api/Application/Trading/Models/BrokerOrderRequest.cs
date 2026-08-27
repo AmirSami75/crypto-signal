@@ -29,7 +29,8 @@ public sealed record BrokerOrderRequest(
     decimal? TakeProfitPrice = null,
     decimal? StopLossPrice = null,
     TimeInForce? TimeInForce = null,
-    int MaxSlippageBps = 0);
+    int MaxSlippageBps = 0,
+    int Leverage = 1);        // 1 = unleveraged; futures brokers must apply/validate explicitly.
 
 /// <summary>How a submission ended.</summary>
 public enum BrokerOutcome

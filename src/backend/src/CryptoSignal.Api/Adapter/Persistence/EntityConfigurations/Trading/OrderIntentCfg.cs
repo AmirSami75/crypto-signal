@@ -32,6 +32,7 @@ public sealed class OrderIntentCfg : BaseEntityTypeConfiguration<OrderIntent>
         builder.Property(x => x.StatusReason).HasMaxLength(500).IsUnicode();
 
         builder.Property(x => x.OperatingMode).HasConversion<int>();
+        builder.Property(x => x.Leverage).HasDefaultValue(1);
         builder.Property(x => x.Direction).HasConversion<int>();
         builder.Property(x => x.Side).HasConversion<int>();
         builder.Property(x => x.Type).HasConversion<int>();

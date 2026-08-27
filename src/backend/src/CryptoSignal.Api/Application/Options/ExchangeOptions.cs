@@ -30,6 +30,8 @@ public sealed class ExchangeOptions
 
     public BinanceVenueOptions Bitunix { get; init; } = new();
 
+    public BinanceVenueOptions Bybit { get; init; } = new();
+
     /// <summary>
     /// How long a signed request stays valid at the venue, in milliseconds. Binance rejects anything
     /// older, which is what stops a replayed request from executing late.
@@ -45,6 +47,7 @@ public sealed class ExchangeOptions
         MarketVenue.BinanceTestnet => Or(BinanceTestnet.RestBaseUrl, BinanceEndpoints.BinanceTestnet),
         MarketVenue.BinanceMainnet => Or(BinanceMainnet.RestBaseUrl, BinanceEndpoints.BinanceMainnet),
         MarketVenue.Bitunix => Or(Bitunix.RestBaseUrl, BinanceEndpoints.Bitunix),
+        MarketVenue.Bybit => Or(Bybit.RestBaseUrl, BinanceEndpoints.BybitDemo),
         _ => throw new ArgumentOutOfRangeException(
             nameof(venue), venue, "This venue has no REST endpoint configured here."),
     };
@@ -54,6 +57,7 @@ public sealed class ExchangeOptions
         MarketVenue.BinanceTestnet => BinanceTestnet,
         MarketVenue.BinanceMainnet => BinanceMainnet,
         MarketVenue.Bitunix => Bitunix,
+        MarketVenue.Bybit => Bybit,
         _ => throw new ArgumentOutOfRangeException(
             nameof(venue), venue, "This venue is not configured here."),
     };
@@ -92,4 +96,7 @@ public static class BinanceEndpoints
 
     /// <summary>Bitunix's OpenAPI host (futures).</summary>
     public const string Bitunix = "https://fapi.bitunix.com";
+
+    /// <summary>Bybit's v5 demo-trading host (futures, virtual funds).</summary>
+    public const string BybitDemo = "https://api-demo.bybit.com";
 }

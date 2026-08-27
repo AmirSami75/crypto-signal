@@ -247,6 +247,7 @@ services
 AddVenueClient(MarketVenue.BinanceTestnet);
 AddVenueClient(MarketVenue.BinanceMainnet);
 AddVenueClient(MarketVenue.Bitunix);
+AddVenueClient(MarketVenue.Bybit);
 
 void AddVenueClient(MarketVenue venue)
 {

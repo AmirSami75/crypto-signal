@@ -31,7 +31,7 @@ import { useResource } from '../lib/useResource'
  * — is stated on the confirmation.
  */
 
-const VENUES: MarketVenueName[] = ['BinanceTestnet', 'BinanceMainnet', 'Bitunix']
+const VENUES: MarketVenueName[] = ['BinanceTestnet', 'BinanceMainnet', 'Bitunix', 'Bybit']
 
 type Dialog =
   | { kind: 'create' }

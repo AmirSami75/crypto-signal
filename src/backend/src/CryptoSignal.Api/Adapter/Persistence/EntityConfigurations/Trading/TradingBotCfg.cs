@@ -34,6 +34,7 @@ public sealed class TradingBotCfg : BaseEntityTypeConfiguration<TradingBot>
         builder.Property(x => x.Interval).HasMaxLength(10).IsUnicode(false);
         builder.Property(x => x.StatusReason).HasMaxLength(500).IsUnicode();
         builder.Property(x => x.ExpectedModelVersion).HasMaxLength(128).IsUnicode(false);
+        builder.Property(x => x.Leverage).HasDefaultValue(1);
 
         // Persisted as numeric values so renaming an enum member cannot reinterpret stored rows.
         builder.Property(x => x.Venue).HasConversion<int>();
