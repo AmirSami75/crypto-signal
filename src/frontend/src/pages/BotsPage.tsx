@@ -16,7 +16,7 @@ import { Input } from '../components/ui/Input'
 import { BotStatusBadge, OperatingModeBadge } from '../components/trading/TradingBadges'
 import { BotFormModal } from '../components/trading/BotFormModal'
 import { fa } from '../i18n/fa'
-import { api } from '../lib/api'
+import { api, errorMessage } from '../lib/api'
 import type { BotDetail, BotSummary, BotFilters, BotStatusName, OperatingModeName } from '../lib/apiTypes'
 import { ROUTES, botDetailPath, botMonitorPath } from '../routes'
 import { dateTimeText, signedMoneyText } from '../lib/tradingFormat'
@@ -57,6 +57,10 @@ export function BotsPage() {
   const [dialog, setDialog] = useState<Dialog>(null)
   const [reason, setReason] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
+  // Failures from start/pause/stop/delete. ConfirmDialog renders the message too, but a thrown
+  // error whose dialog already closed (or one raised outside it) must still reach the operator —
+  // console.error alone is how a "dead" run button happens.
+  const [actionError, setActionError] = useState<string | null>(null)
   // The full record behind an 'edit' dialog. Fetched on open — the listing row is a summary and does
   // not carry every field the form seeds from (risk limits, expected model version).
   const [editDetail, setEditDetail] = useState<BotDetail | null>(null)
@@ -113,6 +117,8 @@ export function BotsPage() {
     }
 
     try {
+      // A fresh attempt supersedes whatever the last one reported.
+      setActionError(null)
       if (kind === 'start') {
         await api.bots.start(bot.id, { reason })
         setNotice(fa.bots.startedSuccess)
@@ -130,6 +136,9 @@ export function BotsPage() {
       setReason('')
       refetch()
     } catch (e) {
+      // Keep the dialog open — its own error line shows the cause, and this records the same fact
+      // at page level so the failure survives even after the dialog is dismissed.
+      setActionError(errorMessage(e))
       console.error(e)
     }
   }, [dialog, reason, refetch])
@@ -276,7 +285,7 @@ export function BotsPage() {
                 ✎
               </IconButton>
             )}
-            {(isDraft || isPaused || isStopped || isFaulted) && canStart && (
+            {(isDraft || isPaused || isStopped) && canStart && (
               <IconButton
                 label={fa.bots.start}
                 onClick={() => setDialog({ kind: 'start', bot })}
@@ -367,6 +376,12 @@ export function BotsPage() {
       {notice && (
         <Alert tone="success">
           {notice}
+        </Alert>
+      )}
+
+      {actionError && (
+        <Alert tone="error" title={fa.bots.actionFailed}>
+          {actionError}
         </Alert>
       )}
 

@@ -612,6 +612,7 @@ export const fa = {
     pausedSuccess: 'ربات موقتا متوقف شد',
     stoppedSuccess: 'ربات متوقف شد',
     deletedSuccess: 'ربات حذف شد',
+    actionFailed: 'انجام عملیات ناموفق بود',
   },
 
   botDetail: {
