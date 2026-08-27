@@ -892,6 +892,10 @@ namespace CryptoSignal.Api.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<int>("Leverage")
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<decimal?>("LimitPrice")
                         .HasPrecision(28, 10)
                         .HasColumnType("numeric(28,10)");
@@ -1276,6 +1280,11 @@ namespace CryptoSignal.Api.Migrations
 
                     b.Property<DateTime?>("LastTickAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Leverage")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
 
                     b.Property<int>("MaxConcurrentPositions")
                         .HasColumnType("integer");
