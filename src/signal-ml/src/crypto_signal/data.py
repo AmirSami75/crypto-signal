@@ -286,6 +286,148 @@ def fetch_recent_ohlcv(
     return frame
 
 
+# ---------------------------------------------------------------------------
+# Derivatives-native data: funding rate and open interest (Binance USDT-M fapi)
+#
+# These are a second, orthogonal information source: price/volume features cannot
+# see positioning or carry. Every series is joined onto the candle frame by
+# *candle open time* with a last-observation-carried-forward that only ever looks
+# BACKWARD (merge_asof direction="backward"), so a row at time t never reads a
+# funding settlement or OI snapshot published after t — the same causality rule
+# the OHLCV features obey.
+# ---------------------------------------------------------------------------
+
+BINANCE_FAPI_FUNDING_URL = "https://fapi.binance.com/fapi/v1/fundingRate"
+BINANCE_FAPI_OI_HIST_URL = "https://fapi.binance.com/futures/data/openInterestHist"
+
+
+def fetch_funding_history(
+    symbol: str,
+    start: str | None = None,
+    end: str | None = None,
+    proxy_url: str | None = None,
+    timeout: int = 30,
+) -> pd.DataFrame:
+    """Funding settlements for one symbol: timestamp, funding_rate.
+
+    Funding settles every 8h; Binance caps this endpoint at 1000 rows per call,
+    so paginate forward by startTime.
+    """
+    start_ms = iso_to_milliseconds(start) or 0
+    end_ms = iso_to_milliseconds(end) or int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+    rows: list[dict[str, Any]] = []
+    cursor = start_ms
+    while cursor < end_ms:
+        payload = _get_json(
+            BINANCE_FAPI_FUNDING_URL,
+            {"symbol": symbol, "startTime": cursor, "endTime": end_ms, "limit": 1000},
+            timeout=timeout,
+            proxy_url=proxy_url,
+        )
+        if not payload:
+            break
+        rows.extend(payload)
+        last_ts = int(payload[-1]["fundingTime"])
+        if len(payload) < 1000:
+            break
+        cursor = last_ts + 1
+        if len(rows) > 20000:
+            break  # ~5.5 years of 8h funding; far beyond any current training window
+    frame = pd.DataFrame(
+        {
+            "funding_time": [int(r["fundingTime"]) for r in rows],
+            "funding_rate": [float(r["fundingRate"]) for r in rows],
+        }
+    )
+    if frame.empty:
+        return frame
+    frame["funding_time"] = pd.to_datetime(frame["funding_time"], unit="ms", utc=True)
+    return frame.drop_duplicates(subset="funding_time", keep="last").sort_values("funding_time").reset_index(drop=True)
+
+
+def fetch_open_interest_history(
+    symbol: str,
+    interval: str = "1h",
+    proxy_url: str | None = None,
+    timeout: int = 30,
+) -> pd.DataFrame:
+    """Open-interest snapshots for one symbol at `interval` granularity.
+
+    Binance's openInterestHist only keeps the trailing ~30 days, so this is a
+    RECENT-only series. Historical OI backfills must come from an external
+    archive; the trainer treats missing OI as absent (see join functions).
+    """
+    payload = _get_json(
+        BINANCE_FAPI_OI_HIST_URL,
+        {"symbol": symbol, "period": interval, "limit": 500},
+        timeout=timeout,
+        proxy_url=proxy_url,
+    )
+    if not payload:
+        return pd.DataFrame({"oi_time": pd.Series(dtype="datetime64[ns, UTC]"), "open_interest": pd.Series(dtype="float64")})
+    frame = pd.DataFrame(
+        {
+            "oi_time": [int(r["timestamp"]) for r in payload],
+            "open_interest": [float(r["sumOpenInterest"]) for r in payload],
+        }
+    )
+    frame["oi_time"] = pd.to_datetime(frame["oi_time"], unit="ms", utc=True)
+    return frame.drop_duplicates(subset="oi_time", keep="last").sort_values("oi_time").reset_index(drop=True)
+
+
+def join_derivatives_features(
+    candles: pd.DataFrame,
+    funding: pd.DataFrame | None,
+    open_interest: pd.DataFrame | None,
+) -> pd.DataFrame:
+    """Attach funding/OI columns to a candle frame, strictly backward-looking.
+
+    Produces three feature columns on every candle row:
+      - funding_rate_last: most recent SETTLED funding rate at candle open
+      - funding_rate_chg_3: change over the last three settlements (~24h)
+      - oi_change_1: fractional 1-bar change in open interest (NaN when OI history is unavailable;
+        HistGradientBoosting handles missing values natively)
+
+    Causality: merge_asof(backward) means the value joined to candle t was published at or before t.
+    """
+    out = candles.copy()
+    timestamps = pd.to_datetime(out["timestamp"], utc=True)
+    out["funding_rate_last"] = np.nan
+    out["funding_rate_chg_3"] = np.nan
+    out["oi_change_1"] = np.nan
+
+    if funding is not None and not funding.empty:
+        f = funding.sort_values("funding_time")
+        f = f.assign(funding_rate_chg_3=f["funding_rate"].diff(3))
+        merged = pd.merge_asof(
+            timestamps.to_frame("timestamp").sort_values("timestamp"),
+            f.rename(columns={"funding_time": "timestamp"})[["timestamp", "funding_rate", "funding_rate_chg_3"]],
+            on="timestamp",
+            direction="backward",
+        )
+        out["funding_rate_last"] = merged["funding_rate"].to_numpy()
+        out["funding_rate_chg_3"] = merged["funding_rate_chg_3"].to_numpy()
+
+    if open_interest is not None and not open_interest.empty:
+        oi = open_interest.sort_values("oi_time").copy()
+        oi["oi_change_1"] = oi["open_interest"].pct_change(fill_method=None)
+        merged = pd.merge_asof(
+            timestamps.to_frame("timestamp").sort_values("timestamp"),
+            oi.rename(columns={"oi_time": "timestamp"})[["timestamp", "oi_change_1"]],
+            on="timestamp",
+            direction="backward",
+        )
+        out["oi_change_1"] = merged["oi_change_1"].to_numpy()
+
+    logger.info(
+        "Derivatives features joined | rows=%s | funding=%s | oi=%s",
+        f"{len(out):,}",
+        "yes" if funding is not None and not funding.empty else "no",
+        "yes" if open_interest is not None and not open_interest.empty else "no",
+    )
+    return out
+
+
 def save_ohlcv(frame: pd.DataFrame, path: str | Path) -> Path:
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)

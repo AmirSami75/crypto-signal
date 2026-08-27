@@ -46,6 +46,7 @@ from crypto_signal.modeling import (
     reliability_curve,
 )
 from crypto_signal.modeling.calibration import (
+    CONFIDENCE_CEILING_QUANTILE,
     DECISION_FLOOR,
     MAX_COVERAGE_LOSS,
     MIN_BIN_COUNT_FOR_ERROR,
@@ -429,18 +430,42 @@ class ConfidenceReachTests(unittest.TestCase):
 
     def test_the_ceiling_is_a_percentile_not_the_maximum(self) -> None:
         """One outlier row in a 138k-row block is not a level an operator can plan around."""
-        wins = np.concatenate([np.full(9_999, 0.40), [0.99]])
-        probabilities = np.column_stack([1.0 - wins, np.zeros_like(wins), wins])
+        # 9,999 rows whose best side is 0.40 (split evenly between SELL and BUY), plus one outlier.
+        confident = np.full(9_999, 0.40)
+        probabilities = np.column_stack(
+            [confident, np.full(9_999, 0.20), confident]
+        )
+        probabilities = np.append(probabilities, [[0.005, 0.01, 0.985]], axis=0)
         measured = measure_confidence_reach(probabilities, thresholds=(0.50, 0.95))
-        self.assertAlmostEqual(measured.maximum, 0.99, places=9)
+        self.assertAlmostEqual(measured.maximum, 0.985, places=9)
         self.assertLess(measured.ceiling, 0.5, "the ceiling must not be dragged up by one row")
         self.assertAlmostEqual(measured.attainment[1][1], 1e-4, places=9)
 
-    def test_reach_is_measured_on_the_win_column(self) -> None:
+    def test_reach_is_measured_on_the_max_side(self) -> None:
+        # A bidirectional model: a row's decision confidence is whichever class wins the argmax.
+        # With columns [sell, hold, buy], max(sell, buy) crosses 0.5 for 3/4 of these rows —
+        # a BUY-column-only measure would see only the half where buy wins.
         wins = np.linspace(0.0, 1.0, 1_001)
         probabilities = np.column_stack([1.0 - wins, np.zeros_like(wins), wins])
         measured = measure_confidence_reach(probabilities, thresholds=(0.50,))
-        self.assertAlmostEqual(measured.attainment[0][1], 501 / 1_001, places=9)
+        self.assertAlmostEqual(measured.attainment[0][1], 1.0, places=9)
+
+    def test_an_honest_low_confidence_block_stays_below_the_floor(self) -> None:
+        # The mirror check: when no side ever reaches 0.5, attainment at 0.5 must be zero.
+        low = np.linspace(0.1, 0.4, 1_001)
+        hold = np.full_like(low, 0.25)
+        probabilities = np.column_stack([low, hold, low])
+        measured = measure_confidence_reach(probabilities, thresholds=(0.50,))
+        self.assertAlmostEqual(measured.attainment[0][1], 0.0, places=9)
+
+    def test_reach_covers_both_sides_of_the_book(self) -> None:
+        # Every row here is confidently SELL (BUY column near zero) and would be invisible to a
+        # BUY-column-only reach measurement; attainment at 0.5 must still see them all.
+        sells = np.linspace(0.9, 1.0, 101)
+        probabilities = np.column_stack([sells, np.zeros_like(sells), 1.0 - sells])
+        measured = measure_confidence_reach(probabilities, thresholds=(0.50,))
+        self.assertAlmostEqual(measured.attainment[0][1], 1.0, places=9)
+        self.assertAlmostEqual(measured.ceiling, float(np.quantile(sells, CONFIDENCE_CEILING_QUANTILE)), places=9)
 
     def test_an_empty_block_cannot_be_measured(self) -> None:
         with self.assertRaises(ValueError):

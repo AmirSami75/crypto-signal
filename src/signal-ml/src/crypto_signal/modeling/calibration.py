@@ -474,10 +474,17 @@ def measure_confidence_reach(
     probabilities: np.ndarray,
     thresholds: tuple[float, ...] = CONFIDENCE_THRESHOLDS,
 ) -> ConfidenceReach:
-    """How high the win probability climbs on a block of scored rows, and how often it gets there."""
-    wins = np.asarray(probabilities, dtype=np.float64)[:, int(np.flatnonzero(ALL_CLASSES == 1)[0])]
-    if wins.size == 0:
+    """How high the win probability climbs on a block of scored rows, and how often it gets there.
+
+    The model is bidirectional: one estimator answers both LONG and SHORT bets, and a row's decision
+    confidence lives in whichever side wins the argmax. Measuring only the BUY column would halve
+    attainment by construction (every SHORT-side confident row is discarded), so reach is measured on
+    the per-row maximum class probability — the number an operator's threshold actually gates on.
+    """
+    probabilities = np.asarray(probabilities, dtype=np.float64)
+    if probabilities.size == 0:
         raise ValueError("no rows to measure confidence reach on")
+    wins = probabilities.max(axis=1)
     return ConfidenceReach(
         ceiling=float(np.quantile(wins, CONFIDENCE_CEILING_QUANTILE)),
         maximum=float(wins.max()),

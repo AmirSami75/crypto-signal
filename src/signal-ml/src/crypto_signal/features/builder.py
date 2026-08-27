@@ -130,6 +130,23 @@ def build_features(frame: pd.DataFrame, atr_window: int = 14) -> FeatureFrame:
     # or, worse, a finite-looking split point; as a NaN it is trimmed with the warm-up rows.
     output = output.replace([np.inf, -np.inf], np.nan)
 
+    # Derivatives-native columns (funding rate, open interest) arrive already computed on the candle
+    # frame by `join_derivatives_features` — they are causal, scale-free, and follow the same
+    # backward-only join rule, so pass them straight through. Their absence (older datasets without
+    # the fapi fetch) simply omits them and keeps the historical feature set byte-identical.
+    deriv_columns = [c for c in ("funding_rate_last", "funding_rate_chg_3", "oi_change_1") if c in frame.columns]
+    for column in deriv_columns:
+        output[column] = frame[column].to_numpy(dtype=float)
+        output[column] = output[column].replace([np.inf, -np.inf], np.nan)
+    # A fully-missing column (e.g. oi_change_1 when no open-interest history is available) would reach
+    # the estimator's binner as a single flat value and crash it; HistGradientBoosting tolerates NaNs,
+    # but not a column that IS nothing. Drop those so datasets without a data source stay train-compatible.
+    present = [c for c in deriv_columns if bool(output[c].notna().any())]
+    dropped = [c for c in deriv_columns if c not in present]
+    if dropped:
+        output = output.drop(columns=dropped)
+        logger.info("Dropped all-missing derivative columns | columns=%s", dropped)
+
     columns = tuple(output.columns)
     logger.info(
         "Feature engineering finished | rows=%s | features=%s | elapsed=%.3fs",
