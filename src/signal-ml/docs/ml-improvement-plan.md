@@ -83,3 +83,34 @@ fee-dominance problem. The levers that actually matter are NOT model-side:
   (3) meta-labeling to select a SUBSET with P(win) far enough above the fee break-even.
 Meta-labeling (predict "will THIS setup's net return exceed break-even", not "which class")
 is the single remaining model-side lever worth building; uniqueness weights + DSR remain.
+
+## Meta-labeling go/no-go (2026-08-27, executed)
+
+`scripts/experiments/meta_label_gate.py`: meta-learner (HistGradientBoosting, 5 features
+[primary `p_win` + 4 barrier-context], pooled, chronological 60/40 split of the production
+holdout). Sweep of meta-confidence floors:
+
+| meta-floor | n trades | net E[ATR] | symbols passing +0.05 & n>=50 |
+|---|---|---|---|
+| 0.50 | 129,434 | -0.311 | 0/7 |
+| 0.55 |  96,519 | -0.310 | 0/7 |
+| 0.60 |  54,876 | -0.300 | 0/7 |
+| 0.65 |  17,110 | -0.272 | 0/7 |
+| 0.70 |       0 |  --    | 0/7 |
+
+RESULT: FAIL. The meta-learner is monotone (tighter floor -> slightly less bad) but cannot
+find a subset whose net return is positive on >=3 of 7 symbols. Per the plan, the only
+model-side lever for 1h profitability is now classified as exhausted.
+
+**Honest conclusion: no model-side fix at 1h.** Remaining levers are operational:
+
+  (a) maker-only / fee tier (cuts the ~0.30 ATR fee by 50-80%, the right axis),
+  (b) bracket selection that lifts the TP/SL ratio above 1.5:1 (sweep showed nothing
+      above 2:1 with the current model; if fees are halved, 1.5/1.0 becomes profitable),
+  (c) horizon reduction (15m has the same ~62% TP ceiling but different fee structure),
+  (d) move to Replay / paper first and measure realised slippage on this exact venue
+      pair before any real-money claim.
+
+Task 3 (wire meta into serving) is CANCELLED on this evidence. Tasks 4-5 (uniqueness
+weights, DSR trial log) are still worth building as governance for future work even
+though no model-side fix is in scope today.
