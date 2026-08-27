@@ -18,6 +18,10 @@ RUN dotnet publish src/backend/src/CryptoSignal.Api/CryptoSignal.Api.csproj \
     --no-restore
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS development
+# compose.dev.yml mounts a named NuGet cache at /tmp/nuget. Initialize both cache paths for
+# the non-root development user so a brand-new volume is writable without a manual chown.
+RUN mkdir -p /tmp/nuget /tmp/dotnet \
+    && chown -R 1000:1000 /tmp/nuget /tmp/dotnet
 WORKDIR /workspace/src/backend/src/CryptoSignal.Api
 EXPOSE 8080
 
