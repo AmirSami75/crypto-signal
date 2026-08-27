@@ -52,3 +52,34 @@ compute DSR when strategy-level Sharpe is reported.
 Operationalize as: at serving time, when the engine reports confidence ≥0.60, realized hit rate on that
 bucket must stay ≥0.60 per symbol on the purged holdout, while attaining on as many requests as possible.
 Current status: ALREADY TRUE at 43% attainment. P1-P3 aim to raise attainment without breaking honesty.
+
+## Addendum — bracket sweep + confidence-floor verdict (2026-08-27, executed)
+
+Bracket sweep (TP ∈ {0.75,1.0,1.25,1.5,2.0} × floors 0.50-0.65, run_bracket_backtest):
+every bracket loses net of fees on every symbol at floor 0.50; floors >= 0.55 fire ZERO
+trades on the serving read.
+
+Root cause (measured, not conjectured):
+- Serving gate reads P(class==+1) = P(TP-first), which caps ~0.47 (99th pct). A 0.60
+  floor is structurally unreachable — the model is not "wrong", the probability space is.
+- The OTHER metric (argmax/max-class, the calibration-reach number) reaches 0.62+, but
+  its confident rows mostly predict stop-first/timeout, not win — so it measures
+  classification accuracy (67.8% @ 0.60), not trade profitability.
+
+Net-expectancy vs P(win)-floor on holdout (fee ~0.30 ATR flat on 1.5/1.0):
+  0.40 -> 53.4% TP, -0.309 ATR
+  0.45 -> 55.6% TP, -0.308 ATR
+  0.50 -> 59.1% TP, -0.304 ATR
+  0.55 -> 61.8% TP, -0.303 ATR
+Expectancy is FLAT and NEGATIVE at every floor: P(win) is informative (monotone TP rate)
+but fees ~0.30 ATR vs a ~1.5:1 bracket need ~64% TP-first to break even, and the engine
+tops out ~62% at 1h.
+
+CONCLUSION (closes the task): "confidence > 60%" is ALREADY TRUE for the label metric
+(67.8% argmax-correct), but IRREDUCIBLY unprofitable on 1h — no classifier change fixes a
+fee-dominance problem. The levers that actually matter are NOT model-side:
+  (1) tighter brackets / larger edge per trade (sweep shows none clear fees at 1h),
+  (2) lower fees (maker-only, fee tier),
+  (3) meta-labeling to select a SUBSET with P(win) far enough above the fee break-even.
+Meta-labeling (predict "will THIS setup's net return exceed break-even", not "which class")
+is the single remaining model-side lever worth building; uniqueness weights + DSR remain.
