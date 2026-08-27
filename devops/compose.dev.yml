@@ -22,6 +22,15 @@ services:
       - ../src/signal-ml/src:/app/src:ro
       - ../src/signal-ml/artifacts:/app/artifacts:ro
       - ../src/signal-ml/artifacts_5m:/app/artifacts_5m:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      HTTP_PROXY: http://host.docker.internal:10808
+      HTTPS_PROXY: http://host.docker.internal:10808
+      ALL_PROXY: http://host.docker.internal:10808
+      NO_PROXY: localhost,127.0.0.1,signal-ml,db,host.docker.internal
+      ML_MODEL_DIR: /app/artifacts/models
+      ML_EXTERNAL_PROXY_URL: http://host.docker.internal:10808
 
   api:
     build:
@@ -51,6 +60,12 @@ services:
       Trading__Risk__SpotOnly: "false"
       Trading__Risk__MaxLeverage: "5"
       Trading__Risk__AllowShorting: "true"
+      # External exchange traffic must use the host V2Ray tunnel. Internal services remain direct
+      # through NO_PROXY above (db and signal-ml must never be sent through the public proxy).
+      Exchange__BinanceTestnet__ProxyUrl: http://host.docker.internal:10808
+      Exchange__BinanceMainnet__ProxyUrl: http://host.docker.internal:10808
+      Exchange__Bitunix__ProxyUrl: http://host.docker.internal:10808
+      Exchange__Bybit__ProxyUrl: http://host.docker.internal:10808
     command: ["dotnet", "watch", "run", "--no-launch-profile", "--urls", "http://0.0.0.0:8080"]
     ports:
       - "127.0.0.1:8000:8080"
