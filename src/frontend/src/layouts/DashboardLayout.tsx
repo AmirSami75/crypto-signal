@@ -81,7 +81,7 @@ export function DashboardLayout() {
       permission: PERMISSIONS.killSwitchGet,
     },
     { to: ROUTES.connections, label: fa.nav.connections, icon: <ChipIcon />, permission: PERMISSIONS.exchangeConnectionGet },
-    { to: ROUTES.ml, label: fa.nav.ml, icon: <ChipIcon />, permission: PERMISSIONS.mlGetModel },
+    { to: ROUTES.mlEngine, label: fa.nav.ml, icon: <ModelIcon />, permission: PERMISSIONS.mlGetModel },
   ]
 
   const adminNav: NavEntry[] = [
@@ -455,6 +455,19 @@ function ChipIcon() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={iconClass} aria-hidden="true">
       <rect x="6.5" y="6.5" width="11" height="11" rx="2.5" />
       <path d="M10 3.5v3M14 3.5v3M10 17.5v3M14 17.5v3M3.5 10h3M3.5 14h3M17.5 10h3M17.5 14h3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/** A neural-network-style node, for the M Engine nav entry. */
+function ModelIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={iconClass} aria-hidden="true">
+      <circle cx="6.5" cy="12" r="2.5" />
+      <circle cx="12" cy="7.5" r="2.5" />
+      <circle cx="17.5" cy="12" r="2.5" />
+      <circle cx="12" cy="16.5" r="2.5" />
+      <path d="M9 10.5L7 11.5M15 10.5L17 11.5M9 13.5L7 14.5M15 13.5L17 14.5M12 5L10 9.5M12 19L10 14.5M14 9.5L12 5M14 19L12 14.5" strokeLinecap="round" />
     </svg>
   )
 }

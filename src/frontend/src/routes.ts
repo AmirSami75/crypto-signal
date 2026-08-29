@@ -24,6 +24,7 @@ export const ROUTES = {
   permissions: '/permissions',
   loginHistory: '/login-history',
   ml: '/ml',
+  mlEngine: '/m-engine',
 } as const
 
 export type RoutePath = (typeof ROUTES)[keyof typeof ROUTES]

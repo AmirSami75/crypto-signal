@@ -11,6 +11,7 @@ import { ChangePasswordPage } from './pages/ChangePasswordPage'
 import { ConnectionsPage } from './pages/ConnectionsPage'
 import { KillSwitchesPage } from './pages/KillSwitchesPage'
 import { LoginHistoryPage } from './pages/LoginHistoryPage'
+import { MlEnginePage } from './pages/MlEnginePage'
 import { LoginPage } from './pages/LoginPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { OverviewPage } from './pages/OverviewPage'
@@ -113,6 +114,14 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission permission={PERMISSIONS.exchangeConnectionGet}>
             <ConnectionsPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: ROUTES.mlEngine,
+        element: (
+          <RequirePermission permission={PERMISSIONS.mlGetModel}>
+            <MlEnginePage />
           </RequirePermission>
         ),
       },
