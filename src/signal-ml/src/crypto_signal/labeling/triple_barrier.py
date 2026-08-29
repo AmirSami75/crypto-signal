@@ -129,6 +129,38 @@ LABEL_COLUMN = "target"
 #: a chronological split means anyway.
 TIME_COLUMN = "timestamp"
 
+#: Column carrying the per-row uniqueness weight used by AFML sample weighting. Each candle in a group
+#: shares the weight equally: the inverse of how many rows reference the same (symbol, candle-open).
+UNIQUENESS_COLUMN = "uniqueness"
+
+
+def compute_uniqueness_weights(frame: pd.DataFrame) -> pd.Series:
+    """Compute the AFML "uniqueness weight" for every row of a barrier-variant frame.
+
+    "Uniqueness (overlap)" in Lopez de Prado counts, for each observation, how many concurrent
+    overlapping observations share the same unit of information — here a (symbol, candle-open) key.
+    A candle emitted three times (for example, three barrier variants) gives each row 1/3; a candle
+    emitted once gets 1.0. The weight therefore measures how much of the sample is "unique" versus
+    duplicated, and feeds the AFML `sample_weight = uniqueness` so correlated duplicates do not
+    dominate training.
+
+    Returns a float Series aligned to the input frame's index, carrying only the weights so the
+    caller can multiply it directly into an estimator's `sample_weight` without aligning columns.
+    """
+    if "symbol" not in frame.columns or "timestamp" not in frame.columns:
+        raise ValueError("compute_uniqueness_weights requires 'symbol' and 'timestamp' columns")
+
+    keys = frame[["symbol", "timestamp"]]
+    # Normalise so NaT/NaN in either column is treated as one comparable bucket, and so that two rows
+    # describing the same candle really are the same group.
+    normalised = keys.assign(
+        symbol=keys["symbol"].astype(object),
+        timestamp=pd.to_datetime(keys["timestamp"], utc=True, format="ISO8601"),
+    )
+    group_sizes = normalised.groupby(["symbol", "timestamp"], dropna=False)["symbol"].transform("size")
+    weights = 1.0 / group_sizes.astype(float)
+    return pd.Series(weights.to_numpy(), index=frame.index, name="uniqueness")
+
 
 def barrier_grid(
     multiples: Sequence[float] = BARRIER_GRID_ATR,

@@ -36,21 +36,21 @@ class UniquenessTests(unittest.TestCase):
 
     def test_unique_weight_equals_inverse_overlap(self) -> None:
         out = compute_uniqueness_weights(self.frame)
-        btc = out[out["symbol"] == "BTCUSDT"]["uniqueness"].to_numpy()
-        eth = out[out["symbol"] == "ETHUSDT"]["uniqueness"].to_numpy()
+        btc = out[self.frame["symbol"] == "BTCUSDT"].to_numpy()
+        eth = out[self.frame["symbol"] == "ETHUSDT"].to_numpy()
         np.testing.assert_allclose(btc, [1 / 3, 1 / 3, 1 / 3])
         np.testing.assert_allclose(eth, [1.0, 1.0])
 
     def test_effective_sample_size_equals_unique_candle_count(self) -> None:
         # AFML: the SUM of uniqueness equals the number of unique (candle, symbol) keys.
         out = compute_uniqueness_weights(self.frame)
-        self.assertAlmostEqual(float(out[UNIQUENESS_COLUMN].sum()), 3.0)  # 2 BTC candles + 1 ETH... no, 1 BTC + 2 ETH
+        self.assertAlmostEqual(float(out.sum()), 3.0)  # 2 BTC candles + 1 ETH... no, 1 BTC + 2 ETH
 
     def test_effective_sample_size_matches_unique_keys(self) -> None:
         out = compute_uniqueness_weights(self.frame)
         unique_keys = self.frame[["symbol", "timestamp"]].drop_duplicates()
         self.assertAlmostEqual(
-            float(out[UNIQUENESS_COLUMN].sum()), float(len(unique_keys))
+            float(out.sum()), float(len(unique_keys))
         )
 
     def test_zero_overlap_keys_collapse_to_zero_weight(self) -> None:
@@ -65,7 +65,7 @@ class UniquenessTests(unittest.TestCase):
             }
         )
         out = compute_uniqueness_weights(frame)
-        self.assertTrue((out[UNIQUENESS_COLUMN] == 1.0).all())
+        self.assertTrue((out == 1.0).all())
 
     def test_required_columns(self) -> None:
         with self.assertRaises(ValueError):
