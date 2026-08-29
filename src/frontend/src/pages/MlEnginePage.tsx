@@ -1,14 +1,15 @@
 import { useCallback, useState } from 'react'
 import { fa } from '../i18n/fa'
 import { StatusDot } from '../components/ui/Badge'
-import { Button, buttonClasses } from '../components/ui/Button'
+import { Button } from '../components/ui/Button'
 import { Card, Eyebrow } from '../components/ui/Card'
 import { Spinner } from '../components/ui/Spinner'
 import { BarChart } from '../components/ui/Charts'
 import { Alert } from '../components/ui/Alert'
 import { api } from '../lib/api'
-import type { MlSupportedMarket } from '../lib/apiTypes'
+import type { MlModelInfo, MlSupportedMarket } from '../lib/apiTypes'
 import { useResource } from '../lib/useResource'
+import { useInterval } from '../lib/useInterval'
 import { dateTimeText, percentText } from '../lib/tradingFormat'
 
 /**
@@ -27,6 +28,9 @@ import { dateTimeText, percentText } from '../lib/tradingFormat'
  */
 
 const POLL_INTERVAL = 60_000
+
+/** Confidence ceiling below which the model's discriminative power is suspect. */
+const CEILING_WARN = 0.6
 
 export function MlEnginePage() {
   const [showAllMarkets, setShowAllMarkets] = useState(false)
@@ -53,15 +57,34 @@ export function MlEnginePage() {
     refetch: refetchModel,
   } = useResource(modelFetcher)
 
+  // Self-refresh on an interval — the engine hot-reloads, so a promoted model appears here without
+  // a navigation. Manual refresh is still wired for the "I clicked deploy" case.
+  const handleRefresh = useCallback(() => {
+    refetchCapabilities()
+    refetchModel()
+  }, [refetchCapabilities, refetchModel])
+
+  useInterval(handleRefresh, POLL_INTERVAL, !capsLoading && !modelLoading && capabilities !== null)
+
   const isReady = capabilities?.modelReady ?? false
   const markets = capabilities?.supportedMarkets ?? []
-  const displayedMarkets = showAllMarkets ? markets : markets.slice(0, Math.min(markets.length, 6))
+  const hasMarkets = markets.length > 0
+  const displayedMarkets = showAllMarkets ? markets : markets.slice(0, 6)
 
   const confidenceReach = model?.confidenceReach ?? []
   const bucketLabels = confidenceReach.map((b) => `${Math.round(b.threshold * 100)}%+`)
   const bucketValues = confidenceReach.map((b) => b.share * 100)
 
   const versionShort = (model?.modelVersion ?? '').slice(0, 12)
+  const trainedAt = model?.trainedAt ? dateTimeText(model.trainedAt) : null
+  const ceilingLow = model && model.confidenceCeiling < CEILING_WARN
+
+  const headerTone: 'success' | 'danger' | 'warn' = ceilingLow ? 'warn' : isReady ? 'success' : 'danger'
+  const headerLabel = ceilingLow
+    ? fa.mlEngine.stateLowCeiling
+    : isReady
+      ? fa.mlEngine.stateReady
+      : fa.mlEngine.stateNotReady
 
   return (
     <div className="space-y-6">
@@ -70,62 +93,68 @@ export function MlEnginePage() {
         {capsLoading || modelLoading ? (
           <Spinner size="sm" />
         ) : (
-          <span
-            className="flex items-center gap-1.5 text-sm"
-          >
-            <StatusDot tone={isReady ? 'success' : 'danger'} />
-            <span>{isReady ? fa.mlEngine.stateReady : fa.mlEngine.stateNotReady}</span>
+          <span className="flex items-center gap-1.5 text-sm">
+            <StatusDot tone={headerTone} />
+            <span>{headerLabel}</span>
           </span>
         )}
         <Button
           variant="outline"
           size="sm"
-          onClick={() => {
-            refetchCapabilities()
-            refetchModel()
-          }}
+          onClick={handleRefresh}
           className="ms-auto"
         >
           {fa.common.refresh}
         </Button>
       </header>
 
-      {capsError && <Alert tone="error">{fa.mlEngine.capsLoadFailed}</Alert>}
-      {modelError && <Alert tone="error">{fa.mlEngine.modelLoadFailed}</Alert>}
+      {(capsError || modelError) && (
+        <div className="space-y-2">
+          {capsError && <Alert tone="error">{fa.mlEngine.capsLoadFailed}</Alert>}
+          {modelError && <Alert tone="error">{fa.mlEngine.modelLoadFailed}</Alert>}
+        </div>
+      )}
 
-      {/* Capabilities summary */}
-      <section
-        aria-label={fa.mlEngine.capabilitiesLabel}
-        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
-      >
+      {/* Capabilities summary — skeleton-shaped cards while loading, so the grid does not jump */ }
+      <section aria-label={fa.mlEngine.capabilitiesLabel} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatValue
           label={fa.mlEngine.serviceLabel}
-          value={capabilities?.service ?? '—'}
+          value={capabilities ? capabilities.service : <LoadingSkeleton width="w-32" />}
           caption={capabilities ? `${fa.mlEngine.versionLabel} ${capabilities.serviceVersion}` : undefined}
         />
         <StatValue
           label={fa.mlEngine.protocolLabel}
-          value={capabilities?.protocolVersion ?? '—'}
+          value={capabilities ? capabilities.protocolVersion : <LoadingSkeleton width="w-16" />}
           caption={fa.mlEngine.minCandlesLabel}
         />
         <StatValue
           label={fa.mlEngine.marketsLabel}
-          value={markets.length > 0 ? markets.length.toString() : '—'}
+          value={capsLoading ? <LoadingSkeleton width="w-8" /> : (hasMarkets ? markets.length.toString() : '—')}
           caption={fa.mlEngine.marketsCaption}
         />
-        <StatValue
-          label={fa.mlEngine.wildcardLabel}
-          value={capabilities?.wildcardModelReady ? fa.common.active : fa.common.inactive}
-          tone={capabilities?.wildcardModelReady ? 'success' : 'neutral'}
-        />
+        {capabilities && (
+          <StatValue
+            label={fa.mlEngine.wildcardLabel}
+            value={capabilities.wildcardModelReady ? fa.common.active : fa.common.inactive}
+            tone={capabilities.wildcardModelReady ? 'success' : 'neutral'}
+          />
+        )}
       </section>
 
-      {/* Active model card */}
+      {/* Active model card */ }
       <Card as="section" className="p-6 sm:p-7">
-        <Eyebrow>{fa.mlEngine.activeModelLabel}</Eyebrow>
+        <div className="flex items-baseline justify-between gap-3">
+          <Eyebrow>{fa.mlEngine.activeModelLabel}</Eyebrow>
+          {trainedAt && (
+            <span className="text-xs text-ink-faint">{`${fa.mlEngine.lastRefreshLabel} ${trainedAt}`}</span>
+          )}
+        </div>
+
         {modelLoading ? (
-          <div className="mt-4">
-            <Spinner />
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <StatValue key={i} label={fa.mlEngine.modelLoadingLabel} value={<LoadingSkeleton width="w-24" />} />
+            ))}
           </div>
         ) : model ? (
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -136,7 +165,7 @@ export function MlEnginePage() {
             />
             <StatValue
               label={fa.mlEngine.trainedAtLabel}
-              value={model.trainedAt ? dateTimeText(model.trainedAt) : '—'}
+              value={trainedAt ?? '—'}
               caption={fa.mlEngine.trainedAtNote}
             />
             <StatValue
@@ -147,7 +176,8 @@ export function MlEnginePage() {
             <StatValue
               label={fa.mlEngine.confidenceCeilingLabel}
               value={percentText(model.confidenceCeiling * 100, 1)}
-              caption={fa.mlEngine.confidenceCeilingNote}
+              caption={ceilingLow ? fa.mlEngine.confidenceCeilingLowNote : fa.mlEngine.confidenceCeilingNote}
+              tone={ceilingLow ? 'warn' : 'neutral'}
             />
             <StatValue
               label={fa.mlEngine.holdingPeriodsLabel}
@@ -163,9 +193,15 @@ export function MlEnginePage() {
         ) : (
           <p className="mt-4 text-sm text-ink-muted">{fa.mlEngine.modelNotReady}</p>
         )}
+
+        {ceilingLow && model && (
+          <Alert tone="warn" className="mt-4">
+            {fa.mlEngine.lowCeilingWarning}
+          </Alert>
+        )}
       </Card>
 
-      {/* Confidence calibration: does confidence track win rate? */}
+      {/* Confidence calibration: does confidence track win rate? */ }
       {model && confidenceReach.length > 0 && (
         <Card as="section" className="p-6 sm:p-7">
           <Eyebrow>{fa.mlEngine.calibrationLabel}</Eyebrow>
@@ -182,7 +218,7 @@ export function MlEnginePage() {
         </Card>
       )}
 
-      {/* Supported markets */}
+      {/* Supported markets */ }
       <Card as="section" className="p-6 sm:p-7">
         <div className="flex items-baseline justify-between gap-3">
           <Eyebrow>{fa.mlEngine.marketsLabel}</Eyebrow>
@@ -196,6 +232,7 @@ export function MlEnginePage() {
             </button>
           )}
         </div>
+
         <div className="mt-4 -mx-1 -mx-5 sm:mx-0 sm:overflow-x-auto">
           <table className="w-full min-w-[38rem] border-collapse text-sm sm:min-w-0">
             <thead>
@@ -207,9 +244,17 @@ export function MlEnginePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {displayedMarkets.map((market) => (
-                <MarketRow key={`${market.symbol}:${market.interval}:${market.modelVersion}`} market={market} />
-              ))}
+              {displayedMarkets.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-6 text-center text-sm text-ink-faint">
+                    {fa.mlEngine.noMarkets}
+                  </td>
+                </tr>
+              ) : (
+                displayedMarkets.map((market) => (
+                  <MarketRow key={`${market.symbol}:${market.interval}:${market.modelVersion}`} market={market} />
+                ))
+              )}
               {!showAllMarkets && markets.length > 6 && (
                 <tr>
                   <td colSpan={4} className="py-2 text-center text-xs text-ink-faint">
@@ -220,6 +265,10 @@ export function MlEnginePage() {
             </tbody>
           </table>
         </div>
+
+        {!capsLoading && !hasMarkets && !capsError && (
+          <p className="mt-4 text-xs text-ink-faint">{fa.mlEngine.noMarketsNote}</p>
+        )}
       </Card>
     </div>
   )
@@ -255,6 +304,7 @@ function MarketRow({ market }: { market: MlSupportedMarket }) {
 
 /**
  * A labelled figure. `tone` colours the value, matching Badge's palette.
+ * The `value` accepts ReactNode so a skeleton can be shown while loading.
  */
 function StatValue({
   label,
@@ -263,7 +313,7 @@ function StatValue({
   tone = 'neutral',
 }: {
   label: string
-  value: string
+  value: string | React.ReactNode
   caption?: string
   tone?: 'neutral' | 'success' | 'danger' | 'warn'
 }) {
@@ -282,4 +332,9 @@ function StatValue({
       {caption && <span className="text-xs text-ink-muted">{caption}</span>}
     </div>
   )
+}
+
+/** A grey block matching the height of a loaded value, to keep the grid stable while fetching. */
+function LoadingSkeleton({ width = 'w-20' }: { width?: string }) {
+  return <span className={`inline-block h-5 animate-pulse rounded bg-line ${width}`} />
 }
