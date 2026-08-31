@@ -655,24 +655,24 @@ export const api = {
   /** Per-user exchange connections. Secrets are write-only: no endpoint returns them. */
   exchangeConnections: {
     paged: (query: TradingPageQuery, signal?: AbortSignal) =>
-      request<PagedResult<ExchangeConnection>>('/api/v1/exchange-connection' + queryString({ ...query }), {
+      request<PagedResult<ExchangeConnection>>('/api/v1/exchange-connections' + queryString({ ...query }), {
         signal,
       }),
 
     list: (signal?: AbortSignal) =>
-      request<PagedResult<ExchangeConnection>>('/api/v1/exchange-connection?pageSize=200', { signal }),
+      request<PagedResult<ExchangeConnection>>('/api/v1/exchange-connections?pageSize=200', { signal }),
 
     create: (payload: ExchangeConnectionInput, signal?: AbortSignal) =>
-      request<string>('/api/v1/exchange-connection', { method: 'POST', body: payload, signal }),
+      request<string>('/api/v1/exchange-connections', { method: 'POST', body: payload, signal }),
 
     update: (id: string, payload: ExchangeConnectionInput, signal?: AbortSignal) =>
-      request<boolean>(`/api/v1/exchange-connection/${id}`, { method: 'PUT', body: payload, signal }),
+      request<boolean>(`/api/v1/exchange-connections/${id}`, { method: 'PUT', body: payload, signal }),
 
     toggleActive: (id: string, signal?: AbortSignal) =>
-      request<boolean>(`/api/v1/exchange-connection/${id}/toggle-active`, { method: 'POST', signal }),
+      request<boolean>(`/api/v1/exchange-connections/${id}/toggle-active`, { method: 'POST', signal }),
 
     remove: (id: string, signal?: AbortSignal) =>
-      request<boolean>(`/api/v1/exchange-connection/${id}`, { method: 'DELETE', signal }),
+      request<boolean>(`/api/v1/exchange-connections/${id}`, { method: 'DELETE', signal }),
   },
 
   killSwitches: {

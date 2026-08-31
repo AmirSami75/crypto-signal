@@ -4,6 +4,7 @@ using CryptoSignal.Api.Application.Trading.Abstractions;
 using CryptoSignal.Api.Application.Trading.Models;
 using CryptoSignal.Api.Application.Trading.Risk;
 using CryptoSignal.Api.Domain.Constants;
+using CryptoSignal.Api.Domain.Constants.Trading;
 using CryptoSignal.Api.Domain.Enums.Trading;
 using CryptoSignal.Api.Domain.Models.Trading;
 using CryptoSignal.Auth.API.Attributes.Permissions;
@@ -408,7 +409,7 @@ public class BotController(
                 "این ربات مجاز به فروش استقراضی است، اما پلتفرم فقط معاملات نقدی را پشتیبانی می کند");
         }
 
-        var futuresVenue = bot.Venue == MarketVenue.Bybit;
+        var futuresVenue = bot.Venue.IsFutures();
         if (bot.Leverage < 1 || (!futuresVenue && bot.Leverage != 1))
             throw new BadRequestException("اهرم باید برای بازارهای نقدی برابر 1 باشد و برای معاملات آتی حداقل 1 باشد");
         if (futuresVenue && (limits.SpotOnly || limits.MaxLeverage < bot.Leverage))
