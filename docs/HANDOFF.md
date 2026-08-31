@@ -4,7 +4,7 @@
 > of the work: what changed, what was verified, what remains. The next agent (Hermes, Cline, OpenCode,
 > Claude Code, or a human) starts here.
 >
-> **Last updated:** 2026-08-31 (evening) · **Branch:** `main` · **Status:** LSTM v2 + online self-learning implemented, tested (358 ML / 15 backend), deployed live; uncommitted
+> **Last updated:** 2026-08-31 (evening) · **Branch:** `main` · **HEAD:** `1678984` — LSTM v2 + online self-learning committed and deployed live
 
 ---
 
@@ -57,8 +57,8 @@ Autonomous crypto futures-trading platform:
 
 ## 4. Remaining work (next up)
 
-1. **Rebuild signal-ml image** (blocker above): finish the torch wheel resume loop at `/tmp/wheels/`, then either retry `docker compose build signal-ml` (pip cache may pick it up) or extend the Dockerfile with a `--find-links /wheels` ARG. Then restart the engine container so the new RPCs (RecordTradeOutcome / GetTrainingStatus) go live.
-2. **Commit** the LSTM v2 + online-learning work (all tests green).
+1. ~~**Rebuild signal-ml image**~~ — DONE (CPU torch via `wheels/` + constraints pin; engine container live with the new RPCs)
+2. **Commit** the LSTM v2 + online-learning work (all tests green). — DONE as `1678984`
 3. **Binance Futures Testnet order lifecycle** (task p3e): enter testnet API key/secret via **Connections page** → verify place → reconcile → close on a Sandbox bot.
 4. **Watch the online loop in the wild**: paper bots closing positions now feed `trade_samples.jsonl`; after ~50 closes a market triggers its first challenger run — verdict visible on the M-Engine page (`/m-engine`).
 5. Full 7-symbol v2 training run needs more RAM than the current 15GB host allows with 1h data for all symbols (OOM-killed); the single-symbol smoke config works — consider per-symbol runs or a 5m config.
