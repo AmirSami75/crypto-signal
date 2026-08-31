@@ -125,12 +125,26 @@ public sealed class BotTickExecutor(
         }
 
         // ── 2. fetch candles (no fallback; a missing window faults the bot) ───────
+        // One retry inside the tick: a transient TLS blip through the outbound proxy must not
+        // permanently halt a bot, but there is still no second venue and no skip — after the
+        // retry the failure faults exactly as before. Fail-closed, just not fail-once.
         var source = marketData.Resolve(bot.Venue);
         IReadOnlyList<MarketCandleData> window;
         try
         {
-            window = await source.GetClosedCandlesAsync(
-                bot.Symbol, bot.Interval, options.Value.CandleWindowSize, cancellationToken);
+            try
+            {
+                window = await source.GetClosedCandlesAsync(
+                    bot.Symbol, bot.Interval, options.Value.CandleWindowSize, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken);
+                logger.LogWarning(
+                    "Bot {BotId} candle fetch retry after: {Message}", bot.Id, exception.Message);
+                window = await source.GetClosedCandlesAsync(
+                    bot.Symbol, bot.Interval, options.Value.CandleWindowSize, cancellationToken);
+            }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
