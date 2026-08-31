@@ -37,6 +37,9 @@ public abstract class BinanceKlineSource(IHttpClientFactory httpClientFactory, I
 
     public abstract MarketVenue Venue { get; }
 
+    /// <summary>The kline endpoint path. Overridden by futures derivatives whose REST root differs from spot.</summary>
+    protected virtual string KlinesPath => "/api/v3/klines";
+
     public async Task<IReadOnlyList<MarketCandleData>> GetClosedCandlesAsync(
         string symbol,
         string interval,
@@ -60,7 +63,7 @@ public abstract class BinanceKlineSource(IHttpClientFactory httpClientFactory, I
         var normalizedSymbol = symbol.Trim().ToUpperInvariant();
         var client = httpClientFactory.CreateClient(TradingHttpClients.ForVenue(Venue));
 
-        var url = $"/api/v3/klines?symbol={Uri.EscapeDataString(normalizedSymbol)}" +
+        var url = $"{KlinesPath}?symbol={Uri.EscapeDataString(normalizedSymbol)}" +
                   $"&interval={Uri.EscapeDataString(interval.Trim())}&limit={requested}";
 
         JsonDocument document;
@@ -191,4 +194,19 @@ public sealed class BinanceMainnetKlineSource(
     : BinanceKlineSource(httpClientFactory, logger), IScopedSvcMarker
 {
     public override MarketVenue Venue => MarketVenue.BinanceMainnet;
+}
+
+/// <summary>USDT-margined futures klines from the Binance Futures testnet (<c>testnet.binancefuture.com</c>).</summary>
+/// <remarks>
+/// Uses the <c>/fapi/v1/klines</c> surface. The array layout is identical to spot, so the shared parser
+/// applies — only the endpoint path changes. Futures klines also carry a <c>quoteVolume</c> element that
+/// this platform leaves as-is; the bot does not need turnover for its signals.
+/// </remarks>
+public sealed class BinanceFuturesTestnetKlineSource(
+    IHttpClientFactory httpClientFactory,
+    ILogger<BinanceFuturesTestnetKlineSource> logger)
+    : BinanceKlineSource(httpClientFactory, logger), IScopedSvcMarker
+{
+    public override MarketVenue Venue => MarketVenue.BinanceFuturesTestnet;
+    protected override string KlinesPath => "/fapi/v1/klines";
 }

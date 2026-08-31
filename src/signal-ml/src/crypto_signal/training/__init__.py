@@ -20,6 +20,7 @@ from .barrier_pipeline import (
     latest_barrier_signal,
     train_barrier_model,
 )
+from .lstm_pipeline import train_lstm_bundle
 from .pipeline import SIGNAL_NAMES, download_data, latest_signal, train_and_backtest
 
 __all__ = [
@@ -34,6 +35,7 @@ __all__ = [
     "latest_signal",
     "train_and_backtest",
     "train_barrier_model",
+    "train_lstm_bundle",
     "write_json",
     "write_text",
 ]

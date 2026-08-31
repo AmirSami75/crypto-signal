@@ -82,6 +82,13 @@ class ModelDescriptor:
     confidence_ceiling: float | None = None
     confidence_attainment: tuple[tuple[float, float], ...] = ()
 
+    #: `True` for a recurrent model (LSTM) that reads a window of `lookback` candles rather than the
+    #: single latest row. The evaluator branches on this to feed the right-shaped input.
+    is_sequence: bool = False
+
+    #: How many consecutive candles a sequence model expects. Ignored for row models.
+    lookback: int = 1
+
     #: How raw scores became probabilities, as the training run recorded it. Empty when the bundle
     #: predates the field. Reported over the wire because a caller thresholding on `confidence` is
     #: entitled to know whether anything calibrated it — an uncalibrated GBM score is not a probability,
@@ -122,6 +129,7 @@ class LoadedModel:
     descriptor: ModelDescriptor
     estimator: Any
     fingerprint: tuple[int, int]
+    is_sequence: bool = False
     _lock: RLock = field(default_factory=RLock, repr=False)
 
     def predict_proba(self, features: Any) -> Any:
@@ -419,22 +427,27 @@ def _load(candidate: Candidate, fingerprint: tuple[int, int]) -> LoadedModel:
         atr_window = int(metadata["atr_window"])
         max_horizon = int(metadata["max_horizon"])
         project_version = str(metadata.get("project_version", "unknown"))
+        is_sequence = bool(metadata.get("is_sequence", False))
+        lookback = int(metadata.get("lookback", 1))
     except Exception as exc:
         raise ModelUnavailable(f"not a valid model bundle: {type(exc).__name__}: {exc}") from exc
 
     if not hasattr(estimator, "predict_proba"):
         raise ModelUnavailable("the estimator cannot produce probabilities")
 
-    # The check that keeps a legacy close-to-close artifact from being served as a barrier model. Without
-    # it the mismatch surfaces as a feature-count error inside `predict_proba` on the first real request,
-    # by which time the caller sees an internal error instead of "this artifact answers a different
-    # question".
-    missing = [column for column in BARRIER_FEATURE_COLUMNS if column not in feature_columns]
-    if missing:
-        raise ModelUnavailable(
-            f"not trained on barrier inputs (missing {', '.join(missing)}), so it cannot answer a "
-            "take-profit/stop-loss request"
-        )
+    # A recurrent model reads only the scale-free candle features and is flagged `is_sequence`; it does
+    # not carry the per-bet barrier columns, so the barrier-input guard below is skipped for it.
+    if not is_sequence:
+        # The check that keeps a legacy close-to-close artifact from being served as a barrier model.
+        # Without it the mismatch surfaces as a feature-count error inside `predict_proba` on the first
+        # real request, by which time the caller sees an internal error instead of "this artifact answers
+        # a different question".
+        missing = [column for column in BARRIER_FEATURE_COLUMNS if column not in feature_columns]
+        if missing:
+            raise ModelUnavailable(
+                f"not trained on barrier inputs (missing {', '.join(missing)}), so it cannot answer a "
+                "take-profit/stop-loss request"
+            )
 
     if candidate.names_its_identity:
         if interval != candidate.interval:
@@ -470,9 +483,16 @@ def _load(candidate: Candidate, fingerprint: tuple[int, int]) -> LoadedModel:
         is_pooled=is_pooled,
         confidence_ceiling=ceiling,
         confidence_attainment=attainment,
+        is_sequence=is_sequence,
+        lookback=lookback,
         calibration_method=str((metadata.get("calibration") or {}).get("method") or ""),
     )
-    return LoadedModel(descriptor=descriptor, estimator=estimator, fingerprint=fingerprint)
+    return LoadedModel(
+        descriptor=descriptor,
+        estimator=estimator,
+        fingerprint=fingerprint,
+        is_sequence=is_sequence,
+    )
 
 
 def _symbols(metadata: dict[str, Any]) -> tuple[str, ...]:

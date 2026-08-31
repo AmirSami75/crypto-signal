@@ -230,12 +230,17 @@ class MarketEvaluator:
                 "changed between the caller's last read and this call"
             )
 
+        # A recurrent model reads a window of candles, so the request must carry at least `lookback`.
+        minimum_candles = self._minimum_candles
+        if descriptor.is_sequence:
+            minimum_candles = max(minimum_candles, descriptor.lookback)
+
         window = build_window(
             symbol=canonical_symbol,
             interval=canonical_interval,
             candles=candles,
             parameters=parameters,
-            minimum_candles=self._minimum_candles,
+            minimum_candles=minimum_candles,
             maximum_candles=self._maximum_candles,
             atr_window=descriptor.atr_window,
         )
@@ -257,9 +262,15 @@ class MarketEvaluator:
             else (self._default_max_holding_periods or descriptor.max_horizon)
         )
 
+        if descriptor.is_sequence:
+            # Feed the recurrent model a window of `lookback` candles, not the single latest row.
+            model_features = window.features.frame.iloc[-descriptor.lookback :]
+        else:
+            model_features = window.features.frame.loc[[window.latest_index]]
+
         choice = choose_direction(
             model,
-            window.features.frame.loc[[window.latest_index]],
+            model_features,
             barriers,
             allow_short=permit_short,
             minimum_confidence=minimum_confidence,

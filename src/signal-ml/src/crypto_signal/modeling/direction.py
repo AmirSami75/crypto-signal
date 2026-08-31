@@ -130,6 +130,21 @@ def barrier_variants(
     return rows
 
 
+def _sequence_window(features: pd.DataFrame, barriers: BarrierPair, sign: int) -> pd.DataFrame:
+    """The candle window a recurrent model scores for one direction.
+
+    `features` is a window of scale-free candle rows (no bet columns); this appends the barrier distances
+    and the requested `direction_sign` across every row, mirroring what `barrier_variants` does for a
+    single row so the LSTM is conditioned on the same bet the tree is.
+    """
+    window = features.copy()
+    window["take_profit_atr"] = float(barriers.take_profit_atr)
+    window["stop_loss_atr"] = float(barriers.stop_loss_atr)
+    window["risk_reward_ratio"] = float(barriers.risk_reward_ratio)
+    window["direction_sign"] = float(sign)
+    return window
+
+
 def choose_direction(
     model,
     features: pd.DataFrame,
@@ -150,14 +165,25 @@ def choose_direction(
         raise ValueError(f"minimum_confidence must be in [0, 1], got {minimum_confidence!r}")
 
     directions = (Direction.LONG, Direction.SHORT)
-    rows = barrier_variants(features, barriers, directions)
-    if feature_columns is not None:
-        missing = [column for column in feature_columns if column not in rows.columns]
-        if missing:
-            raise ValueError(f"feature row is missing {len(missing)} column(s) the model expects: {missing[:5]}")
-        rows = rows[list(feature_columns)]
 
-    probabilities = aligned_probabilities(model, rows)
+    if getattr(model, "is_sequence", False):
+        # A recurrent model reads a window of candles; score the long and short bets by flipping the
+        # `direction_sign` column across the whole window, exactly as the tree sees them.
+        long_probs = np.asarray(model.predict_proba(_sequence_window(features, barriers, +1)), dtype=float)
+        short_probs = np.asarray(model.predict_proba(_sequence_window(features, barriers, -1)), dtype=float)
+        if long_probs.ndim == 1:
+            long_probs = long_probs.reshape(1, -1)
+            short_probs = short_probs.reshape(1, -1)
+        probabilities = np.vstack([long_probs, short_probs])
+    else:
+        rows = barrier_variants(features, barriers, directions)
+        if feature_columns is not None:
+            missing = [column for column in feature_columns if column not in rows.columns]
+            if missing:
+                raise ValueError(f"feature row is missing {len(missing)} column(s) the model expects: {missing[:5]}")
+            rows = rows[list(feature_columns)]
+
+        probabilities = aligned_probabilities(model, rows)
     candidates = tuple(
         DirectionCandidate(
             direction=direction,

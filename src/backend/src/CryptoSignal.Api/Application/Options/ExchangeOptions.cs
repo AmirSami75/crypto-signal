@@ -28,6 +28,8 @@ public sealed class ExchangeOptions
 
     public BinanceVenueOptions BinanceMainnet { get; init; } = new();
 
+    public BinanceVenueOptions BinanceFuturesTestnet { get; init; } = new();
+
     public BinanceVenueOptions Bitunix { get; init; } = new();
 
     public BinanceVenueOptions Bybit { get; init; } = new();
@@ -45,6 +47,7 @@ public sealed class ExchangeOptions
     public string RestBaseUrl(MarketVenue venue) => venue switch
     {
         MarketVenue.BinanceTestnet => Or(BinanceTestnet.RestBaseUrl, BinanceEndpoints.BinanceTestnet),
+        MarketVenue.BinanceFuturesTestnet => Or(BinanceFuturesTestnet.RestBaseUrl, BinanceEndpoints.BinanceFuturesTestnet),
         MarketVenue.BinanceMainnet => Or(BinanceMainnet.RestBaseUrl, BinanceEndpoints.BinanceMainnet),
         MarketVenue.Bitunix => Or(Bitunix.RestBaseUrl, BinanceEndpoints.Bitunix),
         MarketVenue.Bybit => Or(Bybit.RestBaseUrl, BinanceEndpoints.BybitDemo),
@@ -55,6 +58,7 @@ public sealed class ExchangeOptions
     public BinanceVenueOptions For(MarketVenue venue) => venue switch
     {
         MarketVenue.BinanceTestnet => BinanceTestnet,
+        MarketVenue.BinanceFuturesTestnet => BinanceFuturesTestnet,
         MarketVenue.BinanceMainnet => BinanceMainnet,
         MarketVenue.Bitunix => Bitunix,
         MarketVenue.Bybit => Bybit,
@@ -93,6 +97,7 @@ public static class BinanceEndpoints
 {
     public const string BinanceTestnet = "https://testnet.binance.vision";
     public const string BinanceMainnet = "https://api.binance.com";
+    public const string BinanceFuturesTestnet = "https://testnet.binancefuture.com";
 
     /// <summary>Bitunix's OpenAPI host (futures).</summary>
     public const string Bitunix = "https://fapi.bitunix.com";

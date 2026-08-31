@@ -1,0 +1,74 @@
+[market]
+# LSTM training config. Mirrors config.toml but adds a `[lstm]` block and points at the interval you
+# want a recurrent model for. Run `python -m crypto_signal train-lstm --config config.lstm.toml` to
+# produce `artifacts/models/_pooled_1h.joblib` (is_sequence=true). Copy this file with a different
+# `interval` + `raw_data_path`/`data_dir` to train the 5m model alongside it.
+symbol = "BTCUSDT"
+symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "DOGEUSDT"]
+interval = "1h"
+start = "2024-01-01T00:00:00Z"
+end = ""
+raw_data_path = "data/BTCUSDT_1h.csv"
+data_dir = "data"
+
+[features]
+prediction_horizon = 6
+label_threshold = 0.0035
+
+[barrier]
+max_horizon = 24
+atr_window = 14
+grid_atr = [0.5, 1.0, 1.5, 2.0, 3.0]
+min_risk_reward = 0.4
+max_risk_reward = 4.0
+pairs_per_candle = 3
+holdout_fraction = 0.2
+calibration_blocks = [0.6, 0.2, 0.2]
+calibration_method = "isotonic"
+per_symbol_overrides = []
+backtest_take_profit_atr = 1.5
+backtest_stop_loss_atr = 1.0
+backtest_minimum_confidence = 0.5
+allow_short = true
+
+[model]
+test_fraction = 0.20
+cv_splits = 5
+probability_threshold = 0.50
+random_state = 42
+max_iter = 250
+learning_rate = 0.05
+max_leaf_nodes = 15
+min_samples_leaf = 40
+l2_regularization = 1.0
+
+[lstm]
+# Experimental recurrent model. `lookback` is how many candles the LSTM reads; the rest are hyper-params.
+lookback = 24
+hidden_size = 64
+num_layers = 2
+dropout = 0.2
+learning_rate = 0.001
+batch_size = 256
+epochs = 12
+weight_decay = 0.00001
+
+[backtest]
+fee_rate = 0.0010
+slippage_rate = 0.0005
+allow_short = false
+
+[output]
+artifact_dir = "artifacts"
+model_dir = "artifacts/models"
+legacy_dir = "artifacts/legacy"
+
+[network]
+proxy_url = "http://127.0.0.1:10808"
+timeout_seconds = 30
+
+[logging]
+level = "INFO"
+log_file = "artifacts/logs/crypto_signal_lstm.log"
+max_bytes = 5000000
+backup_count = 3

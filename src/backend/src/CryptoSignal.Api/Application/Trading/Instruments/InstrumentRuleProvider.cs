@@ -52,7 +52,9 @@ public sealed class InstrumentRuleProvider(
         {
             MarketVenue.Replay => ReplayInstrumentRules.For(key.Symbol),
             MarketVenue.BinanceTestnet or MarketVenue.BinanceMainnet =>
-                await FetchBinanceAsync(venue, key.Symbol, cancellationToken),
+                await FetchBinanceAsync(venue, key.Symbol, "/api/v3/exchangeInfo", cancellationToken),
+            MarketVenue.BinanceFuturesTestnet =>
+                await FetchBinanceAsync(venue, key.Symbol, "/fapi/v1/exchangeInfo", cancellationToken),
             MarketVenue.Bybit => await FetchBybitAsync(key.Symbol, cancellationToken),
             _ => throw new InstrumentRulesUnavailableException(
                 $"No instrument-rule source is configured for venue {venue}."),
@@ -65,6 +67,7 @@ public sealed class InstrumentRuleProvider(
     private async Task<InstrumentRules> FetchBinanceAsync(
         MarketVenue venue,
         string symbol,
+        string exchangeInfoPath,
         CancellationToken cancellationToken)
     {
         var client = httpClientFactory.CreateClient(TradingHttpClients.ForVenue(venue));
@@ -75,7 +78,7 @@ public sealed class InstrumentRuleProvider(
             // Asked per symbol, not for the whole venue: the full exchangeInfo payload is megabytes and
             // costs far more of the venue's request weight than the one symbol a bot trades.
             document = await client.GetFromJsonAsync<JsonDocument>(
-                           $"/api/v3/exchangeInfo?symbol={Uri.EscapeDataString(symbol)}",
+                           $"{exchangeInfoPath}?symbol={Uri.EscapeDataString(symbol)}",
                            cancellationToken)
                        ?? throw new InstrumentRulesUnavailableException(
                            $"{venue} returned an empty exchangeInfo body for {symbol}.");

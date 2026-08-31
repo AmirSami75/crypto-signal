@@ -117,6 +117,20 @@ class BacktestConfig:
 
 
 @dataclass(frozen=True)
+class LstmSection:
+    """Experimental recurrent model hyper-parameters. Optional; the engine ignores it when absent."""
+
+    lookback: int = 24
+    hidden_size: int = 64
+    num_layers: int = 2
+    dropout: float = 0.2
+    learning_rate: float = 1e-3
+    batch_size: int = 256
+    epochs: int = 12
+    weight_decay: float = 1e-5
+
+
+@dataclass(frozen=True)
 class OutputConfig:
     artifact_dir: Path
 
@@ -155,6 +169,7 @@ class AppConfig:
     network: NetworkConfig
     logging: LoggingConfig
     source_path: Path
+    lstm: LstmSection = LstmSection()
 
 
 def _resolve(base: Path, value: str) -> Path:

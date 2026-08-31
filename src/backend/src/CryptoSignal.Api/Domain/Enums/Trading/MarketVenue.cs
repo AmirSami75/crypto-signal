@@ -23,6 +23,13 @@ public enum MarketVenue
     [Display(Name = "Binance mainnet")] BinanceMainnet = 3,
 
     /// <summary>
+    /// Binance USDT-margined futures testnet (<c>testnet.binancefuture.com</c>). The same virtual-funds
+    /// account as the spot testnet, but the <c>/fapi/</c> REST surface supports shorts, leverage and
+    /// per-side positions. Sandbox broker and kline source address this host directly.
+    /// </summary>
+    [Display(Name = "Binance Futures testnet")] BinanceFuturesTestnet = 6,
+
+    /// <summary>
     /// Bitunix USDT-margined futures. Their public OpenAPI is futures-only
     /// (<c>fapi.bitunix.com</c>), double-SHA-256 signed — a different protocol family from the
     /// Binance venues, hence its own broker and kline source rather than a Binance subclass.

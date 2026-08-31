@@ -147,6 +147,13 @@ public sealed record BotSummaryDto
     public bool AllowShort { get; init; }
     public int Leverage { get; init; } = 1;
     public decimal QuoteNotionalPerTrade { get; init; }
+
+    /// <summary>Gross notional per order, in quote currency. Equals <see cref="QuoteNotionalPerTrade"/>.</summary>
+    public decimal EstimatedNotional { get; init; }
+
+    /// <summary>Margin the bot would tie up per order: <see cref="EstimatedNotional"/> / <see cref="Leverage"/>.</summary>
+    public decimal EstimatedMargin { get; init; }
+
     public int CadenceSeconds { get; init; }
     public DateTime? LastTickAt { get; init; }
     public DateTime? LastEvaluatedCandleOpenTime { get; init; }
@@ -183,6 +190,19 @@ public sealed record BotDetailDto
     public bool AllowShort { get; init; }
     public int Leverage { get; init; } = 1;
     public decimal QuoteNotionalPerTrade { get; init; }
+
+    /// <summary>Gross notional per order, in quote currency. Equals <see cref="QuoteNotionalPerTrade"/>.</summary>
+    public decimal EstimatedNotional { get; init; }
+
+    /// <summary>Margin the bot would tie up per order: <see cref="EstimatedNotional"/> / <see cref="Leverage"/>.</summary>
+    public decimal EstimatedMargin { get; init; }
+
+    /// <summary>
+    /// Quote collateral currently free at the venue, when a live balance read is available. Null until a
+    /// risk check has actually queried the venue; the dashboard shows "not available" rather than estimating.
+    /// </summary>
+    public decimal? AvailableQuoteBalance { get; init; }
+
     public double MinimumConfidence { get; init; }
     public int MaxHoldingPeriods { get; init; }
     public int CadenceSeconds { get; init; }

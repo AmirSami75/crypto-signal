@@ -173,6 +173,34 @@ original close-to-close model into `artifacts/legacy`. They are kept as a compar
 nothing serves from them. `demo` trains and signals on a bundled synthetic market and touches no
 network at all, which is the quickest way to confirm an install works.
 
+### Experimental LSTM sequence model
+
+`train-lstm` trains an **additive, experimental** recurrent model that reads a window of `lookback`
+candles instead of a single feature row, and writes `_pooled_<INTERVAL>.joblib` with
+`metadata["is_sequence"] = True`. Copy `config.lstm.toml` (or edit its `interval`) to train the 1h and
+5m models; the serving registry loads whichever `*_pooled_<INTERVAL>.joblib` files are present.
+
+```bash
+python -m crypto_signal.cli --config config.lstm.toml download
+python -m crypto_signal.cli --config config.lstm.toml train-lstm    # writes artifacts/models/_pooled_1h.joblib
+```
+
+**Honest status.** This is experimental and is **not** a replacement for the gradient-boosted bundle.
+`docs/ml-improvement-plan.md` explicitly rejects deep learning on 1h bars ("no robust dominance after
+costs"). The LSTM must clear the same purged-holdout, cost-aware backtest bar — net of fees and
+slippage, versus buy-and-hold — before anyone promotes it over the tree; until then it stays flagged
+experimental and the production path keeps serving the histogram-gradient-boosting bundle by default.
+
+Design notes:
+
+- It predicts the triple-barrier outcome of a **long** bet at the canonical bracket, conditioned on the
+  bet via `direction_sign` and the barrier distances (the same columns the tree sees). The short side is
+  scored by flipping `direction_sign` across the window — one network, both directions.
+- The bundle stores only hyper-parameters, the feature-column order and the fitted `state_dict`; the
+  module is rebuilt on load, so artifacts are small and pickling-version-agnostic.
+- `torch` is an optional dependency (`pip install torch`, CPU build is sufficient); the rest of the
+  engine imports without it.
+
 ### Reading the bracket backtest
 
 `REPORT.md` grades each symbol against **three break-even win rates**, and the distinction matters

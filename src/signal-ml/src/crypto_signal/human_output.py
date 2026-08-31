@@ -255,6 +255,37 @@ def _bracket_lines(backtest: dict[str, Any]) -> list[str]:
     return lines
 
 
+def format_lstm_training_summary(metadata: dict[str, Any]) -> str:
+    """A plain report for the experimental LSTM run.
+
+    Deliberately modest: the LSTM is additive and unproven, so the headline is the cost-aware backtest
+    versus buy-and-hold, not a victory lap. See `docs/ml-improvement-plan.md` for why it must clear the
+    same bar as the tree before promotion.
+    """
+    backtest = (metadata.get("strict_holdout") or {}).get("backtest", {})
+    strategy = backtest.get("strategy", {})
+    benchmark = backtest.get("buy_and_hold", {})
+    lines = [
+        "LSTM TRAINING COMPLETE (experimental)",
+        "=====================================",
+        f"Interval:        {metadata['interval']} candles",
+        f"Pooled symbols:  {', '.join(metadata['symbols'])}",
+        f"Lookback:        {metadata.get('lookback')} candles",
+        f"Label rows:      {metadata.get('label_rows'):,}",
+        f"Horizon:         {metadata.get('max_horizon')} candles | ATR window: {metadata.get('atr_window')}",
+        "",
+        "Strict holdout backtest (net of fees + slippage)",
+        f"  Strategy cumulative return:  {strategy.get('cumulative_return', float('nan')):.2%}",
+        f"  Buy & hold cumulative return: {benchmark.get('cumulative_return', float('nan')):.2%}",
+        f"  Strategy Sharpe:              {strategy.get('sharpe_zero_rate', float('nan')):.3f}",
+        f"  Strategy max drawdown:        {strategy.get('max_drawdown', float('nan')):.2%}",
+        "",
+        "WARNING: experimental recurrent model. It is not promoted over the gradient-boosted bundle",
+        "unless it clears the same purged-holdout, cost-aware backtest bar. See docs/ml-improvement-plan.md.",
+    ]
+    return "\n".join(lines)
+
+
 def format_barrier_signal_summary(payload: dict[str, Any]) -> str:
     """The advisory answer for one requested bet, in the order an operator reads it.
 

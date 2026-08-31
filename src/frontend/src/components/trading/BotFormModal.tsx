@@ -31,7 +31,7 @@ import type {
  */
 
 const INTERVALS = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w']
-const VENUES: MarketVenueName[] = ['Replay', 'BinanceTestnet', 'BinanceMainnet']
+const VENUES: MarketVenueName[] = ['Replay', 'BinanceTestnet', 'BinanceFuturesTestnet', 'BinanceMainnet']
 const MODES: OperatingModeName[] = ['Paper', 'Sandbox', 'Live']
 
 /** Every numeric field starts empty rather than at zero — see `NUMERIC_FIELDS`. */

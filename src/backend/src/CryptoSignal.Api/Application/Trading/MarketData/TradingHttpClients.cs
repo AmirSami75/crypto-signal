@@ -15,6 +15,7 @@ namespace CryptoSignal.Api.Application.Trading.MarketData;
 public static class TradingHttpClients
 {
     public const string BinanceTestnet = "binance-testnet";
+    public const string BinanceFuturesTestnet = "binance-futures-testnet";
     public const string BinanceMainnet = "binance-mainnet";
     public const string Bitunix = "bitunix";
     public const string Bybit = "bybit";
@@ -23,6 +24,7 @@ public static class TradingHttpClients
     public static string ForVenue(MarketVenue venue) => venue switch
     {
         MarketVenue.BinanceTestnet => BinanceTestnet,
+        MarketVenue.BinanceFuturesTestnet => BinanceFuturesTestnet,
         MarketVenue.BinanceMainnet => BinanceMainnet,
         MarketVenue.Bitunix => Bitunix,
         MarketVenue.Bybit => Bybit,

@@ -24,6 +24,7 @@ from .human_output import (
     format_barrier_signal_summary,
     format_barrier_training_summary,
     format_download_summary,
+    format_lstm_training_summary,
     format_signal_summary,
     format_training_summary,
 )
@@ -35,6 +36,7 @@ from .training import (
     latest_signal,
     train_and_backtest,
     train_barrier_model,
+    train_lstm_bundle,
 )
 
 
@@ -60,6 +62,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     download_parser.add_argument(
         "--refresh", action="store_true", help="Redownload even when a CSV already exists"
+    )
+
+    train_lstm_parser = subparsers.add_parser(
+        "train-lstm",
+        help="Train the experimental LSTM sequence model and write _pooled_<INTERVAL>.joblib",
+    )
+    train_lstm_parser.add_argument(
+        "--refresh", action="store_true", help="Redownload historical data first"
     )
 
     train_parser = subparsers.add_parser(
@@ -142,6 +152,12 @@ def main(argv: list[str] | None = None) -> None:
                 _print_json(trained)
             else:
                 print(format_barrier_training_summary(trained))
+        elif args.command == "train-lstm":
+            trained = train_lstm_bundle(config, refresh=args.refresh)
+            if args.json:
+                _print_json(trained)
+            else:
+                print(format_lstm_training_summary(trained))
         elif args.command == "signal":
             signal = latest_barrier_signal(
                 config,

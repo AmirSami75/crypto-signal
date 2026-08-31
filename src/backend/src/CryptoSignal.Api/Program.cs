@@ -245,6 +245,7 @@ services
 // venue rotates DNS; the timeout is what turns an unanswered write into an explicit ambiguous
 // outcome rather than a hung tick.
 AddVenueClient(MarketVenue.BinanceTestnet);
+AddVenueClient(MarketVenue.BinanceFuturesTestnet);
 AddVenueClient(MarketVenue.BinanceMainnet);
 AddVenueClient(MarketVenue.Bitunix);
 AddVenueClient(MarketVenue.Bybit);

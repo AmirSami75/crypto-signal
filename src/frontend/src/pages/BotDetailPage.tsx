@@ -373,6 +373,15 @@ function OverviewTab({ bot }: { bot: BotDetailData }) {
             <Stat label={fa.bots.quoteNotionalPerTrade}>
               <span className="num">{moneyText(bot.quoteNotionalPerTrade)}</span>
             </Stat>
+            <Stat label={fa.bots.leverage}>
+              <span className="num">{`${bot.leverage}${fa.overview.leverageUnit}`}</span>
+            </Stat>
+            <Stat label={fa.bots.estimatedNotional}>
+              <span className="num">{moneyText(bot.estimatedNotional)}</span>
+            </Stat>
+            <Stat label={fa.bots.estimatedMargin}>
+              <span className="num">{moneyText(bot.estimatedMargin)}</span>
+            </Stat>
             <Stat label={fa.trading.minimumConfidence}>
               <span className="num">{shareText(bot.minimumConfidence)}</span>
             </Stat>
@@ -403,6 +412,13 @@ function OverviewTab({ bot }: { bot: BotDetailData }) {
             </Stat>
             <Stat label={fa.bots.maxSlippageBps}>
               <span className="num">{countText(bot.maxSlippageBps)}</span>
+            </Stat>
+            <Stat label={fa.bots.availableQuoteBalance}>
+              {bot.availableQuoteBalance == null ? (
+                <span className="text-muted">{fa.bots.notAvailable}</span>
+              ) : (
+                <span className="num">{moneyText(bot.availableQuoteBalance)}</span>
+              )}
             </Stat>
           </div>
           {/* Zero means deny, restated wherever the limits are shown. */}
