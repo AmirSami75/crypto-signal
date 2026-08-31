@@ -57,14 +57,18 @@ Autonomous crypto futures-trading platform:
 
 ## 4. Remaining work (next up)
 
+> Refreshed 2026-08-31 evening after the Binance Futures Testnet bot went live.
+
 1. ~~**Rebuild signal-ml image**~~ — DONE (CPU torch via `wheels/` + constraints pin; engine container live with the new RPCs)
-2. **Commit** the LSTM v2 + online-learning work (all tests green). — DONE as `1678984`
-3. **Binance Futures Testnet order lifecycle** (task p3e): enter testnet API key/secret via **Connections page** → verify place → reconcile → close on a Sandbox bot.
-4. **Watch the online loop in the wild**: paper bots closing positions now feed `trade_samples.jsonl`; after ~50 closes a market triggers its first challenger run — verdict visible on the M-Engine page (`/m-engine`).
-5. Full 7-symbol v2 training run needs more RAM than the current 15GB host allows with 1h data for all symbols (OOM-killed); the single-symbol smoke config works — consider per-symbol runs or a 5m config.
-6. LSTM promotion gate: v2 must beat the tree bundle on purged-holdout, net-of-costs backtest before any promotion (gate in `docs/ml-improvement-plan.md`).
-7. Before any real money (standing gates): bracket sweep → 4-week soak → manual approval → rotate the screenshotted Bitunix key → gateway running for retrain cron.
-8. Minor: `BotDtos.cs` shows a duplicated `EstimatedNotional`/`EstimatedMargin` doc-block in the `afd5e5c` diff — worth a 2-minute glance; harmless today.
+2. ~~**Commit** the LSTM v2 + online-learning work~~ — DONE as `1678984`
+3. **Sandbox order lifecycle** — IN PROGRESS: connection stored, bot `binance-futures-demo` (Sandbox, BTCUSDT 1h, 2x, 60 USDT) ACTIVE with confidence floor 0.40. Waiting for the first candle whose edge clears 40% to exercise place → reconcile → close. Verify fills reconcile (`exchangeOrderId` set, position row created) and the close reports the outcome to the online learner.
+4. **Watch the online loop in the wild**: bot closes feed `trade_samples.jsonl`; ~50 closes trigger the first challenger run — verdict on `/m-engine`.
+5. Full 7-symbol v2 training run needs more RAM than the 15GB host allows (OOM-killed); per-symbol runs or a 5m config are the workarounds.
+6. **Retire or gate the v1 LSTM** currently serving `_pooled:1h` — its holdout backtest is net −100% (30,816 trades at the 0.5 floor). Either promote the tree bundle back as incumbent, or let the first online challenger replace it via the gate.
+7. **EX-006 circuit breaker + backoff** (repeated failures disable execution) — next Phase D item.
+8. **RISK-003 freshness checks** (candle gaps, stale mark price) after EX-006.
+9. Before any real money (standing gates): bracket sweep → 4-week soak → manual approval → rotate the screenshotted Bitunix key → gateway running for retrain cron.
+10. Minor: duplicated `EstimatedNotional`/`EstimatedMargin` doc-block in `BotDtos.cs` (`afd5e5c`) — cosmetic.
 
 ## 5. Environment quirks (read before building)
 
