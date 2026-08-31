@@ -36,6 +36,7 @@ CAPABILITIES: tuple[str, ...] = (
     "bot_decision_advice",
     "pooled_cross_symbol_model",
     "decimal_string_prices",
+    "online_trade_outcome_capture",
 )
 
 SUPPORTED_OPERATIONS: tuple[str, ...] = (
@@ -43,6 +44,8 @@ SUPPORTED_OPERATIONS: tuple[str, ...] = (
     "GetModelInfo",
     "GetSignal",
     "EvaluateBotDecision",
+    "RecordTradeOutcome",
+    "GetTrainingStatus",
 )
 
 

@@ -341,3 +341,91 @@ class EvaluateBotDecisionResponse(_message.Message):
     processing_milliseconds: float
     barrier_extrapolated: bool
     def __init__(self, request_id: _Optional[str] = ..., action: _Optional[_Union[BotAction, str]] = ..., direction: _Optional[_Union[TradeDirection, str]] = ..., levels: _Optional[_Union[TradeLevels, _Mapping]] = ..., confidence: _Optional[float] = ..., probabilities: _Optional[_Union[BarrierProbabilities, _Mapping]] = ..., expected_value: _Optional[float] = ..., reason_code: _Optional[str] = ..., rationale: _Optional[_Iterable[str]] = ..., symbol: _Optional[str] = ..., interval: _Optional[str] = ..., candle_open_time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., valid_until: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., model_id: _Optional[str] = ..., model_version: _Optional[str] = ..., model_trained_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., used_wildcard_model: _Optional[bool] = ..., input_digest_sha256: _Optional[str] = ..., warning: _Optional[str] = ..., processing_milliseconds: _Optional[float] = ..., barrier_extrapolated: _Optional[bool] = ...) -> None: ...
+
+class RecordTradeOutcomeRequest(_message.Message):
+    __slots__ = ("request_id", "bot_id", "symbol", "interval", "model_id", "model_version", "direction", "candles", "take_profit_percent", "stop_loss_percent", "close_reason", "realized_pnl", "bars_held", "decision_candle_open_time", "closed_at")
+    REQUEST_ID_FIELD_NUMBER: _ClassVar[int]
+    BOT_ID_FIELD_NUMBER: _ClassVar[int]
+    SYMBOL_FIELD_NUMBER: _ClassVar[int]
+    INTERVAL_FIELD_NUMBER: _ClassVar[int]
+    MODEL_ID_FIELD_NUMBER: _ClassVar[int]
+    MODEL_VERSION_FIELD_NUMBER: _ClassVar[int]
+    DIRECTION_FIELD_NUMBER: _ClassVar[int]
+    CANDLES_FIELD_NUMBER: _ClassVar[int]
+    TAKE_PROFIT_PERCENT_FIELD_NUMBER: _ClassVar[int]
+    STOP_LOSS_PERCENT_FIELD_NUMBER: _ClassVar[int]
+    CLOSE_REASON_FIELD_NUMBER: _ClassVar[int]
+    REALIZED_PNL_FIELD_NUMBER: _ClassVar[int]
+    BARS_HELD_FIELD_NUMBER: _ClassVar[int]
+    DECISION_CANDLE_OPEN_TIME_FIELD_NUMBER: _ClassVar[int]
+    CLOSED_AT_FIELD_NUMBER: _ClassVar[int]
+    request_id: str
+    bot_id: str
+    symbol: str
+    interval: str
+    model_id: str
+    model_version: str
+    direction: TradeDirection
+    candles: _containers.RepeatedCompositeFieldContainer[Candle]
+    take_profit_percent: str
+    stop_loss_percent: str
+    close_reason: str
+    realized_pnl: str
+    bars_held: int
+    decision_candle_open_time: _timestamp_pb2.Timestamp
+    closed_at: _timestamp_pb2.Timestamp
+    def __init__(self, request_id: _Optional[str] = ..., bot_id: _Optional[str] = ..., symbol: _Optional[str] = ..., interval: _Optional[str] = ..., model_id: _Optional[str] = ..., model_version: _Optional[str] = ..., direction: _Optional[_Union[TradeDirection, str]] = ..., candles: _Optional[_Iterable[_Union[Candle, _Mapping]]] = ..., take_profit_percent: _Optional[str] = ..., stop_loss_percent: _Optional[str] = ..., close_reason: _Optional[str] = ..., realized_pnl: _Optional[str] = ..., bars_held: _Optional[int] = ..., decision_candle_open_time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., closed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
+
+class RecordTradeOutcomeResponse(_message.Message):
+    __slots__ = ("request_id", "status", "samples_stored", "training_triggered")
+    REQUEST_ID_FIELD_NUMBER: _ClassVar[int]
+    STATUS_FIELD_NUMBER: _ClassVar[int]
+    SAMPLES_STORED_FIELD_NUMBER: _ClassVar[int]
+    TRAINING_TRIGGERED_FIELD_NUMBER: _ClassVar[int]
+    request_id: str
+    status: str
+    samples_stored: int
+    training_triggered: bool
+    def __init__(self, request_id: _Optional[str] = ..., status: _Optional[str] = ..., samples_stored: _Optional[int] = ..., training_triggered: _Optional[bool] = ...) -> None: ...
+
+class GetTrainingStatusRequest(_message.Message):
+    __slots__ = ("request_id", "symbols", "intervals")
+    REQUEST_ID_FIELD_NUMBER: _ClassVar[int]
+    SYMBOLS_FIELD_NUMBER: _ClassVar[int]
+    INTERVALS_FIELD_NUMBER: _ClassVar[int]
+    request_id: str
+    symbols: _containers.RepeatedScalarFieldContainer[str]
+    intervals: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, request_id: _Optional[str] = ..., symbols: _Optional[_Iterable[str]] = ..., intervals: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class TrainingStatus(_message.Message):
+    __slots__ = ("symbol", "interval", "samples_stored", "samples_since_training", "last_trained_at", "last_challenger_version", "last_verdict", "last_verdict_reason", "training_in_progress")
+    SYMBOL_FIELD_NUMBER: _ClassVar[int]
+    INTERVAL_FIELD_NUMBER: _ClassVar[int]
+    SAMPLES_STORED_FIELD_NUMBER: _ClassVar[int]
+    SAMPLES_SINCE_TRAINING_FIELD_NUMBER: _ClassVar[int]
+    LAST_TRAINED_AT_FIELD_NUMBER: _ClassVar[int]
+    LAST_CHALLENGER_VERSION_FIELD_NUMBER: _ClassVar[int]
+    LAST_VERDICT_FIELD_NUMBER: _ClassVar[int]
+    LAST_VERDICT_REASON_FIELD_NUMBER: _ClassVar[int]
+    TRAINING_IN_PROGRESS_FIELD_NUMBER: _ClassVar[int]
+    symbol: str
+    interval: str
+    samples_stored: int
+    samples_since_training: int
+    last_trained_at: str
+    last_challenger_version: str
+    last_verdict: str
+    last_verdict_reason: str
+    training_in_progress: bool
+    def __init__(self, symbol: _Optional[str] = ..., interval: _Optional[str] = ..., samples_stored: _Optional[int] = ..., samples_since_training: _Optional[int] = ..., last_trained_at: _Optional[str] = ..., last_challenger_version: _Optional[str] = ..., last_verdict: _Optional[str] = ..., last_verdict_reason: _Optional[str] = ..., training_in_progress: _Optional[bool] = ...) -> None: ...
+
+class GetTrainingStatusResponse(_message.Message):
+    __slots__ = ("request_id", "online_learning_enabled", "markets")
+    REQUEST_ID_FIELD_NUMBER: _ClassVar[int]
+    ONLINE_LEARNING_ENABLED_FIELD_NUMBER: _ClassVar[int]
+    MARKETS_FIELD_NUMBER: _ClassVar[int]
+    request_id: str
+    online_learning_enabled: bool
+    markets: _containers.RepeatedCompositeFieldContainer[TrainingStatus]
+    def __init__(self, request_id: _Optional[str] = ..., online_learning_enabled: _Optional[bool] = ..., markets: _Optional[_Iterable[_Union[TrainingStatus, _Mapping]]] = ...) -> None: ...

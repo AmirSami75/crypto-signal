@@ -1121,5 +1121,18 @@ export const fa = {
     colVersion: 'نسخه مدل',
     colWildcard: 'عمومی',
     wildcardYes: 'بله',
+    onlineLearningLabel: 'یادگیری آنلاین',
+    onlineLearningNote:
+      'هر معاملهٔ بسته‌شده به‌عنوان نمونهٔ آموزشی ثبت می‌شود؛ با رسیدن به حد آستانه، مدل چالش‌گر بازآموزی و با گیت ارتقا مقایسه می‌شود.',
+    onlineLearningDisabled: 'یادگیری آنلاین غیرفعال است (ML_ONLINE_LEARNING=false)',
+    colMarket: 'بازار',
+    colSamples: 'نمونه‌های ذخیره‌شده',
+    colSinceTraining: 'از آخرین آموزش',
+    colVerdict: 'آخرین نتیجه',
+    noOnlineMarkets: 'هنوز نمونه‌ای ثبت نشده است؛ با بسته‌شدن اولین معامله این جدول پر می‌شود.',
+    verdictPromoted: 'ارتقا یافت',
+    verdictRejected: 'رد شد',
+    verdictFailed: 'خطا',
+    trainingInProgress: 'در حال آموزش…',
   },
 } as const

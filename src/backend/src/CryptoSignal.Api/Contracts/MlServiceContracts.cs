@@ -266,6 +266,49 @@ public sealed record DependencyHealth(
     string Status,
     string? Detail = null);
 
+/// <summary>
+/// One resolved trade, reported to the engine's online-learning sample store. Prices and pnl cross
+/// as decimal strings per the proto contract; the engine stores the sample for a future training run.
+/// </summary>
+public sealed record MlTradeOutcome(
+    string BotId,
+    string Symbol,
+    string Interval,
+    string ModelId,
+    string ModelVersion,
+    MlDirection Direction,
+    IReadOnlyList<MlCandle> Candles,
+    decimal TakeProfitPercent,
+    decimal StopLossPercent,
+    string CloseReason,
+    decimal RealizedPnl,
+    uint BarsHeld,
+    DateTimeOffset DecisionCandleOpenTime,
+    DateTimeOffset ClosedAt,
+    string? RequestId = null);
+
+public sealed record MlTradeOutcomeAck(
+    string RequestId,
+    string Status,
+    uint SamplesStored,
+    bool TrainingTriggered);
+
+public sealed record MlMarketTrainingStatus(
+    string Symbol,
+    string Interval,
+    uint SamplesStored,
+    uint SamplesSinceTraining,
+    string? LastTrainedAt,
+    string? LastChallengerVersion,
+    string LastVerdict,
+    string LastVerdictReason,
+    bool TrainingInProgress);
+
+public sealed record MlTrainingStatus(
+    string RequestId,
+    bool OnlineLearningEnabled,
+    IReadOnlyList<MlMarketTrainingStatus> Markets);
+
 public sealed class MlServiceException(
     string errorCode,
     string message,

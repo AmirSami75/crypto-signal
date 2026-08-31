@@ -219,7 +219,12 @@ class ReasonCodeVocabularyTests(unittest.TestCase):
         if not source.exists():  # installed without the contracts tree beside it
             self.skipTest("proto source not available from the installed package")
         text = source.read_text()
-        documented = set(re.findall(r'"([a-z_]+)"', text.split("Why, in one machine-readable token")[1]))
+        # The vocabulary is the quoted tokens between the reason-code comment and the next section of
+        # the contract. Bounded, because later sections (online learning) quote their own status words
+        # — 'promoted', 'stored' — which are not bot-decision reason codes.
+        section = text.split("Why, in one machine-readable token")[1]
+        section = section.split("online learning")[0]
+        documented = set(re.findall(r'"([a-z_]+)"', section))
         self.assertEqual(documented, set(REASON_CODES))
 
 

@@ -96,6 +96,14 @@ class EngineSettings:
     tls_private_key_path: Path | None
     tls_client_ca_path: Path | None
 
+    #: Online learning: the JSONL store of resolved trade outcomes, and the trigger threshold.
+    #: Disabled by default — enabling it changes what trains on, and that must be an operator's
+    #: explicit choice, not a default that silently activates after an upgrade.
+    online_learning_enabled: bool
+    trade_samples_path: Path
+    online_training_min_samples: int
+    online_training_sample_weight: float
+
     @classmethod
     def from_environment(cls) -> EngineSettings:
         environment = os.getenv("ML_ENVIRONMENT", "production").strip().lower()
@@ -161,4 +169,10 @@ class EngineSettings:
             tls_certificate_path=certificate,
             tls_private_key_path=private_key,
             tls_client_ca_path=client_ca,
+            online_learning_enabled=_boolean("ML_ONLINE_LEARNING", False),
+            trade_samples_path=Path(
+                os.getenv("ML_TRADE_SAMPLES_PATH", "artifacts/online/trade_samples.jsonl")
+            ).resolve(),
+            online_training_min_samples=_integer("ML_ONLINE_TRAINING_MIN_SAMPLES", 50, 10, 5_000),
+            online_training_sample_weight=_float("ML_ONLINE_SAMPLE_WEIGHT", 5.0, 1.0, 100.0),
         )

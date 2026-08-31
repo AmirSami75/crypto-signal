@@ -35,6 +35,10 @@ from crypto_signal_engine.application.errors import (
     InvalidInferenceRequest,
     ModelUnavailable,
 )
+from crypto_signal_engine.application.online_service import (
+    OnlineLearningService,
+    TradeOutcomeInput,
+)
 from crypto_signal_engine.application.signal_service import SignalService
 from crypto_signal_engine.contracts.v1 import ml_engine_pb2_grpc
 from crypto_signal_engine.transport.grpc import mappers
@@ -58,9 +62,15 @@ def _request_id(value: str) -> str:
 
 
 class MlEngineServicer(ml_engine_pb2_grpc.MlEngineServiceServicer):
-    def __init__(self, signals: SignalService, advisor: BotAdvisorService) -> None:
+    def __init__(
+        self,
+        signals: SignalService,
+        advisor: BotAdvisorService,
+        online: OnlineLearningService | None = None,
+    ) -> None:
         self._signals = signals
         self._advisor = advisor
+        self._online = online
 
     def GetCapabilities(self, request, context):
         request_id = _request_id(request.request_id)
@@ -106,6 +116,81 @@ class MlEngineServicer(ml_engine_pb2_grpc.MlEngineServiceServicer):
             return mappers.bot_decision_to_proto(self._advisor.evaluate(parsed))
 
         return self._dispatch("EvaluateBotDecision", request_id, context, work)
+
+    def RecordTradeOutcome(self, request, context):
+        request_id = _request_id(request.request_id)
+
+        def work():
+            if self._online is None:
+                return mappers.trade_outcome_to_proto(
+                    request_id,
+                    "rejected: online learning is not configured on this engine",
+                    0,
+                    False,
+                )
+            parsed = TradeOutcomeInput(
+                request_id=request_id,
+                bot_id=request.bot_id,
+                symbol=request.symbol,
+                interval=request.interval,
+                model_id=request.model_id,
+                model_version=request.model_version,
+                direction=mappers.trade_direction_name(request.direction),
+                candles=tuple(
+                    {
+                        "open_time": c.open_time.ToDatetime().isoformat(),
+                        "open": c.open,
+                        "high": c.high,
+                        "low": c.low,
+                        "close": c.close,
+                        "volume": c.volume,
+                    }
+                    for c in request.candles
+                ),
+                take_profit_percent=request.take_profit_percent,
+                stop_loss_percent=request.stop_loss_percent,
+                close_reason=request.close_reason,
+                realized_pnl=request.realized_pnl,
+                bars_held=request.bars_held,
+                decision_candle_open_time=(
+                    request.decision_candle_open_time.ToDatetime().isoformat()
+                    if request.HasField("decision_candle_open_time")
+                    else ""
+                ),
+                closed_at=(
+                    request.closed_at.ToDatetime().isoformat()
+                    if request.HasField("closed_at")
+                    else ""
+                ),
+            )
+            result = self._online.record_trade_outcome(parsed)
+            return mappers.trade_outcome_to_proto(
+                result.request_id,
+                result.status,
+                result.samples_stored,
+                result.training_triggered,
+            )
+
+        return self._dispatch("RecordTradeOutcome", request_id, context, work)
+
+    def GetTrainingStatus(self, request, context):
+        request_id = _request_id(request.request_id)
+
+        def work():
+            if self._online is None:
+                return mappers.training_status_to_proto(request_id, False, ())
+            result = self._online.training_status(
+                request_id,
+                symbols=tuple(request.symbols),
+                intervals=tuple(request.intervals),
+            )
+            return mappers.training_status_to_proto(
+                result.request_id,
+                result.online_learning_enabled,
+                result.markets,
+            )
+
+        return self._dispatch("GetTrainingStatus", request_id, context, work)
 
     # ── error handling ────────────────────────────────────────────────────────────
 

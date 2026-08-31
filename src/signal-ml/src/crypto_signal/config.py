@@ -131,6 +131,28 @@ class LstmSection:
 
 
 @dataclass(frozen=True)
+class LstmV2Section:
+    """The advanced recurrent model: attention pooling, early stopping, seed ensemble, temperature.
+
+    Optional like `[lstm]`. Absent fields take the dataclass defaults; the section itself may be
+    absent entirely, in which case `load_config` fills in `LstmV2Section()`.
+    """
+
+    lookback: int = 32
+    hidden_size: int = 96
+    num_layers: int = 2
+    dropout: float = 0.25
+    learning_rate: float = 1e-3
+    batch_size: int = 256
+    epochs: int = 40
+    weight_decay: float = 1e-4
+    patience: int = 6
+    validation_fraction: float = 0.15
+    ensemble_seeds: int = 3
+    seed_base: int = 20260831
+
+
+@dataclass(frozen=True)
 class OutputConfig:
     artifact_dir: Path
 
@@ -170,6 +192,7 @@ class AppConfig:
     logging: LoggingConfig
     source_path: Path
     lstm: LstmSection = LstmSection()
+    lstm_v2: LstmV2Section = LstmV2Section()
 
 
 def _resolve(base: Path, value: str) -> Path:
@@ -310,9 +333,24 @@ def load_config(path: str | Path) -> AppConfig:
             backup_count=int(logging_raw.get("backup_count", 3)),
         ),
         source_path=source,
+        lstm_v2=LstmV2Section(
+            **{
+                key: _coerce_scalar(key, value)
+                for key, value in (raw.get("lstm_v2", {}) or {}).items()
+                if key in LstmV2Section.__dataclass_fields__
+            }
+        ),
     )
     validate_config(config)
     return config
+
+
+def _coerce_scalar(key: str, value: Any) -> Any:
+    """TOML gives the right primitive types already; this exists to reject unknown keys loudly."""
+    fields = LstmV2Section.__dataclass_fields__
+    if key not in fields:
+        raise ValueError(f"unknown key in [lstm_v2]: {key!r}")
+    return value
 
 
 def validate_config(config: AppConfig) -> None:
@@ -329,6 +367,7 @@ def validate_config(config: AppConfig) -> None:
     if min(config.backtest.fee_rate, config.backtest.slippage_rate) < 0:
         raise ValueError("fee and slippage rates cannot be negative")
     _validate_barrier(config)
+    _validate_lstm_v2(config)
     if config.network.timeout_seconds < 1:
         raise ValueError("network timeout_seconds must be at least 1")
     if config.logging.level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
@@ -392,3 +431,24 @@ def _validate_barrier(config: AppConfig) -> None:
         raise ValueError("barrier backtest barrier distances must be positive")
     if not 0 <= barrier.backtest_minimum_confidence < 1:
         raise ValueError("barrier.backtest_minimum_confidence must be in [0, 1)")
+
+
+def _validate_lstm_v2(config: AppConfig) -> None:
+    """Reject an `[lstm_v2]` section that would train or serve dishonestly."""
+    v2 = config.lstm_v2
+    if v2.lookback < 2:
+        raise ValueError("lstm_v2.lookback must be at least 2 candles")
+    if v2.hidden_size < 8 or v2.num_layers < 1:
+        raise ValueError("lstm_v2.hidden_size must be >= 8 and num_layers >= 1")
+    if not 0 <= v2.dropout < 1:
+        raise ValueError("lstm_v2.dropout must be in [0, 1)")
+    if v2.learning_rate <= 0 or v2.weight_decay < 0:
+        raise ValueError("lstm_v2.learning_rate must be positive and weight_decay non-negative")
+    if v2.epochs < 1 or v2.batch_size < 1:
+        raise ValueError("lstm_v2.epochs and batch_size must be at least 1")
+    if v2.patience < 1:
+        raise ValueError("lstm_v2.patience must be at least 1")
+    if not 0.05 <= v2.validation_fraction < 0.5:
+        raise ValueError("lstm_v2.validation_fraction must be in [0.05, 0.5)")
+    if v2.ensemble_seeds < 1 or v2.ensemble_seeds > 10:
+        raise ValueError("lstm_v2.ensemble_seeds must be between 1 and 10")

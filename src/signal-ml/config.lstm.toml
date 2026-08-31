@@ -53,6 +53,25 @@ batch_size = 256
 epochs = 12
 weight_decay = 0.00001
 
+[lstm_v2]
+# Advanced recurrent model: additive attention pooling over the window, early stopping on a
+# chronological validation slice, a 3-seed ensemble averaged at inference, and temperature
+# calibration fitted on that same validation slice. Trained via `train-lstm-v2`; writes
+# `_pooled_1h_v2.joblib`. It is a challenger: it serves only when its artifact is present, and it
+# must clear the same purged-holdout, cost-aware backtest bar as every other bundle.
+lookback = 32
+hidden_size = 96
+num_layers = 2
+dropout = 0.25
+learning_rate = 0.001
+batch_size = 256
+epochs = 40
+weight_decay = 0.0001
+patience = 6
+validation_fraction = 0.15
+ensemble_seeds = 3
+seed_base = 20260831
+
 [backtest]
 fee_rate = 0.0010
 slippage_rate = 0.0005

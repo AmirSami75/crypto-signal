@@ -6,17 +6,33 @@ WORKDIR /workspace
 ARG PIP_PROXY=""
 COPY contracts ./contracts
 COPY src/signal-ml ./src/signal-ml
+# Optional pre-fetched wheels. The repo keeps `wheels/` (with a .gitkeep) so this COPY always
+# succeeds; drop a heavy wheel (e.g. torch) in there when the proxy cannot sustain one long
+# download and the build picks it up via --find-links instead of the network.
+COPY wheels ./wheels
+# Pre-fetched heavy wheels (torch) when the proxy cannot sustain one long download. The repo keeps
+# `wheels/` (with a .gitkeep); drop e.g. the torch wheel there, and this copies it straight into
+# /wheels so the main `pip wheel` resolves it locally instead of re-downloading 500MB through the
+# proxy. Anything NOT pre-staged is fetched from the index as usual.
+# Heavy-wheel staging: when the proxy cannot sustain one long download, put the wheel(s) plus a
+# constraints.txt (e.g. `torch==2.13.0+cpu`) in `wheels/`. The constraints pin disqualifies the
+# CUDA torch from PyPI in the resolver, so the local CPU wheel is the only candidate. Engine
+# inference/training is CPU-only by design, so the CPU build is the correct one regardless.
 RUN --mount=type=cache,target=/root/.cache/pip \
+    CONSTRAINTS=""; \
+    if [ -f ./wheels/constraints.txt ]; then \
+        CONSTRAINTS="-c ./wheels/constraints.txt"; \
+    fi; \
     if [ -n "$PIP_PROXY" ]; then \
-        python -m pip --proxy "$PIP_PROXY" install "grpcio-tools>=1.81,<1.82"; \
+        python -m pip --proxy "$PIP_PROXY" install $CONSTRAINTS "grpcio-tools>=1.81,<1.82"; \
     else \
-        python -m pip install "grpcio-tools>=1.81,<1.82"; \
+        python -m pip install $CONSTRAINTS "grpcio-tools>=1.81,<1.82"; \
     fi \
     && python src/signal-ml/scripts/generate_grpc.py \
     && if [ -n "$PIP_PROXY" ]; then \
-        python -m pip --proxy "$PIP_PROXY" wheel --wheel-dir /wheels './src/signal-ml[grpc]'; \
+        python -m pip --proxy "$PIP_PROXY" wheel --wheel-dir /wheels $CONSTRAINTS --find-links ./wheels './src/signal-ml[grpc]'; \
     else \
-        python -m pip wheel --wheel-dir /wheels './src/signal-ml[grpc]'; \
+        python -m pip wheel --wheel-dir /wheels $CONSTRAINTS --find-links ./wheels './src/signal-ml[grpc]'; \
     fi
 
 FROM python:3.14-slim AS runtime

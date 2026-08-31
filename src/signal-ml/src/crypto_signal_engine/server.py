@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from concurrent import futures
 import logging
+import os
 import signal
 from threading import Event
 
@@ -28,6 +29,8 @@ from grpc_reflection.v1alpha import reflection
 from crypto_signal_engine import __version__
 from crypto_signal_engine.application.bot_advisor import BotAdvisorService
 from crypto_signal_engine.application.evaluator import MarketEvaluator
+from crypto_signal_engine.application.online_learning import OnlineTrainer, TradeSampleStore
+from crypto_signal_engine.application.online_service import OnlineLearningService
 from crypto_signal_engine.application.signal_service import SignalService
 from crypto_signal_engine.contracts.v1 import ml_engine_pb2, ml_engine_pb2_grpc
 from crypto_signal_engine.infrastructure.model_registry import ModelRegistry
@@ -41,12 +44,14 @@ logger = logging.getLogger(__name__)
 
 def build_services(
     settings: EngineSettings,
-) -> tuple[ModelRegistry, SignalService, BotAdvisorService]:
+) -> tuple[ModelRegistry, SignalService, BotAdvisorService, OnlineLearningService | None]:
     """The application layer, wired to the model registry.
 
     Returns the three objects it composed rather than assembled inline, so a test can drive the services
     directly without binding a port. The registry comes back too — start-up logging needs it, and
     reaching it through `service._evaluator._registry` would make two layers of encapsulation notional.
+    The online-learning service comes back None when `ML_ONLINE_LEARNING` is unset/false: an operator
+    who has not opted in gets no sample store and no trainer threads, exactly as before this existed.
     """
     registry = ModelRegistry(settings.model_directory, single_artifact=settings.model_path)
     evaluator = MarketEvaluator(
@@ -63,7 +68,36 @@ def build_services(
         service_version=__version__,
         operating_mode=settings.operating_mode,
     )
-    return registry, signals, BotAdvisorService(evaluator)
+    advisor = BotAdvisorService(evaluator)
+
+    online: OnlineLearningService | None = None
+    if settings.online_learning_enabled:
+        store = TradeSampleStore(settings.trade_samples_path)
+
+        def _load_engine_config():
+            """The engine's own training config, from the same source the batch pipeline uses."""
+            from crypto_signal.config import load_config
+
+            config_path = os.getenv("ML_TRAINING_CONFIG", "config.toml")
+            return load_config(config_path)
+
+        trainer = OnlineTrainer(
+            store,
+            model_dir=settings.model_directory,
+            config_loader=_load_engine_config,
+            sequence_builder=None,  # built lazily inside `_train_market`; kept for testability
+            trainer=None,           # ditto — the trainer imports its own model code lazily
+            min_samples=settings.online_training_min_samples,
+            sample_weight=settings.online_training_sample_weight,
+        )
+        online = OnlineLearningService(store, trainer, enabled=True)
+        logger.info(
+            "Online learning enabled | samples=%s | min_samples=%s",
+            settings.trade_samples_path,
+            settings.online_training_min_samples,
+        )
+
+    return registry, signals, advisor, online
 
 
 def _log_inventory(registry: ModelRegistry) -> None:
@@ -111,7 +145,7 @@ def _log_inventory(registry: ModelRegistry) -> None:
 
 
 def build_server(settings: EngineSettings) -> tuple[grpc.Server, health.HealthServicer]:
-    registry, signals, advisor = build_services(settings)
+    registry, signals, advisor, online = build_services(settings)
     options = (
         ("grpc.max_receive_message_length", settings.max_receive_message_mb * 1_048_576),
         ("grpc.max_send_message_length", settings.max_send_message_mb * 1_048_576),
@@ -125,7 +159,7 @@ def build_server(settings: EngineSettings) -> tuple[grpc.Server, health.HealthSe
         options=options,
     )
     ml_engine_pb2_grpc.add_MlEngineServiceServicer_to_server(
-        MlEngineServicer(signals, advisor),
+        MlEngineServicer(signals, advisor, online),
         server,
     )
     health_service = health.HealthServicer()

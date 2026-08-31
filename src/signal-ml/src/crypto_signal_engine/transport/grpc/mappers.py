@@ -306,6 +306,56 @@ def capabilities_to_proto(capabilities: Capabilities) -> pb.GetCapabilitiesRespo
     )
 
 
+def trade_direction_name(value) -> str:
+    """A proto TradeDirection enum to its plain name, for the online-learning admission checks."""
+    names = {
+        int(pb.TRADE_DIRECTION_LONG): "LONG",
+        int(pb.TRADE_DIRECTION_SHORT): "SHORT",
+        int(pb.TRADE_DIRECTION_FLAT): "FLAT",
+        int(pb.TRADE_DIRECTION_UNSPECIFIED): "UNSPECIFIED",
+    }
+    return names.get(int(value), "UNSPECIFIED")
+
+
+def trade_outcome_to_proto(
+    request_id: str,
+    status: str,
+    samples_stored: int,
+    training_triggered: bool,
+) -> pb.RecordTradeOutcomeResponse:
+    return pb.RecordTradeOutcomeResponse(
+        request_id=request_id,
+        status=status,
+        samples_stored=samples_stored,
+        training_triggered=training_triggered,
+    )
+
+
+def training_status_to_proto(
+    request_id: str,
+    enabled: bool,
+    markets,
+) -> pb.GetTrainingStatusResponse:
+    return pb.GetTrainingStatusResponse(
+        request_id=request_id,
+        online_learning_enabled=enabled,
+        markets=[
+            pb.TrainingStatus(
+                symbol=market.symbol,
+                interval=market.interval,
+                samples_stored=market.samples_stored,
+                samples_since_training=market.samples_since_training,
+                last_trained_at=market.last_trained_at,
+                last_challenger_version=market.last_challenger_version,
+                last_verdict=market.last_verdict,
+                last_verdict_reason=market.last_verdict_reason,
+                training_in_progress=market.training_in_progress,
+            )
+            for market in markets
+        ],
+    )
+
+
 __all__ = [
     "bot_decision_request_from_proto",
     "bot_decision_to_proto",
@@ -320,4 +370,7 @@ __all__ = [
     "signal_to_proto",
     "optional_datetime",
     "to_timestamp",
+    "trade_direction_name",
+    "trade_outcome_to_proto",
+    "training_status_to_proto",
 ]

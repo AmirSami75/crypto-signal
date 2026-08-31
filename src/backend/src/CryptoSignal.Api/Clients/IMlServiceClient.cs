@@ -28,4 +28,16 @@ public interface IMlServiceClient
     Task<MlBotDecision> EvaluateBotDecisionAsync(
         MlBotDecisionRequest request,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Feed a resolved trade outcome to the engine's online-learning sample store. Best-effort by
+    /// contract: a failed call never affects trading — the sample is lost, not acted on.
+    /// </summary>
+    Task<MlTradeOutcomeAck?> RecordTradeOutcomeAsync(
+        MlTradeOutcome outcome,
+        CancellationToken cancellationToken);
+
+    /// <summary>Online-learning status per market; null when the engine predates the RPC.</summary>
+    Task<MlTrainingStatus?> GetTrainingStatusAsync(
+        CancellationToken cancellationToken);
 }

@@ -309,7 +309,8 @@ public sealed class BotTickExecutor(
 
         // ── 8. place, record, and update the position ────────────────────────────
         return await PlaceAndRecordAsync(
-            bot, decision, intent, broker, creds, rules, action, openPosition, correlationId, cancellationToken);
+            bot, decision, intent, broker, creds, rules, action, openPosition, correlationId,
+            window, cancellationToken);
     }
 
 
@@ -354,6 +355,7 @@ public sealed class BotTickExecutor(
         BotDecisionAction action,
         BotPosition? openPosition,
         string correlationId,
+        IReadOnlyList<MarketCandleData> window,
         CancellationToken cancellationToken)
     {
         intent.Status = OrderIntentStatus.Submitted;
@@ -442,6 +444,15 @@ public sealed class BotTickExecutor(
                     BotId: bot.Id, Symbol: bot.Symbol, OrderIntentId: intent.Id,
                     BotPositionId: position.Id, CandleOpenTime: decision.CandleOpenTime),
                 cancellationToken);
+
+            // The position's lifecycle produced a labelled example for the engine's online learner.
+            // Best-effort and off the trading path: a failed report is logged by the client and
+            // forgotten, never retried at the cost of a tick.
+            if (position.Status == PositionStatus.Closed)
+            {
+                await ReportTradeOutcomeAsync(
+                    bot, decision, position, window, correlationId, CancellationToken.None);
+            }
         }
 
         if (placement.Status is ExchangeOrderStatus.Filled)
@@ -558,6 +569,63 @@ public sealed class BotTickExecutor(
         openPosition.CloseReason = MapCloseReason(decision.ReasonCode);
         await positions.UpdateAsync(openPosition, saveNow: true, cancellationToken);
         return openPosition;
+    }
+
+    /// <summary>
+    /// Reports one closed position to the engine's online learner: the exact candle window the opening
+    /// decision consumed, the bracket actually traded, and how the position ended. Fire-and-forget by
+    /// design — a lost sample costs one training datum, never a trade.
+    /// </summary>
+    private async Task ReportTradeOutcomeAsync(
+        TradingBot bot,
+        StrategyDecision decision,
+        BotPosition position,
+        IReadOnlyList<MarketCandleData> window,
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
+        if (position.ClosedAt is null)
+            return;
+
+        try
+        {
+            var ack = await engine.RecordTradeOutcomeAsync(
+                new MlTradeOutcome(
+                    BotId: bot.Id.ToString(),
+                    Symbol: bot.Symbol,
+                    Interval: bot.Interval,
+                    ModelId: decision.ModelId ?? string.Empty,
+                    ModelVersion: decision.ModelVersion ?? string.Empty,
+                    Direction: (MlDirection)(int)position.Direction,
+                    Candles: window.Select(ToMlCandle).ToList(),
+                    TakeProfitPercent: bot.TakeProfitPercent,
+                    StopLossPercent: bot.StopLossPercent,
+                    CloseReason: MapCloseReason(decision.ReasonCode) == PositionCloseReason.Manual
+                        && decision.ReasonCode is "manual"
+                        ? "manual"
+                        : decision.ReasonCode,
+                    RealizedPnl: position.RealizedPnl,
+                    BarsHeld: (uint)Math.Max(0, position.BarsHeld),
+                    DecisionCandleOpenTime: new DateTimeOffset(
+                        DateTime.SpecifyKind(position.OpenedFromCandleOpenTime, DateTimeKind.Utc)),
+                    ClosedAt: new DateTimeOffset(DateTime.SpecifyKind(position.ClosedAt.Value, DateTimeKind.Utc))),
+                cancellationToken);
+
+            if (ack is not null)
+            {
+                logger.LogInformation(
+                    "Trade outcome reported for online learning | Bot {BotId} | status {Status} | stored {Stored} | training triggered {Triggered}",
+                    bot.Id, ack.Status, ack.SamplesStored, ack.TrainingTriggered);
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // The engine's own failure to store a sample must never surface as a trading fault.
+            logger.LogWarning(
+                exception,
+                "Trade outcome report failed | Bot {BotId} | the sample is lost, trading is unaffected",
+                bot.Id);
+        }
     }
 
     // ── construction helpers ─────────────────────────────────────────────────────

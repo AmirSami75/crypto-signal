@@ -72,6 +72,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--refresh", action="store_true", help="Redownload historical data first"
     )
 
+    train_lstm_v2_parser = subparsers.add_parser(
+        "train-lstm-v2",
+        help="Train the attention-ensemble LSTM v2 and write _pooled_<INTERVAL>_v2.joblib",
+    )
+    train_lstm_v2_parser.add_argument(
+        "--refresh", action="store_true", help="Redownload historical data first"
+    )
+
     train_parser = subparsers.add_parser(
         "train", help="Train the barrier-conditional model and write the serving registry"
     )
@@ -158,6 +166,25 @@ def main(argv: list[str] | None = None) -> None:
                 _print_json(trained)
             else:
                 print(format_lstm_training_summary(trained))
+        elif args.command == "train-lstm-v2":
+            from .training.lstm_pipeline import train_lstm_v2_bundle
+
+            trained = train_lstm_v2_bundle(config, refresh=args.refresh)
+            if args.json:
+                _print_json(trained)
+            else:
+                holdout = trained.get("strict_holdout", {})
+                backtest = (holdout.get("backtest") or {}).get("strategy") or {}
+                diag = trained.get("diagnostics", {})
+                print("LSTM v2 training complete")
+                print(f"  bundle: _pooled_{trained.get('interval')}_v2.joblib")
+                print(f"  holdout log loss: {holdout.get('log_loss', float('nan')):.4f}")
+                print(
+                    f"  holdout net return: {backtest.get('cumulative_return', float('nan')) * 100:.2f}%"
+                )
+                print(f"  temperature: {diag.get('temperature_mean', float('nan')):.3f}")
+                print(f"  members: {diag.get('validation_log_loss_members', [])}")
+                print(f"  seed spread (mean std): {diag.get('seed_spread_mean_std', 0.0):.4f}")
         elif args.command == "signal":
             signal = latest_barrier_signal(
                 config,

@@ -65,4 +65,20 @@ public class MlController(IMlServiceClient mlService) : BaseController
 
         return Ok(model);
     }
+
+    /// <summary>
+    /// Online-learning status: stored trade-outcome samples per market, last training verdict, and
+    /// whether a background run is executing. Read-only — triggering a run is the engine's decision.
+    /// </summary>
+    [HttpGet("training-status")]
+    [Permission(PermissionType.Custom, nameof(GetTrainingStatus), "مشاهده وضعیت یادگیری آنلاین")]
+    public async Task<ApiResult<MlTrainingStatus>> GetTrainingStatus(CancellationToken ct)
+    {
+        var status = await mlService.GetTrainingStatusAsync(ct);
+
+        if (status is null)
+            throw new ServiceUnavailableException("سرویس یادگیری ماشین در دسترس نیست");
+
+        return Ok(status);
+    }
 }

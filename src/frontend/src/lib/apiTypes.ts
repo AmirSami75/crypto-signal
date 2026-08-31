@@ -889,3 +889,22 @@ export type MlModelInfo = {
   confidenceCeiling: number
   confidenceReach: MlConfidenceReach[]
 }
+
+/** One market's online-learning state, from GET /ml/training-status. */
+export type MlMarketTrainingStatus = {
+  symbol: string
+  interval: string
+  samplesStored: number
+  samplesSinceTraining: number
+  lastTrainedAt: string | null
+  lastChallengerVersion: string | null
+  lastVerdict: string
+  lastVerdictReason: string
+  trainingInProgress: boolean
+}
+
+export type MlTrainingStatus = {
+  requestId: string
+  onlineLearningEnabled: boolean
+  markets: MlMarketTrainingStatus[]
+}

@@ -43,6 +43,7 @@ import type {
   User,
   UserFilters,
   UserInput,
+  MlTrainingStatus,
 } from './apiTypes'
 
 /**
@@ -558,6 +559,10 @@ export const api = {
     /** Both parameters omitted resolves the pooled model; the response reports which one answered. */
     model: (query: { symbol?: string; interval?: string } = {}, signal?: AbortSignal) =>
       request<MlModelInfo>(`/api/v1/ml/model${queryString(query)}`, { signal }),
+
+    /** Online-learning state per market: sample counts, last verdict, run-in-progress. */
+    trainingStatus: (signal?: AbortSignal) =>
+      request<MlTrainingStatus>('/api/v1/ml/training-status', { signal }),
   },
 
   bots: {

@@ -33,6 +33,13 @@ service MlEngineService {
 
   // Stateless bot advice. Everything the engine is allowed to know arrives in the request.
   rpc EvaluateBotDecision(EvaluateBotDecisionRequest) returns (EvaluateBotDecisionResponse);
+
+  // Feed a resolved trade outcome back into the online-learning sample store. Fire-and-record:
+  // the response carries what the engine did with the sample, never an instruction to trade.
+  rpc RecordTradeOutcome(RecordTradeOutcomeRequest) returns (RecordTradeOutcomeResponse);
+
+  // Online-learning status: sample counts per market, last training run, challenger state.
+  rpc GetTrainingStatus(GetTrainingStatusRequest) returns (GetTrainingStatusResponse);
 }
 
 // ─────────────────────────────── shared value types ───────────────────────────────
@@ -363,4 +370,101 @@ message EvaluateBotDecisionResponse {
   // Same meaning as on GetSignalResponse: the bracket asked about sits outside the model's fitted span.
   // Field number matches deliberately, so a shared mapper reads the same number on both messages.
   bool barrier_extrapolated = 21;
+}
+
+// ─────────────────────────────── online learning ───────────────────────────────
+
+// One resolved trade, as the orchestrator reports it. The engine stores this sample so a future
+// online training run can fit on it. Nothing here instructs the engine to act.
+message RecordTradeOutcomeRequest {
+  string request_id = 1;
+
+  // Correlation only; stored alongside the sample for traceability.
+  string bot_id = 2;
+  string symbol = 3;
+  string interval = 4;
+
+  // The model that made the decision being graded.
+  string model_id = 5;
+  string model_version = 6;
+
+  // Direction the bot actually opened. FLAT or UNSPECIFIED is rejected: a flat bot has no outcome
+  // to report.
+  TradeDirection direction = 7;
+
+  // The exact candle window the decision was computed from, oldest first. Stored verbatim so a
+  // future training run reproduces the same features the decision consumed.
+  repeated Candle candles = 8;
+
+  // The bracket the bot actually traded, in percent of entry.
+  string take_profit_percent = 9;
+  string stop_loss_percent = 10;
+
+  // How the position ended. One of the engine's close reason codes: "take_profit_touched",
+  // "stop_loss_touched", "max_holding_periods_reached", "direction_reversed", "manual".
+  string close_reason = 11;
+
+  // Realized P&L net of fees, in quote currency, as a decimal string. Dimensional data stays a
+  // string across this boundary like every other price.
+  string realized_pnl = 12;
+
+  // Bars (closed candles) from open to close.
+  uint32 bars_held = 13;
+
+  // Open time of the candle the opening decision was made on; idempotency key with (bot_id).
+  google.protobuf.Timestamp decision_candle_open_time = 14;
+
+  // When the position fully closed.
+  google.protobuf.Timestamp closed_at = 15;
+}
+
+message RecordTradeOutcomeResponse {
+  string request_id = 1;
+
+  // "stored" (first report of this outcome), "duplicate" (already stored — not an error), or
+  // "rejected: <reason>" for a sample that cannot be used.
+  string status = 2;
+
+  // Total samples now stored for this (symbol, interval).
+  uint32 samples_stored = 3;
+
+  // Non-empty when a background training run was triggered by this sample crossing the
+  // configured threshold. Informational: the run is asynchronous and reported by GetTrainingStatus.
+  bool training_triggered = 4;
+}
+
+message GetTrainingStatusRequest {
+  string request_id = 1;
+
+  // Optional filters; empty lists mean "all markets".
+  repeated string symbols = 2;
+  repeated string intervals = 3;
+}
+
+message TrainingStatus {
+  string symbol = 1;
+  string interval = 2;
+  uint32 samples_stored = 3;
+  uint32 samples_since_training = 4;
+
+  // ISO-8601 UTC timestamp of the last completed online training run, empty when never run.
+  string last_trained_at = 5;
+
+  // Version of the bundle the last run produced, empty when never run or rejected.
+  string last_challenger_version = 6;
+
+  // "promoted" | "rejected" | "failed" | "" (never run).
+  string last_verdict = 7;
+
+  // The gate's reason string from the last run.
+  string last_verdict_reason = 8;
+
+  // True when an online training run for this market is currently executing.
+  bool training_in_progress = 9;
+}
+
+message GetTrainingStatusResponse {
+  string request_id = 1;
+  bool online_learning_enabled = 2;
+  repeated TrainingStatus markets = 3;
 }

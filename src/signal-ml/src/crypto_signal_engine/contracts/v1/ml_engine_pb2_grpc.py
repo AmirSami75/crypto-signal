@@ -72,6 +72,16 @@ class MlEngineServiceStub:
                 request_serializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.EvaluateBotDecisionRequest.SerializeToString,
                 response_deserializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.EvaluateBotDecisionResponse.FromString,
                 _registered_method=True)
+        self.RecordTradeOutcome = channel.unary_unary(
+                '/crypto_signal.ml.v1.MlEngineService/RecordTradeOutcome',
+                request_serializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.RecordTradeOutcomeRequest.SerializeToString,
+                response_deserializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.RecordTradeOutcomeResponse.FromString,
+                _registered_method=True)
+        self.GetTrainingStatus = channel.unary_unary(
+                '/crypto_signal.ml.v1.MlEngineService/GetTrainingStatus',
+                request_serializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetTrainingStatusRequest.SerializeToString,
+                response_deserializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetTrainingStatusResponse.FromString,
+                _registered_method=True)
 
 
 class MlEngineServiceServicer:
@@ -121,6 +131,21 @@ class MlEngineServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def RecordTradeOutcome(self, request, context):
+        """Feed a resolved trade outcome back into the online-learning sample store. Fire-and-record:
+        the response carries what the engine did with the sample, never an instruction to trade.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetTrainingStatus(self, request, context):
+        """Online-learning status: sample counts per market, last training run, challenger state.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_MlEngineServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -143,6 +168,16 @@ def add_MlEngineServiceServicer_to_server(servicer, server):
                     servicer.EvaluateBotDecision,
                     request_deserializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.EvaluateBotDecisionRequest.FromString,
                     response_serializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.EvaluateBotDecisionResponse.SerializeToString,
+            ),
+            'RecordTradeOutcome': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecordTradeOutcome,
+                    request_deserializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.RecordTradeOutcomeRequest.FromString,
+                    response_serializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.RecordTradeOutcomeResponse.SerializeToString,
+            ),
+            'GetTrainingStatus': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetTrainingStatus,
+                    request_deserializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetTrainingStatusRequest.FromString,
+                    response_serializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetTrainingStatusResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -271,6 +306,60 @@ class MlEngineService:
             '/crypto_signal.ml.v1.MlEngineService/EvaluateBotDecision',
             crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.EvaluateBotDecisionRequest.SerializeToString,
             crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.EvaluateBotDecisionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecordTradeOutcome(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/crypto_signal.ml.v1.MlEngineService/RecordTradeOutcome',
+            crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.RecordTradeOutcomeRequest.SerializeToString,
+            crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.RecordTradeOutcomeResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetTrainingStatus(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/crypto_signal.ml.v1.MlEngineService/GetTrainingStatus',
+            crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetTrainingStatusRequest.SerializeToString,
+            crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetTrainingStatusResponse.FromString,
             options,
             channel_credentials,
             insecure,

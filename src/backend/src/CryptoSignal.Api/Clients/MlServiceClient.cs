@@ -239,6 +239,88 @@ public sealed class MlServiceClient(
         }
     }
 
+    /// <inheritdoc/>
+    public async Task<MlTradeOutcomeAck?> RecordTradeOutcomeAsync(
+        MlTradeOutcome outcome,
+        CancellationToken cancellationToken)
+    {
+        var grpcRequest = new RecordTradeOutcomeRequest
+        {
+            RequestId = RequestId(outcome.RequestId),
+            BotId = outcome.BotId,
+            Symbol = outcome.Symbol,
+            Interval = outcome.Interval,
+            ModelId = outcome.ModelId ?? string.Empty,
+            ModelVersion = outcome.ModelVersion ?? string.Empty,
+            Direction = (TradeDirection)(int)outcome.Direction,
+            TakeProfitPercent = MlWire.Money(outcome.TakeProfitPercent),
+            StopLossPercent = MlWire.Money(outcome.StopLossPercent),
+            CloseReason = outcome.CloseReason,
+            RealizedPnl = MlWire.Money(outcome.RealizedPnl),
+            BarsHeld = outcome.BarsHeld,
+            DecisionCandleOpenTime = Timestamp.FromDateTimeOffset(outcome.DecisionCandleOpenTime),
+            ClosedAt = Timestamp.FromDateTimeOffset(outcome.ClosedAt),
+        };
+        grpcRequest.Candles.AddRange(outcome.Candles.Select(ToProto));
+
+        try
+        {
+            var response = await client.RecordTradeOutcomeAsync(
+                grpcRequest, deadline: Deadline(), cancellationToken: cancellationToken);
+            return new MlTradeOutcomeAck(
+                response.RequestId,
+                response.Status,
+                response.SamplesStored,
+                response.TrainingTriggered);
+        }
+        catch (RpcException exception)
+        {
+            // Best-effort by contract: a lost sample is a lost training datum, never a trading fault.
+            // Logged and swallowed so a position close can never fail because the sample store did.
+            logger.LogWarning(
+                exception,
+                "RecordTradeOutcome failed with {StatusCode} — sample not stored",
+                exception.StatusCode);
+            return null;
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<MlTrainingStatus?> GetTrainingStatusAsync(
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await client.GetTrainingStatusAsync(
+                new GetTrainingStatusRequest { RequestId = Guid.NewGuid().ToString() },
+                deadline: Deadline(),
+                cancellationToken: cancellationToken);
+            return new MlTrainingStatus(
+                response.RequestId,
+                response.OnlineLearningEnabled,
+                response.Markets
+                    .Select(m => new MlMarketTrainingStatus(
+                        m.Symbol,
+                        m.Interval,
+                        m.SamplesStored,
+                        m.SamplesSinceTraining,
+                        string.IsNullOrEmpty(m.LastTrainedAt) ? null : m.LastTrainedAt,
+                        string.IsNullOrEmpty(m.LastChallengerVersion) ? null : m.LastChallengerVersion,
+                        m.LastVerdict,
+                        m.LastVerdictReason,
+                        m.TrainingInProgress))
+                    .ToArray());
+        }
+        catch (RpcException exception)
+        {
+            logger.LogWarning(
+                exception,
+                "GetTrainingStatus failed with {StatusCode}",
+                exception.StatusCode);
+            return null;
+        }
+    }
+
     // ── outbound ────────────────────────────────────────────────────────────────
 
     private static Candle ToProto(MlCandle candle) => new()

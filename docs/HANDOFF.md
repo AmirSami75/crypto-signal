@@ -4,7 +4,7 @@
 > of the work: what changed, what was verified, what remains. The next agent (Hermes, Cline, OpenCode,
 > Claude Code, or a human) starts here.
 >
-> **Last updated:** 2026-08-31 · **Branch:** `main` · **HEAD:** `6a49352`
+> **Last updated:** 2026-08-31 (evening) · **Branch:** `main` · **Status:** LSTM v2 + online self-learning implemented, tested (358 ML / 15 backend), deployed live; uncommitted
 
 ---
 
@@ -34,6 +34,18 @@ Autonomous crypto futures-trading platform:
 
 ## 3. Recent work log (newest first)
 
+- **2026-08-31 (evening) — LSTM v2 (advanced) + online self-learning loop** — uncommitted at write time
+  - **LSTM v2** (`src/signal-ml/src/crypto_signal/modeling/lstm_v2.py`): additive attention pooling over the lookback window, early stopping on a chronological validation slice (`patience`), 3-seed ensemble with probability averaging, temperature scaling fitted on validation (`calibration_method="temperature"`). Serving contract unchanged (`predict_proba`, `is_sequence`, joblib state_dict round-trip). Batched `predict_proba_windows` matches the single-window path to ~1e-9 (verified).
+  - **Pipeline** (`training/lstm_pipeline.py`): `train_lstm_v2_bundle` writes `_pooled_<interval>_v2.joblib` + metadata (per-member losses, seed spread, epochs run). CLI: `train-lstm-v2`. Config: `[lstm_v2]` section in `config.lstm.toml` (+ validation in `config.py`).
+  - **Real run (BTCUSDT-only smoke config, data through 2026-08-26):** holdout log-loss **0.327**, 3 members (val loss 0.78–0.83, early-stopped at 3–4 epochs), temperature 1.59, seed spread 0.17. Net holdout return 0.00% — the model never cleared the 0.5 confidence floor on the holdout, which is honest, not broken.
+  - **Online learning** (engine): `application/online_learning.py` — `TradeSampleStore` (append-only JSONL, idempotent per `(bot_id, decision_candle)`), `promotion_gate` (no-metric-worse/≥1-better, same rule as the batch loop), `OnlineTrainer` (background thread: stored samples up-weighted ×5 + replayed history → v2 challenger → gate vs incumbent on the same holdout → promote writes `<SYMBOL>_<interval>.joblib`, registry hot-reloads). `application/online_service.py` validates/admits samples. Enabled via `ML_ONLINE_LEARNING=true` (default off), store at `ML_TRADE_SAMPLES_PATH`, trigger threshold `ML_ONLINE_TRAINING_MIN_SAMPLES` (default 50).
+  - **Proto**: `RecordTradeOutcome` + `GetTrainingStatus` RPCs (messages at end of `ml_engine.proto`); Python bindings regenerated.
+  - **Backend**: `MlServiceClient.RecordTradeOutcomeAsync/GetTrainingStatusAsync`, contract records in `MlServiceContracts.cs`, `BotTickExecutor.ReportTradeOutcomeAsync` fires best-effort on every position close (window + bracket + close reason + realized pnl), `GET /api/v1/ml/training-status` on `MlController` with Persian permission label.
+  - **Frontend**: M-Engine page gains an online-learning panel (market / samples / since-training / verdict table), i18n in `fa.ts`.
+  - **Verified live:** all 5 containers healthy; `GET /api/v1/ml/training-status` → 200 with `onlineLearningEnabled: true` (new RPC working end-to-end); capabilities advertise `RecordTradeOutcome`. Verified: 358/358 ML tests (9 new: store round-trip, dedup on reload, filter, gate verdicts), 15/15 backend, tsc clean, RTL audit clean (70 files), prod build passes. Reason-code vocabulary test bounds its proto slice to the bot-decision section.
+  - **Container build fix:** torch 2.13 CUDA wheel (527MB + ~1GB nvidia deps) un-downloadable through V2Ray. Solution: CPU-only torch wheel (`torch-2.13.0+cpu`, 192MB) fetched from `download.pytorch.org/whl/cpu` into `wheels/` + `wheels/constraints.txt` pinning `torch==2.13.0+cpu`; Dockerfile copies `wheels/` and passes `-c constraints --find-links ./wheels` so the resolver takes the local CPU wheel. Engine is CPU-only by design, so this is the correct artifact, not a workaround compromise.
+  - **Serving state:** registry serves v1 LSTM as `_pooled:1h`; v2 staged but NOT promoted (registry rejects the `_v2` suffix as unparseable — promotion is the gate's job). Honest numbers: v1 holdout net **-100%** (30,816 trades at the 0.5 floor); v2 holdout log-loss **0.3267**, net **0.00%** (took no trades below the floor) — strictly safer, but on a smaller BTC-only slice so not directly comparable to the tree's 0.7959 on 7 symbols. First online challenger run will gate v2 (or a retrain) against the incumbent on the SAME holdout.
+  - **RAM note:** full 7-symbol 1h v2 run OOM-killed on 15GB host; use the smoke config (BTC-only) or per-symbol runs until more RAM or a 5m config.
 - **2026-08-31 — Binance Futures Testnet integration + LSTM challenger (E1)** — commits `afd5e5c`, `6a49352`
   - `BinanceFuturesTestnetBroker` (`/fapi/v1/order|leverage`, `/fapi/v2/balance`), Sandbox-only, shorts + explicit leverage, reduceOnly closes, HMAC-SHA256, credentials from connection → env fallback.
   - New `BinanceFuturesTestnet` venue end-to-end: enum, options, HTTP client, kline source (`/fapi/v1/klines`), instrument rules (`/fapi/v1/exchangeInfo`), DTOs, frontend types + i18n + BotDetail stats (leverage/notional/margin/available balance).
@@ -45,11 +57,14 @@ Autonomous crypto futures-trading platform:
 
 ## 4. Remaining work (next up)
 
-1. **Binance Futures Testnet order lifecycle** (task p3e, in progress): user enters testnet API key/secret via **Connections page** → verify place → reconcile → close on a Sandbox bot. *This is the only step between the venue being code-complete and being usable.*
-2. Futures instrument-rules coverage check for non-BTC symbols on `/fapi/v1/exchangeInfo`.
-3. LSTM: needs to beat the tree bundle on purged-holdout, net-of-costs backtest before any promotion (gate in `docs/ml-improvement-plan.md`).
-4. Before any real money (standing gates): bracket sweep → 4-week soak → manual approval → rotate the screenshotted Bitunix key → gateway running for retrain cron.
-5. Minor: `BotDtos.cs` shows a duplicated `EstimatedNotional`/`EstimatedMargin` doc-block in the `afd5e5c` diff — worth a 2-minute glance; harmless today.
+1. **Rebuild signal-ml image** (blocker above): finish the torch wheel resume loop at `/tmp/wheels/`, then either retry `docker compose build signal-ml` (pip cache may pick it up) or extend the Dockerfile with a `--find-links /wheels` ARG. Then restart the engine container so the new RPCs (RecordTradeOutcome / GetTrainingStatus) go live.
+2. **Commit** the LSTM v2 + online-learning work (all tests green).
+3. **Binance Futures Testnet order lifecycle** (task p3e): enter testnet API key/secret via **Connections page** → verify place → reconcile → close on a Sandbox bot.
+4. **Watch the online loop in the wild**: paper bots closing positions now feed `trade_samples.jsonl`; after ~50 closes a market triggers its first challenger run — verdict visible on the M-Engine page (`/m-engine`).
+5. Full 7-symbol v2 training run needs more RAM than the current 15GB host allows with 1h data for all symbols (OOM-killed); the single-symbol smoke config works — consider per-symbol runs or a 5m config.
+6. LSTM promotion gate: v2 must beat the tree bundle on purged-holdout, net-of-costs backtest before any promotion (gate in `docs/ml-improvement-plan.md`).
+7. Before any real money (standing gates): bracket sweep → 4-week soak → manual approval → rotate the screenshotted Bitunix key → gateway running for retrain cron.
+8. Minor: `BotDtos.cs` shows a duplicated `EstimatedNotional`/`EstimatedMargin` doc-block in the `afd5e5c` diff — worth a 2-minute glance; harmless today.
 
 ## 5. Environment quirks (read before building)
 

@@ -48,3 +48,5 @@ Logs/
 
 # 5m research artifacts (experiment concluded unprofitable on this venue)
 src/signal-ml/artifacts_5m/
+wheels/*
+!wheels/.gitkeep

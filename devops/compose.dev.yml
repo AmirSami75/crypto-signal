@@ -31,6 +31,12 @@ services:
       NO_PROXY: localhost,127.0.0.1,signal-ml,db,host.docker.internal
       ML_MODEL_DIR: /app/artifacts/models
       ML_EXTERNAL_PROXY_URL: http://host.docker.internal:10809
+      # Online learning: sample store mount + opt-in flag. The store lives on the artifacts volume so
+      # it survives restarts; training is disabled until an operator sets ML_ONLINE_LEARNING=true.
+      ML_ONLINE_LEARNING: "true"
+      ML_TRADE_SAMPLES_PATH: /app/artifacts/online/trade_samples.jsonl
+      ML_TRAINING_CONFIG: /app/config.toml
+      ML_ONLINE_TRAINING_MIN_SAMPLES: "50"
 
   api:
     build:

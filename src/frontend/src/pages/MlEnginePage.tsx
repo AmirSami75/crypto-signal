@@ -7,7 +7,7 @@ import { Spinner } from '../components/ui/Spinner'
 import { BarChart } from '../components/ui/Charts'
 import { Alert } from '../components/ui/Alert'
 import { api } from '../lib/api'
-import type { MlModelInfo, MlSupportedMarket } from '../lib/apiTypes'
+import type { MlMarketTrainingStatus, MlModelInfo, MlSupportedMarket } from '../lib/apiTypes'
 import { useResource } from '../lib/useResource'
 import { useInterval } from '../lib/useInterval'
 import { dateTimeText, percentText } from '../lib/tradingFormat'
@@ -57,12 +57,19 @@ export function MlEnginePage() {
     refetch: refetchModel,
   } = useResource(modelFetcher)
 
+  const trainingFetcher = useCallback(
+    (signal?: AbortSignal) => api.ml.trainingStatus(signal),
+    [],
+  )
+  const { data: training, refetch: refetchTraining } = useResource(trainingFetcher)
+
   // Self-refresh on an interval — the engine hot-reloads, so a promoted model appears here without
   // a navigation. Manual refresh is still wired for the "I clicked deploy" case.
   const handleRefresh = useCallback(() => {
     refetchCapabilities()
     refetchModel()
-  }, [refetchCapabilities, refetchModel])
+    refetchTraining()
+  }, [refetchCapabilities, refetchModel, refetchTraining])
 
   useInterval(handleRefresh, POLL_INTERVAL, !capsLoading && !modelLoading && capabilities !== null)
 
@@ -269,6 +276,76 @@ export function MlEnginePage() {
         {!capsLoading && !hasMarkets && !capsError && (
           <p className="mt-4 text-xs text-ink-faint">{fa.mlEngine.noMarketsNote}</p>
         )}
+      </Card>
+
+      {/* Online learning: what the engine is learning from closed trades */ }
+      <Card as="section" className="p-6 sm:p-7">
+        <Eyebrow>{fa.mlEngine.onlineLearningLabel}</Eyebrow>
+        <p className="mt-1.5 text-xs leading-relaxed text-ink-muted">
+          {training?.onlineLearningEnabled === false
+            ? fa.mlEngine.onlineLearningDisabled
+            : fa.mlEngine.onlineLearningNote}
+        </p>
+
+        <div className="mt-4 -mx-1 -mx-5 sm:mx-0 sm:overflow-x-auto">
+          <table className="w-full min-w-[36rem] border-collapse text-sm sm:min-w-0">
+            <thead>
+              <tr>
+                <th className="text-start font-semibold">{fa.mlEngine.colMarket}</th>
+                <th className="text-start font-semibold">{fa.mlEngine.colSamples}</th>
+                <th className="text-start font-medium">{fa.mlEngine.colSinceTraining}</th>
+                <th className="text-start font-semibold">{fa.mlEngine.colVerdict}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {!training || training.markets.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-6 text-center text-sm text-ink-faint">
+                    {fa.mlEngine.noOnlineMarkets}
+                  </td>
+                </tr>
+              ) : (
+                training.markets.map((market: MlMarketTrainingStatus) => {
+                  const verdictTone: 'success' | 'warn' | 'danger' | undefined =
+                    market.lastVerdict === 'promoted'
+                      ? 'success'
+                      : market.lastVerdict === 'rejected'
+                        ? 'warn'
+                        : market.lastVerdict === 'failed'
+                          ? 'danger'
+                          : undefined
+                  const verdictLabel =
+                    market.trainingInProgress
+                      ? fa.mlEngine.trainingInProgress
+                      : market.lastVerdict === 'promoted'
+                        ? fa.mlEngine.verdictPromoted
+                        : market.lastVerdict === 'rejected'
+                          ? fa.mlEngine.verdictRejected
+                          : market.lastVerdict === 'failed'
+                            ? fa.mlEngine.verdictFailed
+                            : '—'
+                  return (
+                    <tr key={`${market.symbol}:${market.interval}`}>
+                      <td className="py-2.5 font-medium" dir="ltr">
+                        {`${market.symbol} ${market.interval}`}
+                      </td>
+                      <td className="py-2.5 num">{market.samplesStored}</td>
+                      <td className="py-2.5 num text-ink-muted">{market.samplesSinceTraining}</td>
+                      <td className="py-2.5">
+                        <span className="flex items-center gap-1.5">
+                          {verdictTone && <StatusDot tone={verdictTone} />}
+                          <span className={verdictTone === 'danger' ? 'text-danger' : ''} dir="auto">
+                            {verdictLabel}
+                          </span>
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </div>
   )
