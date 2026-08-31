@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 
 from .. import __version__
-from ..config import AppConfig
+from ..config import AppConfig, LstmSection
 from ..data import validate_ohlcv
 from ..evaluation import run_backtest
 from ..labeling.triple_barrier import barrier_grid
@@ -37,16 +37,22 @@ LSTM_CLASS_NAMES = {-1: "stop_loss_first", 0: "timeout", 1: "take_profit_first"}
 
 
 def _lstm_config(config: AppConfig) -> LstmConfig:
-    raw = dict(getattr(config, "lstm", None) or {})
+    """Read the parsed `[lstm]` section off `AppConfig`.
+
+    `load_config` always populates `config.lstm` with an `LstmSection` (defaults when the TOML block is
+    absent), so no dict-walking is needed here and an unparsed dict can never silently disagree with
+    what the config loader validated.
+    """
+    section = getattr(config, "lstm", None) or LstmSection()
     return LstmConfig(
-        lookback=int(raw.get("lookback", 24)),
-        hidden_size=int(raw.get("hidden_size", 64)),
-        num_layers=int(raw.get("num_layers", 2)),
-        dropout=float(raw.get("dropout", 0.2)),
-        learning_rate=float(raw.get("learning_rate", 1e-3)),
-        batch_size=int(raw.get("batch_size", 256)),
-        epochs=int(raw.get("epochs", 12)),
-        weight_decay=float(raw.get("weight_decay", 1e-5)),
+        lookback=int(section.lookback),
+        hidden_size=int(section.hidden_size),
+        num_layers=int(section.num_layers),
+        dropout=float(section.dropout),
+        learning_rate=float(section.learning_rate),
+        batch_size=int(section.batch_size),
+        epochs=int(section.epochs),
+        weight_decay=float(section.weight_decay),
     )
 
 
