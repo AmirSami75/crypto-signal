@@ -4,7 +4,7 @@
 > of the work: what changed, what was verified, what remains. The next agent (Hermes, Cline, OpenCode,
 > Claude Code, or a human) starts here.
 >
-> **Last updated:** 2026-08-31 (evening) · **Branch:** `main` · **HEAD:** `1678984` — LSTM v2 + online self-learning committed and deployed live
+> **Last updated:** 2026-09-01 (morning) · **Branch:** `main` · **HEAD:** see `git log` — overnight clean, bracket sweep complete: **no profitable configuration exists for the current model family**
 
 ---
 
@@ -64,7 +64,7 @@ Autonomous crypto futures-trading platform:
 3. **Sandbox order lifecycle** — IN PROGRESS: connection stored, bot `binance-futures-demo` (Sandbox, BTCUSDT 1h, 2x, 60 USDT) ACTIVE with confidence floor 0.40. Waiting for the first candle whose edge clears 40% to exercise place → reconcile → close. Verify fills reconcile (`exchangeOrderId` set, position row created) and the close reports the outcome to the online learner.
 4. **Watch the online loop in the wild**: bot closes feed `trade_samples.jsonl`; ~50 closes trigger the first challenger run — verdict on `/m-engine`.
 5. Full 7-symbol v2 training run needs more RAM than the 15GB host allows (OOM-killed); per-symbol runs or a 5m config are the workarounds.
-6. **Model edge is negative at current brackets — the real blocker.** The tree bundle (serving BTCUSDT:1h; confirmed per-symbol override wins over pooled) backtests at −7.1% net (51 trades, PF 0.65, break-even 55.1% net-of-fees vs 42.9% achieved); v1 LSTM pooled is −100%. Retrained 2026-08-31 with current code: holdout log-loss 0.7986, ceiling 0.835. No swap happened — none justified. Paths forward: bracket sweep to find a config with break-even ≤ win rate, EX-006/RISK-003, online challenger gated on real outcomes.
+6. **NO EDIBLE EDGE — bracket sweep conclusive (2026-09-01).** 120 configs (6 TP/SL pairs × 6 confidence floors) over the exact purged holdout, serving tree bundle, net of fees+slippage: **zero configs with ≥30 trades are profitable**; the only positive rows have <16 trades (noise). Best meaningful: TP2/SL1 @0.45 → −3.2% (35 trades). Current bot family at floor 0.40 → −47%. The model's calibrated probabilities carry no directional edge on BTCUSDT 1h for this period — parameter tuning cannot fix this; better inputs (funding, OI, order-flow, multi-TF) are the research path. Full results: `docs/bracket-sweep-2026-09-01.csv`. Real-money gate step 1 formally FAILED for this model family. Bot stays in Sandbox as a data collector; do NOT lower the floor.
 7. **EX-006 circuit breaker + backoff** (repeated failures disable execution) — next Phase D item.
 8. **RISK-003 freshness checks** (candle gaps, stale mark price) after EX-006.
 9. Before any real money (standing gates): bracket sweep → 4-week soak → manual approval → rotate the screenshotted Bitunix key → gateway running for retrain cron.
