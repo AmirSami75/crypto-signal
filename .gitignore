@@ -50,3 +50,4 @@ Logs/
 src/signal-ml/artifacts_5m/
 wheels/*
 !wheels/.gitkeep
+devops/env/aws/

@@ -1,0 +1,66 @@
+# AWS deployment overrides. Mirrors compose.dev.yml but for a clean-egress cloud host with
+# managed Postgres (RDS):
+# - no postgres container: the API connects to the user's RDS instance directly
+# - no V2Ray proxy anywhere (AWS egress reaches exchanges directly)
+# - ports bound to loopback on the host; expose via SSH tunnel or a reverse proxy, not 0.0.0.0
+services:
+  db:
+    # Managed RDS replaces the container. The service is defined but never started
+    # (`profiles: [local-only]`) so `docker compose --profile aws up` skips it and
+    # anything referring to the `db` service name stays resolvable via DNS alias below.
+    profiles: [local-only]
+
+  # Docker's built-in DNS can't alias external hosts per-service; the API reaches RDS through
+  # the connection string in env/aws/api.env (Host=maxena-dev...rds.amazonaws.com), not a
+  # service name, so no alias is needed. This block exists for documentation.
+
+  signal-ml:
+    build:
+      args:
+        PIP_PROXY: ""
+    environment:
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      ALL_PROXY: ""
+      ML_EXTERNAL_PROXY_URL: ""
+      ML_ONLINE_LEARNING: "true"
+      ML_TRADE_SAMPLES_PATH: /app/artifacts/online/trade_samples.jsonl
+      ML_TRAINING_CONFIG: /app/config.toml
+      ML_ONLINE_TRAINING_MIN_SAMPLES: "50"
+    volumes:
+      - ../src/signal-ml/artifacts:/app/artifacts
+
+  api:
+    build:
+      args: {}
+    environment:
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      ALL_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+      all_proxy: ""
+      # RDS connection — `environment` wins over any env_file from lower compose layers,
+      # so this reliably replaces the dev `Host=db` string.
+      API_Settings__Db__Type: PostgreSql
+      API_Settings__Db__PostgreSqlCnnStr: Host=maxena-dev.c05iy8ycgy5x.us-east-1.rds.amazonaws.com;Port=5432;Database=crypto_signal;Username=postgres;Password=amir09184951275
+      Exchange__BinanceTestnet__ProxyUrl: ""
+      Exchange__BinanceFuturesTestnet__ProxyUrl: ""
+      Exchange__BinanceMainnet__ProxyUrl: ""
+      Exchange__Bitunix__ProxyUrl: ""
+      Exchange__Bybit__ProxyUrl: ""
+      Trading__Risk__SpotOnly: "false"
+      Trading__Risk__MaxLeverage: "5"
+      Trading__Risk__AllowShorting: "true"
+    ports:
+      - "127.0.0.1:8000:8080"
+
+  dashboard:
+    ports:
+      - "127.0.0.1:5173:5173"
+
+  proxy:
+    # No V2Ray bridge on AWS — direct egress. Defined so compose references don't break;
+    # runs nothing.
+    image: alpine:3.20
+    entrypoint: ["sh", "-c", "echo proxy disabled on aws; sleep infinity"]

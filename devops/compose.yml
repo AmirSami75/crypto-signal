@@ -10,7 +10,12 @@ x-service-defaults: &service-defaults
     - application
 
 services:
+  # Managed RDS replaces the container. The service keeps a definition so depends_on stays
+  # valid, but with profiles: [local-only] it only starts in the local dev stack. The API
+  # reaches RDS through the connection string in env/aws/api.env (Host=maxena-dev...),
+  # not a service name.
   db:
+    profiles: [local-only]
     image: postgres:18.3-alpine3.23
     shm_size: 128mb
     environment:
@@ -50,6 +55,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
+        required: false
       signal-ml:
         condition: service_healthy
     expose:
