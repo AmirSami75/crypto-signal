@@ -52,12 +52,34 @@ services:
       Trading__Risk__SpotOnly: "false"
       Trading__Risk__MaxLeverage: "5"
       Trading__Risk__AllowShorting: "true"
+      # Same-origin production domain served by the dashboard's nginx (CF -> :80 -> nginx
+      # -> /api). CORS must include it or the browser blocks the XHR even though the
+      # reverse proxy forwards it.
+      Cors__AllowedOrigins__0: https://crypto-signal.hoomankhan68.dpdns.org
+      Cors__AllowedOrigins__1: http://crypto-signal.hoomankhan68.dpdns.org
+      Cors__AllowedOrigins__2: http://localhost:5173
     ports:
       - "127.0.0.1:8000:8080"
 
   dashboard:
+    # Production serving: nginx runtime stage (static SPA + /api reverse proxy to the api
+    # container). Published on host port 80 so Cloudflare's proxied A record
+    # (crypto-signal.hoomankhan68.dpdns.org) can pull from this origin.
+    # compose.dev.yml forces development (npm command, source mounts, 5173 healthcheck) —
+    # every one of those is overridden here because the runtime image has no npm and serves
+    # /usr/share/nginx/html on 8080.
+    build:
+      target: runtime
+    # The stock nginx.conf expects a root master process (it creates /var/cache/nginx and
+    # drops privileges via the `user` directive). The Dockerfile's `USER nginx` breaks that
+    # on a fresh volume — run the container as root and let nginx do its own privilege drop.
+    user: "0:0"
+    command: []
+    volumes: []
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/dashboard-health"]
     ports:
-      - "127.0.0.1:5173:5173"
+      - "80:8080"
 
   proxy:
     # No V2Ray bridge on AWS — direct egress. Defined so compose references don't break;
