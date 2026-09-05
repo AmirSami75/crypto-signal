@@ -132,7 +132,42 @@ def build_parser() -> argparse.ArgumentParser:
         "demo",
         help="Train and signal on the bundled synthetic market, without touching the network",
     )
+    run_league_parser = subparsers.add_parser(
+        "run-league",
+        help="Backtest and rank the Strategy Zoo over symbols x intervals (walk-forward)",
+    )
+    run_league_parser.add_argument(
+        "--symbols",
+        default=",".join(config_placeholder_symbols()),
+        help="Comma-separated symbols (default: the config's pooled symbol list)",
+    )
+    run_league_parser.add_argument(
+        "--intervals",
+        default="1h",
+        help="Comma-separated intervals, e.g. 1h,15m (default: 1h)",
+    )
+    run_league_parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help="Redownload historical data first",
+    )
+    run_league_parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Use local CSVs only; skip symbols whose CSV is missing",
+    )
     return parser
+
+
+def config_placeholder_symbols() -> list[str]:
+    """A lazy default so `--help` works without a config file on disk."""
+    try:
+        from .config import load_config
+        from pathlib import Path
+
+        return list(load_config(Path("config.toml")).market.symbols)
+    except Exception:
+        return ["BTCUSDT"]
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -226,6 +261,20 @@ def main(argv: list[str] | None = None) -> None:
                 _print_json(signal)
             else:
                 print(format_signal_summary(signal))
+        elif args.command == "run-league":
+            from .evaluation.league_report import run_league_command
+
+            result = run_league_command(
+                config,
+                symbols=[s.strip().upper() for s in args.symbols.split(",") if s.strip()],
+                intervals=[i.strip() for i in args.intervals.split(",") if i.strip()],
+                refresh=args.refresh,
+                offline=args.offline,
+            )
+            if args.json:
+                _print_json({"artifact": str(result["artifact_path"]), "rows": result["rows"]})
+            else:
+                print(result["table"])
         else:
             raise AssertionError(f"Unknown command: {args.command}")
     except Exception:
