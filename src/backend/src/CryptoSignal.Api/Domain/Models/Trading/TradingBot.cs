@@ -66,6 +66,12 @@ public class TradingBot : BaseEntity
     /// <summary>Stop-loss distance as a percent of entry price. Greater than zero.</summary>
     public decimal StopLossPercent { get; set; }
 
+    /// <summary>Take-profit distance in ATR multiples. When set, overrides TakeProfitPercent.</summary>
+    public decimal? TakeProfitAtrMultiple { get; set; }
+
+    /// <summary>Stop-loss distance in ATR multiples. When set, overrides StopLossPercent.</summary>
+    public decimal? StopLossAtrMultiple { get; set; }
+
     /// <summary>
     /// Whether a short-side edge may be acted on. False still records the short confidence — the bot
     /// can be shown the edge it declined — it only stops the direction from being SHORT.
