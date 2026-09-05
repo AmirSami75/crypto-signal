@@ -129,7 +129,7 @@ class StrategyTriggerTests(unittest.TestCase):
     # -- Supertrend: a deep downtrend followed by a strong rally flips the direction band to LONG.
 
     def test_supertrend_triggers_after_reversal_up(self) -> None:
-        closes = list(np.linspace(150, 80, 55)) + list(np.linspace(80, 130, 13))
+        closes = list(np.linspace(150, 90, 50)) + [90.0] * 6 + [92.0, 125.0]
         signal = strategy("supertrend", make_frame(closes))
         self.assertIsNotNone(signal)
         assert signal is not None
