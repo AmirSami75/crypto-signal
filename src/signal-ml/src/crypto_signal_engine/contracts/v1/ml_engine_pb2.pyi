@@ -277,7 +277,7 @@ class GetSignalResponse(_message.Message):
     def __init__(self, request_id: _Optional[str] = ..., direction: _Optional[_Union[TradeDirection, str]] = ..., levels: _Optional[_Union[TradeLevels, _Mapping]] = ..., confidence: _Optional[float] = ..., probabilities: _Optional[_Union[BarrierProbabilities, _Mapping]] = ..., expected_value: _Optional[float] = ..., long_confidence: _Optional[float] = ..., short_confidence: _Optional[float] = ..., symbol: _Optional[str] = ..., interval: _Optional[str] = ..., candle_open_time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., valid_until: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., model_id: _Optional[str] = ..., model_version: _Optional[str] = ..., model_trained_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., used_wildcard_model: _Optional[bool] = ..., input_digest_sha256: _Optional[str] = ..., rationale: _Optional[_Iterable[str]] = ..., warning: _Optional[str] = ..., processing_milliseconds: _Optional[float] = ..., barrier_extrapolated: _Optional[bool] = ...) -> None: ...
 
 class EvaluateBotDecisionRequest(_message.Message):
-    __slots__ = ("request_id", "bot_id", "symbol", "interval", "candles", "parameters", "position", "expected_model_version")
+    __slots__ = ("request_id", "bot_id", "symbol", "interval", "candles", "parameters", "position", "expected_model_version", "context_candles", "context_interval")
     REQUEST_ID_FIELD_NUMBER: _ClassVar[int]
     BOT_ID_FIELD_NUMBER: _ClassVar[int]
     SYMBOL_FIELD_NUMBER: _ClassVar[int]
@@ -286,6 +286,8 @@ class EvaluateBotDecisionRequest(_message.Message):
     PARAMETERS_FIELD_NUMBER: _ClassVar[int]
     POSITION_FIELD_NUMBER: _ClassVar[int]
     EXPECTED_MODEL_VERSION_FIELD_NUMBER: _ClassVar[int]
+    CONTEXT_CANDLES_FIELD_NUMBER: _ClassVar[int]
+    CONTEXT_INTERVAL_FIELD_NUMBER: _ClassVar[int]
     request_id: str
     bot_id: str
     symbol: str
@@ -294,7 +296,9 @@ class EvaluateBotDecisionRequest(_message.Message):
     parameters: TradeParameters
     position: OpenPosition
     expected_model_version: str
-    def __init__(self, request_id: _Optional[str] = ..., bot_id: _Optional[str] = ..., symbol: _Optional[str] = ..., interval: _Optional[str] = ..., candles: _Optional[_Iterable[_Union[Candle, _Mapping]]] = ..., parameters: _Optional[_Union[TradeParameters, _Mapping]] = ..., position: _Optional[_Union[OpenPosition, _Mapping]] = ..., expected_model_version: _Optional[str] = ...) -> None: ...
+    context_candles: _containers.RepeatedCompositeFieldContainer[Candle]
+    context_interval: str
+    def __init__(self, request_id: _Optional[str] = ..., bot_id: _Optional[str] = ..., symbol: _Optional[str] = ..., interval: _Optional[str] = ..., candles: _Optional[_Iterable[_Union[Candle, _Mapping]]] = ..., parameters: _Optional[_Union[TradeParameters, _Mapping]] = ..., position: _Optional[_Union[OpenPosition, _Mapping]] = ..., expected_model_version: _Optional[str] = ..., context_candles: _Optional[_Iterable[_Union[Candle, _Mapping]]] = ..., context_interval: _Optional[str] = ...) -> None: ...
 
 class EvaluateBotDecisionResponse(_message.Message):
     __slots__ = ("request_id", "action", "direction", "levels", "confidence", "probabilities", "expected_value", "reason_code", "rationale", "symbol", "interval", "candle_open_time", "valid_until", "model_id", "model_version", "model_trained_at", "used_wildcard_model", "input_digest_sha256", "warning", "processing_milliseconds", "barrier_extrapolated")

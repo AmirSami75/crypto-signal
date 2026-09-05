@@ -206,6 +206,14 @@ public sealed class MlServiceClient(
             grpcRequest.Position = ToProto(position);
         }
 
+        // Multi-timeframe context: higher-TF candles the engine merges in as confluence features.
+        // Omitted when not configured, so existing bots are unaffected.
+        if (request.ContextCandles is not null && request.ContextInterval is not null)
+        {
+            grpcRequest.ContextInterval = request.ContextInterval;
+            grpcRequest.ContextCandles.AddRange(request.ContextCandles.Select(ToProto));
+        }
+
         try
         {
             var response = await client.EvaluateBotDecisionAsync(

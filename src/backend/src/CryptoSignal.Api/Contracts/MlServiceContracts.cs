@@ -229,7 +229,9 @@ public sealed record MlBotDecisionRequest(
     MlTradeParameters Parameters,
     MlOpenPosition? Position = null,
     string? ExpectedModelVersion = null,
-    string? RequestId = null);
+    string? RequestId = null,
+    IReadOnlyList<MlCandle>? ContextCandles = null,
+    string? ContextInterval = null);
 
 /// <remarks>
 /// <c>ReasonCode</c> is one token from a fixed vocabulary the orchestrator switches on:

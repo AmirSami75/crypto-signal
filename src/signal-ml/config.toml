@@ -15,6 +15,14 @@ data_dir = "data"
 prediction_horizon = 6
 label_threshold = 0.0035
 
+#: When true, the trainer attaches higher-timeframe context features (h4_trend_ema_ratio,
+#: h4_atr_pct, h4_close_vs_ema20) to the feature matrix and includes them in the model's
+#: feature_columns. The backend sends 4h context candles on every bot tick when
+#: Trading:MtfContextInterval is set, so this flag must match the serving side: a trainer
+#: run with mtf_context=false produces bundles that ignore context candles entirely.
+mtf_context = false
+mtf_higher_interval = "4h"
+
 [barrier]
 # How far forward a label is allowed to look for a barrier touch. 24 hourly candles is a day: long enough
 # for a 3-ATR move to happen, short enough that the bet is still about the setup rather than about drift.

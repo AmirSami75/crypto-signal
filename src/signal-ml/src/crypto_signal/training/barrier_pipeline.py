@@ -495,6 +495,8 @@ def _train_one(
         pairs_per_candle=barrier.pairs_per_candle,
         grid=barrier_grid(barrier.grid_atr, barrier.min_risk_reward, barrier.max_risk_reward),
         atr_window=barrier.atr_window,
+        mtf_context=config.features.mtf_context,
+        mtf_higher_interval=config.features.mtf_higher_interval,
     )
     rows, candles = len(dataset), dataset.candle_count
     logger.info(

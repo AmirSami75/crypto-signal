@@ -53,6 +53,8 @@ class BotAdvisorService:
             parameters=request.parameters,
             expected_model_version=request.expected_model_version,
             allow_short=allow_short,
+            context_candles=request.context_candles,
+            context_interval=request.context_interval,
         )
         position = request.position
         if position is None:

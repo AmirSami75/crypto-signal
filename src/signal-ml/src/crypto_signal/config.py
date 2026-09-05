@@ -48,6 +48,16 @@ class FeatureConfig:
     prediction_horizon: int
     label_threshold: float
 
+    #: When true, the trainer attaches higher-timeframe context features (h4_trend_ema_ratio,
+    #: h4_atr_pct, h4_close_vs_ema20) to the feature matrix so the model learns to consume MTF
+    #: confluence. The backend sends matching context candles at inference time; a mismatch
+    #: (trained with MTF but served without, or vice versa) is detected and warned.
+    mtf_context: bool = False
+
+    #: Which higher-timeframe interval to train/with, e.g. "4h". Must match the backend's
+    #: Trading:MtfContextInterval. Ignored when mtf_context is false.
+    mtf_higher_interval: str = "4h"
+
 
 @dataclass(frozen=True)
 class ModelConfig:
@@ -268,6 +278,8 @@ def load_config(path: str | Path) -> AppConfig:
         features=FeatureConfig(
             prediction_horizon=int(feature_raw["prediction_horizon"]),
             label_threshold=float(feature_raw["label_threshold"]),
+            mtf_context=bool(feature_raw.get("mtf_context", False)),
+            mtf_higher_interval=str(feature_raw.get("mtf_higher_interval", "4h")),
         ),
         barrier=BarrierConfig(
             max_horizon=int(barrier_raw.get("max_horizon", 24)),

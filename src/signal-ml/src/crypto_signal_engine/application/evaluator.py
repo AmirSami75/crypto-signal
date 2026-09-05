@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 import time
 
+import pandas as pd
+
 from crypto_signal.domain import (
     ADVERSE_WINS_TIE_BREAK,
     BarrierPair,
@@ -30,6 +32,7 @@ from crypto_signal.domain import (
     atr_multiple,
     quantize,
 )
+from crypto_signal.features.mtf import attach_higher_tf_features
 from crypto_signal.modeling.direction import DirectionCandidate, DirectionChoice, choose_direction
 
 from .candles import CandleWindow, build_window, normalise_market, validate_request_id
@@ -41,6 +44,7 @@ from .models import (
     ModelStamp,
     TradeParametersInput,
 )
+from .context_helpers import _candles_to_dataframe, _candle_close_time
 
 _PERCENT = Decimal(100)
 
@@ -204,6 +208,8 @@ class MarketEvaluator:
         parameters: TradeParametersInput,
         expected_model_version: str = "",
         allow_short: bool | None = None,
+        context_candles: tuple[CandleInput, ...] = (),
+        context_interval: str = "",
     ) -> Assessment:
         """Validate a request, resolve a model, and price both directions.
 
@@ -264,9 +270,19 @@ class MarketEvaluator:
 
         if descriptor.is_sequence:
             # Feed the recurrent model a window of `lookback` candles, not the single latest row.
-            model_features = window.features.frame.iloc[-descriptor.lookback :]
+            model_features = window.features.frame.iloc[-descriptor.lookback :].copy()
         else:
-            model_features = window.features.frame.loc[[window.latest_index]]
+            model_features = window.features.frame.loc[[window.latest_index]].copy()
+
+        # When the caller supplies higher-timeframe context, attach MTF features to the
+        # model input. The model must have been trained with those columns (they appear
+        # in feature_columns); if it has MTF columns in its training set but no context
+        # arrived, that is a caller-side misconfiguration we surface as a warning rather
+        # than silently scoring on missing data.
+        model_features, mtf_warning = self._attach_context_features(
+            model_features, descriptor.feature_columns, context_candles, context_interval,
+            window.candles,
+        )
 
         choice = choose_direction(
             model,
@@ -278,6 +294,7 @@ class MarketEvaluator:
         )
 
         warning = self._warning(window, descriptor, barriers, max_holding_periods, choice)
+        effective_warning = f"{warning} | {mtf_warning}" if mtf_warning else warning
         return Assessment(
             window=window,
             stamp=self.describe(model),
@@ -286,9 +303,63 @@ class MarketEvaluator:
             parameters=parameters,
             max_holding_periods=max_holding_periods,
             minimum_confidence=minimum_confidence,
-            warning=warning,
+            warning=effective_warning,
             barrier_extrapolated=self._is_extrapolated(barriers),
             started=started,
+        )
+
+    def _attach_context_features(
+        self,
+        model_features: pd.DataFrame,
+        feature_columns: tuple[str, ...],
+        context_candles: tuple[CandleInput, ...],
+        context_interval: str,
+        lower_candles: tuple[CandleInput, ...],
+    ) -> tuple[pd.DataFrame, str]:
+        """Attach higher-TF context columns to the model feature row.
+
+        MTF columns must appear in the model's training ``feature_columns`` to be
+        consumed — an estimator simply ignores extra columns.  If context candles
+        are supplied but the model was not trained with MTF columns, we warn so
+        the caller knows the context is being silently dropped.
+        """
+        if not context_candles or not context_interval:
+            return model_features, ""
+
+        higher_df = _candles_to_dataframe(context_candles, context_interval)
+        lower_df = _candles_to_dataframe(lower_candles, context_interval)
+
+        lower_with_mtf = attach_higher_tf_features(lower_df, higher_df)
+
+        mtf_columns = [c for c in lower_with_mtf.columns if c not in lower_df.columns]
+
+        lower_with_mtf = lower_with_mtf.set_index("close_time")
+
+        close_times = pd.DatetimeIndex(
+            [_candle_close_time(c) for c in lower_candles]
+        )
+        if len(close_times) >= len(model_features):
+            aligned_close = close_times[-len(model_features):]
+        else:
+            aligned_close = close_times
+        mtf_for_rows = lower_with_mtf.reindex(aligned_close, method="ffill")[mtf_columns]
+        mtf_for_rows.index = model_features.index
+
+        model_features = model_features.join(mtf_for_rows)
+
+        trained_mtf = [c for c in mtf_columns if c in feature_columns]
+        if trained_mtf:
+            missing = [c for c in trained_mtf if model_features[c].isna().any()]
+            if missing:
+                return model_features, (
+                    f"MTF columns present in model but some are NaN after context "
+                    f"attachment — model may produce unreliable scores: {missing}"
+                )
+            return model_features, ""
+
+        return model_features, (
+            f"higher-TF context supplied ({context_interval}) but model "
+            f"was not trained with MTF features; context ignored"
         )
 
     def _validate_parameters(self, parameters: TradeParametersInput, allow_short: bool) -> None:

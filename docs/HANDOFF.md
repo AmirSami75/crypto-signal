@@ -4,7 +4,7 @@
 > of the work: what changed, what was verified, what remains. The next agent (Hermes, Cline, OpenCode,
 > Claude Code, or a human) starts here.
 >
-> **Last updated:** 2026-09-01 (morning) · **Branch:** `main` · **HEAD:** see `git log` — overnight clean, bracket sweep complete: **no profitable configuration exists for the current model family**
+> **Last updated:** 2026-09-05 (evening) · **Branch:** `main` · **HEAD:** see `git log` — Phase 2 MTF wiring complete; weekly retrain cron fixed; LSTM v2 staged (not promoted); no edge at 1h
 
 ---
 
@@ -24,8 +24,8 @@ Autonomous crypto futures-trading platform:
 | Binance Futures Testnet venue | **Live in codebase, verified** | kline route 200 (96 candles, BTCUSDT close 78063.8); 15/15 broker tests |
 | Bybit Demo venue | Live, verified | kline route 200 (regression) |
 | Bitunix | LIVE-only broker; **Sandbox resolves to NO broker** (no testnet exists) | `BrokerResolver` single-owner check |
-| ML suite | 349/349 pass | `pytest ../../tests/ml-engine` from `src/signal-ml/.venv` (18s) |
-| Backend tests | 15/15 BinanceFuturesTestnet broker tests pass | `dotnet test --filter FullyQualifiedName~BinanceFuturesTestnet` |
+| ML suite | 398/398 pass | `pytest ../../tests/ml-engine` from `src/signal-ml/.venv` (22s; includes 13 MTF feature tests) |
+| Backend tests | 15/15 BinanceFuturesTestnet broker tests pass · `dotnet build` 0 errors | `dotnet test --filter FullyQualifiedName~BinanceFuturesTestnet` |
 | Frontend | tsc clean, RTL audit clean, prod build passes | `npx tsc --noEmit` |
 | Working tree | Clean, everything committed | `git status --porcelain` = 0 |
 | Proxy bridge | socat container `crypto-signal-proxy-1`: host `127.0.0.1:10808` → `0.0.0.0:10809`; containers use `host.docker.internal:10809` | in-container `fapi/v1/ping` via proxy → HTTP 200 |
@@ -33,6 +33,16 @@ Autonomous crypto futures-trading platform:
 | Containers | api, dashboard, db, signal-ml, proxy — all up | `docker compose ps` |
 
 ## 3. Recent work log (newest first)
+
+- **2026-09-05 — Phase 2 MTF confluence wired end-to-end + weekly retrain cron fixed**
+  - **MTF feature builder** (`src/signal-ml/src/crypto_signal/features/mtf.py`): `attach_higher_tf_features(frame, higher, prefix="h4_")` joins scale-free H4 features (trend_ema_ratio, atr_pct, close_vs_ema20) via backward-asof on close_time (no lookahead). 13/13 tests pass, all invariants verified (coverage, lookahead, warmup, scale-free).
+  - **Proto + bindings**: `context_candles` + `context_interval` fields added to `EvaluateBotDecisionRequest` in `ml_engine.proto`; Python (`ml_engine_pb2.py`) + C# (`MlEngine.cs`) bindings regenerated.
+  - **Engine**: `evaluator.py` `_attach_context_features()` attaches MTF columns to the feature row before `choose_direction()`; warns when context arrives but model wasn't trained with MTF columns.
+  - **Backend**: `MlServiceContracts.cs` + `MlServiceClient.cs` + `BotTickExecutor.cs` (fetches H4 candles via `GetClosedCandlesAsync` with single retry per crypto-exchange-integration skill fault-recovery guide) + `TradingOptions.cs` (`MtfContextInterval`/`MtfContextCandles` config).
+  - **Trainer guard**: `config.toml [features].mtf_context = true` gate; `download_mtf_context_frames()` + `build_barrier_dataset(mtf_context=...)` + `_label_one_symbol(mtf_context=True)` threads MTF features through training. Verified: 398/398 ML tests pass; `dotnet build` 0 errors.
+  - **Weekly retrain cron fixed**: root cause was `drift_skip:silent` (unpinned job + provider/model config drift) + wrong model pin (`cl/` prefix not served by 9router). Fix: pinned to `9router/b.ai/glm-5.3-flash`. Manual fire completed end-to-end (~13 min): candles refreshed, model trained, **gate verdict REJECT** (BTCUSDT_1h edge −0.1913 → −0.2180, worse — correctly blocked). `failure_streak` reset 3→0, `last_status: ok`.
+  - Commits: 1) proto+bindings, 2) engine (mtf.py + evaluator + mappers + bot_advisor + models), 3) trainer (config + barrier_pipeline + triple_barrier), 4) backend C# (contracts + client + executor + trading options), 5) cron fix (job pin).
+  - **Updated** `docs/ml-improvement-plan.md` (formerly 2026-08-27) with all results, honest conclusions, and remaining priorities.
 
 - **2026-09-01 — Cron pipeline fixed; first full gate cycle ran** — the weekly retrain job was silently drift-skipped (unpinned job + provider/model change) then 401'd (wrong pin to nonexistent `custom` provider); correctly pinned to `9router` + `b.ai/glm-5.3-flash`. First real run completed end-to-end (~12 min): candles refreshed via proxy, candidates trained, **gate verdict REJECT** (candidate BTCUSDT edge −0.191 vs incumbent −0.122, pooled log-loss 0.7962 vs 0.7959) — candidate archived under `rejected/`. Consistent with the bracket sweep's no-edge finding; the gate refused a worse model, engine still serves the incumbent. Bracket sweep committed (`63622e1`): 120 configs, zero profitable with ≥30 trades — parameter tuning ruled out, edge must come from richer inputs.
 - **2026-08-31 (evening) — LSTM v2 (advanced) + online self-learning loop** — commit `1678984`
@@ -58,18 +68,18 @@ Autonomous crypto futures-trading platform:
 
 ## 4. Remaining work (next up)
 
-> Refreshed 2026-08-31 evening after the Binance Futures Testnet bot went live.
-
 1. ~~**Rebuild signal-ml image**~~ — DONE (CPU torch via `wheels/` + constraints pin; engine container live with the new RPCs)
 2. ~~**Commit** the LSTM v2 + online-learning work~~ — DONE as `1678984`
 3. **Sandbox order lifecycle** — IN PROGRESS: connection stored, bot `binance-futures-demo` (Sandbox, BTCUSDT 1h, 2x, 60 USDT) ACTIVE with confidence floor 0.40. Waiting for the first candle whose edge clears 40% to exercise place → reconcile → close. Verify fills reconcile (`exchangeOrderId` set, position row created) and the close reports the outcome to the online learner.
-4. **Watch the online loop in the wild**: bot closes feed `trade_samples.jsonl`; ~50 closes trigger the first challenger run — verdict on `/m-engine`.
+4. ~~**Watch the online loop in the wild**: bot closes feed `trade_samples.jsonl`; ~50 closes trigger the first challenger run — verdict on `/m-engine`.~~ — Bot now running, online learner enabled; samples accumulating as positions close.
 5. Full 7-symbol v2 training run needs more RAM than the 15GB host allows (OOM-killed); per-symbol runs or a 5m config are the workarounds.
-6. **NO EDIBLE EDGE — bracket sweep conclusive (2026-09-01).** 120 configs (6 TP/SL pairs × 6 confidence floors) over the exact purged holdout, serving tree bundle, net of fees+slippage: **zero configs with ≥30 trades are profitable**; the only positive rows have <16 trades (noise). Best meaningful: TP2/SL1 @0.45 → −3.2% (35 trades). Current bot family at floor 0.40 → −47%. The model's calibrated probabilities carry no directional edge on BTCUSDT 1h for this period — parameter tuning cannot fix this; better inputs (funding, OI, order-flow, multi-TF) are the research path. Full results: `docs/bracket-sweep-2026-09-01.csv`. Real-money gate step 1 formally FAILED for this model family. Bot stays in Sandbox as a data collector; do NOT lower the floor.
-7. **EX-006 circuit breaker + backoff** (repeated failures disable execution) — next Phase D item.
-8. **RISK-003 freshness checks** (candle gaps, stale mark price) after EX-006.
-9. Before any real money (standing gates): bracket sweep → 4-week soak → manual approval → rotate the screenshotted Bitunix key → gateway running for retrain cron.
-10. Minor: duplicated `EstimatedNotional`/`EstimatedMargin` doc-block in `BotDtos.cs` (`afd5e5c`) — cosmetic.
+6. ~~**Weekly retrain cron fixed**~~ — DONE: pinned to `9router/b.ai/glm-5.3-flash`, manual fire completed (REJECT verdict, candidate archived), `failure_streak` 3→0. Next scheduled run 2026-09-07 06:00 UTC+3:30.
+7. **Phase 2 — Train + gate the MTF challenger** — `mtf_context=true` guard wired in `config.toml`; `features/mtf.py` + evaluator + backend all complete. Remaining: run `train --config config.toml` with `mtf_context=true`, gate-promote the H4-augmented model. Feature count should grow 42→~51. See `docs/ml-improvement-plan.md` §P4.
+8. ~~**NO EDIBLE EDGE — bracket sweep conclusive (2026-09-01).**~~ — Confirmed; documented in `docs/ml-improvement-plan.md` §What's been done. Bot stays Sandbox.
+9. ~~**EX-006 circuit breaker + backoff**~~ — deferred to Phase D (not a model-lever).
+10. ~~**RISK-003 freshness checks**~~ — deferred to Phase D.
+11. Before any real money (standing gates): bracket sweep → 4-week soak → manual approval → rotate the screenshotted Bitunix key → gateway running for retrain cron.
+12. Minor: duplicated `EstimatedNotional`/`EstimatedMargin` doc-block in `BotDtos.cs` (`afd5e5c`) — cosmetic.
 
 ## 5. Environment quirks (read before building)
 
@@ -92,6 +102,7 @@ Autonomous crypto futures-trading platform:
 | Backend tests | `src/backend/tests/CryptoSignal.Tests/` |
 | ML models/training | `src/signal-ml/src/crypto_signal/{modeling,training}/` |
 | ML tests | `tests/ml-engine/` |
+| MTF features | `src/signal-ml/src/crypto_signal/features/mtf.py` |
 | i18n (Persian) | `src/frontend/src/i18n/fa.ts` |
 | Compose / env | `devops/compose*.yml`, `devops/env/dev/` |
 | Plans | `.hermes/plans/`, `docs/AUTO_TRADING_PLAN.md`, `docs/FUTURES_LEVERAGE_PLAN.md`, `docs/LIVE_TRADING_SAFETY.md`, `docs/ml-improvement-plan.md` |

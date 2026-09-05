@@ -92,6 +92,11 @@ class BotDecisionRequest:
     position: OpenPositionInput | None = None
     expected_model_version: str = ""
 
+    #: Optional higher-timeframe context candles for MTF features. When present,
+    #: the evaluator attaches scale-free context columns before scoring the model.
+    context_candles: tuple[CandleInput, ...] = ()
+    context_interval: str = ""
+
     def as_signal_request(self) -> SignalRequest:
         """The same market question without the position, so one evaluator serves both RPCs."""
         return SignalRequest(

@@ -74,6 +74,7 @@ from ..domain import (
     resolve_first_touch,
 )
 from ..features import WARMUP_COLUMNS, build_features
+from ..features.mtf import attach_higher_tf_features
 from ..log_setup import get_logger
 
 logger = get_logger(__name__)
@@ -385,6 +386,9 @@ def build_barrier_dataset(
     directions: Iterable[Direction] = (Direction.LONG, Direction.SHORT),
     random_state: int = 42,
     atr_window: int = 14,
+    mtf_context: bool = False,
+    mtf_higher_interval: str = "4h",
+    mtf_frames: Mapping[str, pd.DataFrame] | None = None,
 ) -> BarrierDataset:
     """Build the pooled, barrier-augmented dataset from one or many symbols' candles.
 
@@ -426,6 +430,7 @@ def build_barrier_dataset(
     ambiguous_shares: list[float] = []
 
     for symbol, raw in sorted(frames.items()):
+        higher_frame = mtf_frames.get(symbol) if mtf_frames else None
         block, columns, shares = _label_one_symbol(
             symbol=symbol,
             interval=interval,
@@ -436,6 +441,9 @@ def build_barrier_dataset(
             pairs_per_candle=pairs_per_candle,
             random_state=random_state,
             atr_window=atr_window,
+            mtf_context=mtf_context,
+            mtf_higher_interval=mtf_higher_interval,
+            higher_frame=higher_frame,
         )
         if block is None:
             continue
@@ -502,9 +510,38 @@ def _label_one_symbol(
     pairs_per_candle: int,
     random_state: int,
     atr_window: int,
+    mtf_context: bool = False,
+    mtf_higher_interval: str = "4h",
+    higher_frame: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame | None, tuple[str, ...], list[float]]:
     """Features, labels and barrier variants for one symbol. Returns `(block, columns, shares)`."""
     features = build_features(raw, atr_window=atr_window)
+
+    # When MTF context is configured, attach higher-TF features to the feature frame
+    # so they travel into the model's feature_columns and the trained bundle knows
+    # about them. The serving-side evaluator does the same join using context candles
+    # sent by the .NET orchestrator.
+    context_columns: tuple[str, ...] = ()
+    if mtf_context:
+        if higher_frame is not None:
+            raw_with_ts = raw.copy()
+            raw_with_ts["timestamp"] = pd.to_datetime(raw_with_ts["timestamp"], utc=True)
+            higher_with_ts = higher_frame.copy()
+            higher_with_ts["timestamp"] = pd.to_datetime(higher_with_ts["timestamp"], utc=True)
+
+            enhanced = attach_higher_tf_features(raw_with_ts, higher_with_ts)
+            context_columns = tuple(
+                c for c in enhanced.columns if c not in raw_with_ts.columns
+            )
+            context_features = enhanced[context_columns]
+            for column in context_columns:
+                features.frame[column] = np.asarray(context_features[column])
+            logger.info(
+                "Attached MTF context | symbol=%s | higher_interval=%s | columns=%s",
+                symbol, mtf_higher_interval, list(context_columns),
+            )
+
+    base = features.frame[list(features.columns) + list(context_columns)]
 
     # The warm-up rows have no long-window features, so they cannot be decision candles. They are still
     # needed *as future candles* for the rows before them, which is why the barrier scan runs on the
@@ -576,7 +613,7 @@ def _label_one_symbol(
             variants.append(variant)
 
     if not variants:
-        return None, tuple(features.columns), shares
+        return None, tuple(list(features.columns) + list(context_columns)), shares
 
     block = pd.concat(variants, axis=0, ignore_index=True)
-    return block, tuple(features.columns), shares
+    return block, tuple(list(features.columns) + list(context_columns)), shares

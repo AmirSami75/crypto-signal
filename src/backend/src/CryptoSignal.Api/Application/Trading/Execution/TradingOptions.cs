@@ -46,4 +46,21 @@ public sealed class TradingOptions
 
     /// <summary>Seconds a heartbeat may lag before another worker may take the bot over.</summary>
     public int LeaseStaleSeconds { get; init; } = 180;
+
+    /// <summary>
+    /// Optional higher-timeframe interval (e.g. <c>4h</c>) that bots fetch and send as
+    /// context candles so the engine can score MTF confluence features. Empty means
+    /// no context is sent — the bot is scored on its own timeframe alone. The trainer
+    /// must produce a model that includes MTF columns (controlled by
+    /// <c>[features].mtf_context = true</c> in <c>config.toml</c>); sending context to
+    /// a model not trained for it is a no-op the engine will warn about.
+    /// </summary>
+    public string? MtfContextInterval { get; init; }
+
+    /// <summary>
+    /// How many higher-TF candles to fetch when <see cref="MtfContextInterval"/> is set.
+    /// The engine's <c>attach_higher_tf_features</c> reads the latest closed higher candle
+    /// at each lower candle (backward join, no lookahead), so a handful suffices.
+    /// </summary>
+    public int MtfContextCandles { get; init; } = 48;
 }

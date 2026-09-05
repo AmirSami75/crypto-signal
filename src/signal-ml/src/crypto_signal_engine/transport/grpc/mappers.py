@@ -175,6 +175,8 @@ def bot_decision_request_from_proto(message) -> BotDecisionRequest:
         # read as a position of zero size at a price of zero. That is a flat bot being told to close.
         position=position_from_proto(message.position) if message.HasField("position") else None,
         expected_model_version=message.expected_model_version.strip(),
+        context_candles=candles_from_proto(message.context_candles),
+        context_interval=message.context_interval.strip(),
     )
 
 

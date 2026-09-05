@@ -200,6 +200,42 @@ public sealed class BotTickExecutor(
         // ── 4. consult the engine ────────────────────────────────────────────────
         var openPosition = await LoadOpenPositionAsync(bot, cancellationToken);
 
+        // Fetch higher-TF context candles when the bot is configured for MTF.
+        // The engine uses them as confluence features; a missing context source
+        // is treated like a missing main candle window — a transient retry, then fault.
+        IReadOnlyList<MlCandle>? contextCandles = null;
+        var mtfContextInterval = options.Value.MtfContextInterval;
+        if (!string.IsNullOrWhiteSpace(mtfContextInterval))
+        {
+            try
+            {
+                try
+                {
+                    var contextWindow = await source.GetClosedCandlesAsync(
+                        bot.Symbol, mtfContextInterval, options.Value.MtfContextCandles,
+                        cancellationToken);
+                    contextCandles = contextWindow.Select(ToMlCandle).ToList();
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken);
+                    logger.LogWarning(
+                        "Bot {BotId} MTF context fetch retry after: {Message}",
+                        bot.Id, exception.Message);
+                    var contextWindow = await source.GetClosedCandlesAsync(
+                        bot.Symbol, mtfContextInterval, options.Value.MtfContextCandles,
+                        cancellationToken);
+                    contextCandles = contextWindow.Select(ToMlCandle).ToList();
+                }
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                throw new BotFaultException(
+                    $"the {bot.Venue} MTF context window for {bot.Symbol} {mtfContextInterval} could not be fetched: " +
+                    $"{exception.Message}");
+            }
+        }
+
         await audit.AppendAsync(
             new BotAuditEntry(
                 correlationId, BotAuditEventType.EngineConsulted, bot.OperatingMode,
@@ -221,7 +257,9 @@ public sealed class BotTickExecutor(
                     bot.MinimumConfidence),
                 Position: openPosition is null ? null : ToMlPosition(openPosition),
                 ExpectedModelVersion: bot.ExpectedModelVersion,
-                RequestId: correlationId),
+                RequestId: correlationId,
+                ContextCandles: contextCandles,
+                ContextInterval: mtfContextInterval),
             cancellationToken);
 
         // ── 5. persist the decision (durable before any intent) ──────────────────

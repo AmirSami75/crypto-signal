@@ -331,6 +331,13 @@ message EvaluateBotDecisionRequest {
   // Absent means flat.
   OpenPosition position = 7;
   string expected_model_version = 8;
+
+  // Optional higher-timeframe context: closed candles from a coarser interval
+  // (e.g. 1h) for the same market, most-recent-last. When present, the engine
+  // attaches MTF confluence features (scale-free, NaN-preserving) before scoring.
+  // The interval these candles are sampled at, for joining and warmup math.
+  repeated Candle context_candles = 9;
+  string context_interval = 10;
 }
 
 message EvaluateBotDecisionResponse {
