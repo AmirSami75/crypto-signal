@@ -156,6 +156,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Use local CSVs only; skip symbols whose CSV is missing",
     )
+    run_league_parser.add_argument(
+        "--resume",
+        type=str,
+        default=None,
+        help="Path to a partial league JSON: skip (strategy, symbol, interval) pairs it already has",
+    )
     return parser
 
 
@@ -270,6 +276,7 @@ def main(argv: list[str] | None = None) -> None:
                 intervals=[i.strip() for i in args.intervals.split(",") if i.strip()],
                 refresh=args.refresh,
                 offline=args.offline,
+                resume=Path(args.resume) if args.resume else None,
             )
             if args.json:
                 _print_json({"artifact": str(result["artifact_path"]), "rows": result["rows"]})

@@ -15,6 +15,7 @@ from ..config import AppConfig
 from ..data import fetch_historical_ohlcv, load_ohlcv
 from ..log_setup import get_logger
 from .league import run_league
+from .league_resume import load_partial, run_league_resumable
 from ..strategies import STRATEGIES
 
 logger = get_logger(__name__)
@@ -28,8 +29,13 @@ def run_league_command(
     intervals: list[str],
     refresh: bool = False,
     offline: bool = False,
+    resume: Path | None = None,
 ) -> dict[str, Any]:
-    """Entry point behind `python -m crypto_signal run-league`."""
+    """Entry point behind `python -m crypto_signal run-league`.
+
+    With `resume`, a partial artifact's completed (strategy, symbol, interval) pairs are skipped and
+    their rows carried through; only the missing pairs are computed.
+    """
     frames: dict[str, Any] = {}
     for interval in intervals:
         for symbol in symbols:
@@ -43,7 +49,9 @@ def run_league_command(
     if not frames:
         raise RuntimeError("run-league has no frames to rank: every requested frame failed to load")
 
-    league = run_league(frames, intervals=intervals, strategy_names=sorted(STRATEGIES))
+    partial = load_partial(resume) if resume else None
+    partial_path = resume if resume else None
+    league = run_league_resumable(frames, intervals, sorted(STRATEGIES), partial, partial_path=partial_path)
 
     artifact_dir = config.output.artifact_dir / "league"
     artifact_dir.mkdir(parents=True, exist_ok=True)

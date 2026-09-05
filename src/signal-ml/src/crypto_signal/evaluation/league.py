@@ -24,10 +24,13 @@ test behaviour supports; with no train trades the verdict degrades to the test-s
 
 from __future__ import annotations
 
+import json
 from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
+
+from pathlib import Path
 
 from ..data import interval_periods_per_year
 from ..domain import Direction
@@ -140,6 +143,7 @@ def run_league(
     costs: BracketCosts | None = None,
     max_horizon: int = DEFAULT_MAX_HORIZON,
     n_blocks: int = DEFAULT_N_TEST_BLOCKS,
+    partial_path_override: Path | None = None,
 ) -> dict[str, Any]:
     """Backtest every strategy on every (symbol, interval) and rank the league.
 
@@ -147,9 +151,14 @@ def run_league(
     play) to its OHLCV frame; every strategy is run against every frame. Returns the ranked rows
     (test-split numbers decide the order: total_return desc, profit_factor tiebreak) plus the
     full train/test detail for the audit artifact.
+
+    When `partial_path_override` is set, every completed (strategy, key) pair is flushed there as a
+    partial artifact — a run killed mid-way loses at most the combo in flight, and `--resume`
+    picks the rest up from that file.
     """
     costs = costs or BracketCosts(fee_rate=0.0010, slippage_rate=0.0005)
     rows: list[dict[str, Any]] = []
+    partial_path: Path | None = partial_path_override
     for name in strategy_names:
         strategy = STRATEGIES[name]
         for key, frame in frames.items():
@@ -188,6 +197,8 @@ def run_league(
                     "test_eras": test_rows,
                 }
             )
+            if partial_path is not None:
+                _flush_partial(partial_path, rows)
 
     rows.sort(
         key=lambda row: (
@@ -209,6 +220,17 @@ def _era_trades(
 ) -> pd.DataFrame:
     trades, _ = run_bracket_backtest(decisions, interval, max_horizon, costs)
     return trades
+
+
+def _flush_partial(path: Path, rows: list[dict[str, Any]]) -> None:
+    """Write the rows computed so far so a kill costs at most the combo in flight."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps({"partial": True, "rows": rows}, indent=2, default=str), encoding="utf-8"
+        )
+    except OSError as error:
+        logger.warning("Partial flush failed | path=%s | error=%s", path, error)
 
 
 def _pool_test(era_rows: list[dict[str, Any]]) -> dict[str, Any]:
