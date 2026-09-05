@@ -1,5 +1,6 @@
 using Xunit;
 using CryptoSignal.Api.Application.Trading.Models;
+using CryptoSignal.Api.Contracts;
 using CryptoSignal.Api.Domain.Enums.Trading;
 using CryptoSignal.Api.Domain.Models.Trading;
 
@@ -63,5 +64,48 @@ public sealed class BotAtrBracketsTests
     {
         Assert.Equal(96m, AtrBrackets.TakeProfitPrice(entryPrice: 100m, atr: 2m, atrMultiple: 2m, isLong: false));
         Assert.Equal(102m, AtrBrackets.StopLossPrice(entryPrice: 100m, atr: 2m, atrMultiple: 1m, isLong: false));
+    }
+
+    // ── T0.2: the executor resolves the effective bracket from the engine's levels ──
+
+    private static MlTradeLevels Levels(decimal entry = 100m, decimal atr = 2m) =>
+        new(EntryPrice: entry, TakeProfitPrice: entry + 1m, StopLossPrice: entry - 1m,
+            Atr: atr, RiskRewardRatio: 1, TakeProfitAtr: 0.5, StopLossAtr: 0.5);
+
+    [Fact]
+    public void Resolve_replaces_engine_levels_with_atr_brackets_when_configured()
+    {
+        var (tp, sl) = AtrBrackets.Resolve(2m, 1m, Levels(), isLong: true);
+
+        Assert.Equal(104m, tp);
+        Assert.Equal(98m, sl);
+    }
+
+    [Fact]
+    public void Resolve_passes_engine_levels_through_when_no_atr_bracket_configured()
+    {
+        var levels = Levels();
+        var (tp, sl) = AtrBrackets.Resolve(null, null, levels, isLong: true);
+
+        Assert.Equal(levels.TakeProfitPrice, tp);
+        Assert.Equal(levels.StopLossPrice, sl);
+    }
+
+    [Fact]
+    public void Resolve_uses_the_short_side_geometry_for_shorts()
+    {
+        var (tp, sl) = AtrBrackets.Resolve(2m, 1m, Levels(), isLong: false);
+
+        Assert.Equal(96m, tp);
+        Assert.Equal(102m, sl);
+    }
+
+    [Fact]
+    public void Resolve_without_engine_levels_yields_nulls()
+    {
+        var (tp, sl) = AtrBrackets.Resolve(2m, 1m, null, isLong: true);
+
+        Assert.Null(tp);
+        Assert.Null(sl);
     }
 }

@@ -43,6 +43,12 @@ public sealed record BotInputDto
 
     public decimal StopLossPercent { get; init; }
 
+    /// <summary>Take-profit distance in ATR multiples. When set, overrides TakeProfitPercent.</summary>
+    public decimal? TakeProfitAtrMultiple { get; init; }
+
+    /// <summary>Stop-loss distance in ATR multiples. When set, overrides StopLossPercent.</summary>
+    public decimal? StopLossAtrMultiple { get; init; }
+
     public bool AllowShort { get; init; }
 
     /// <summary>Requested futures leverage. Must be 1 on spot/replay venues.</summary>
@@ -144,6 +150,8 @@ public sealed record BotSummaryDto
     public string? StatusReason { get; init; }
     public decimal TakeProfitPercent { get; init; }
     public decimal StopLossPercent { get; init; }
+    public decimal? TakeProfitAtrMultiple { get; init; }
+    public decimal? StopLossAtrMultiple { get; init; }
     public bool AllowShort { get; init; }
     public int Leverage { get; init; } = 1;
     public decimal QuoteNotionalPerTrade { get; init; }
@@ -187,6 +195,8 @@ public sealed record BotDetailDto
 
     public decimal TakeProfitPercent { get; init; }
     public decimal StopLossPercent { get; init; }
+    public decimal? TakeProfitAtrMultiple { get; init; }
+    public decimal? StopLossAtrMultiple { get; init; }
     public bool AllowShort { get; init; }
     public int Leverage { get; init; } = 1;
     public decimal QuoteNotionalPerTrade { get; init; }

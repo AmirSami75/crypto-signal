@@ -756,6 +756,17 @@ public sealed class BotTickExecutor(
         DateTime candleOpenTime,
         CancellationToken cancellationToken)
     {
+        // A bot configured in ATR multiples prices its bracket from the engine's own ATR, replacing
+        // the percent-derived levels the engine computed. The engine still priced the bet with its
+        // percent barriers (the wire contract), so the probabilities correspond to those — replacing
+        // the *levels* keeps the recorded geometry consistent with what will actually work at the
+        // venue, while the confidence stays the engine's answer to the percent bet it was asked.
+        var effectiveLevels = AtrBrackets.Resolve(
+            bot.TakeProfitAtrMultiple,
+            bot.StopLossAtrMultiple,
+            response.Levels,
+            isLong: response.Direction == MlDirection.Long);
+
         var decision = new StrategyDecision
         {
             BotId = bot.Id,
@@ -775,8 +786,8 @@ public sealed class BotTickExecutor(
             ProbabilityStopLossFirst = response.Probabilities.StopLossFirst,
             ProbabilityTimeout = response.Probabilities.Timeout,
             EntryPrice = response.Levels?.EntryPrice,
-            TakeProfitPrice = response.Levels?.TakeProfitPrice,
-            StopLossPrice = response.Levels?.StopLossPrice,
+            TakeProfitPrice = effectiveLevels.TakeProfitPrice,
+            StopLossPrice = effectiveLevels.StopLossPrice,
             Atr = response.Levels?.Atr,
             RiskRewardRatio = response.Levels?.RiskRewardRatio,
             TakeProfitAtr = response.Levels?.TakeProfitAtr,
@@ -825,8 +836,16 @@ public sealed class BotTickExecutor(
         if (openPosition is null || response.Levels is null)
             return;
 
-        openPosition.TakeProfitPrice = response.Levels.TakeProfitPrice;
-        openPosition.StopLossPrice = response.Levels.StopLossPrice;
+        // Same override as a fresh decision: an ATR-configured bot trails in ATR multiples, not
+        // percent. The direction is the open position's — that is the side the bracket protects.
+        var effectiveLevels = AtrBrackets.Resolve(
+            bot.TakeProfitAtrMultiple,
+            bot.StopLossAtrMultiple,
+            response.Levels,
+            isLong: openPosition.Direction == TradeDirection.Long);
+
+        openPosition.TakeProfitPrice = effectiveLevels.TakeProfitPrice;
+        openPosition.StopLossPrice = effectiveLevels.StopLossPrice;
         await positions.UpdateAsync(openPosition, saveNow: true, cancellationToken);
 
         await audit.AppendAsync(

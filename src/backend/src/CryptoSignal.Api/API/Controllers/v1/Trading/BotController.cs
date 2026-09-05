@@ -128,6 +128,8 @@ public class BotController(
                 StatusReason = bot.StatusReason,
                 TakeProfitPercent = bot.TakeProfitPercent,
                 StopLossPercent = bot.StopLossPercent,
+                TakeProfitAtrMultiple = bot.TakeProfitAtrMultiple,
+                StopLossAtrMultiple = bot.StopLossAtrMultiple,
                 AllowShort = bot.AllowShort,
                 Leverage = bot.Leverage,
                 QuoteNotionalPerTrade = bot.QuoteNotionalPerTrade,
@@ -181,6 +183,8 @@ public class BotController(
             OperatingMode = bot.OperatingMode,
             TakeProfitPercent = bot.TakeProfitPercent,
             StopLossPercent = bot.StopLossPercent,
+            TakeProfitAtrMultiple = bot.TakeProfitAtrMultiple,
+            StopLossAtrMultiple = bot.StopLossAtrMultiple,
             AllowShort = bot.AllowShort,
             Leverage = bot.Leverage,
             QuoteNotionalPerTrade = bot.QuoteNotionalPerTrade,
@@ -231,6 +235,8 @@ public class BotController(
             OperatingMode = dto.OperatingMode,
             TakeProfitPercent = dto.TakeProfitPercent,
             StopLossPercent = dto.StopLossPercent,
+            TakeProfitAtrMultiple = dto.TakeProfitAtrMultiple,
+            StopLossAtrMultiple = dto.StopLossAtrMultiple,
             AllowShort = dto.AllowShort,
             Leverage = dto.Leverage,
             QuoteNotionalPerTrade = dto.QuoteNotionalPerTrade,
@@ -300,6 +306,8 @@ public class BotController(
         bot.Venue = dto.Venue;
         bot.TakeProfitPercent = dto.TakeProfitPercent;
         bot.StopLossPercent = dto.StopLossPercent;
+        bot.TakeProfitAtrMultiple = dto.TakeProfitAtrMultiple;
+        bot.StopLossAtrMultiple = dto.StopLossAtrMultiple;
         bot.AllowShort = dto.AllowShort;
         bot.Leverage = dto.Leverage;
         bot.QuoteNotionalPerTrade = dto.QuoteNotionalPerTrade;
@@ -640,6 +648,12 @@ public class BotController(
 
         if (dto.StopLossPercent <= 0)
             throw new BadRequestException("درصد حد ضرر باید بزرگتر از صفر باشد");
+
+        if (dto.TakeProfitAtrMultiple is <= 0)
+            throw new BadRequestException("ضریب ATR حد سود باید بزرگتر از صفر باشد");
+
+        if (dto.StopLossAtrMultiple is <= 0)
+            throw new BadRequestException("ضریب ATR حد ضرر باید بزرگتر از صفر باشد");
 
         if (dto.MinimumConfidence is < 0 or > 1)
             throw new BadRequestException("حداقل اطمینان باید بین صفر و یک باشد");
