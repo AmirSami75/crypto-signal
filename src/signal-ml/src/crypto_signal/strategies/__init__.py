@@ -40,3 +40,18 @@ def register(name: str):
         return fn
 
     return deco
+
+
+# Importing the package populates the registry: each module's `@register` runs at import time.
+# One entry per strategy file, so a missing import is a missing strategy, visibly.
+from . import (  # noqa: E402,F401  (imports are the registration mechanism)
+    bollinger,
+    donchian,
+    ema_cross,
+    keltner_breakout,
+    macd,
+    rsi,
+    rsi_pullback,
+    supertrend,
+    triple_ema,
+)
