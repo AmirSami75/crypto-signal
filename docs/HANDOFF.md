@@ -34,6 +34,13 @@ Autonomous crypto futures-trading platform:
 
 ## 3. Recent work log (newest first)
 
+- **2026-09-06 (evening) — TFT smoke run completed end-to-end; both challengers gated**
+  - Machine rebooted mid-session (tmpfs wiped — logs now under `src/signal-ml/tmp/`, reboot-safe path). All containers restarted healthy.
+  - **Memory fix**: stride-1 TFT training (350k windows × 24 × 46) OOM-killed the 15GB host. New `[tft].stride` config: emit a window every Nth candle — adjacent windows share `lookback−1` bars, so stride 4 discards almost no signal while cutting RAM 4×. 350k → 26k windows.
+  - **Five PF-1.8 fixes** (`f637b31`): `time_varying_known_reals` plural rename; `stop_randomization`; string series ids; `QuantileLoss(quantiles=cfg)` (default 7 levels silently misaligned the 5-level CDF); predict via `tft.predict(mode="quantiles")` + per-row monotone projection for quantile crossing.
+  - **Smoke result (BTCUSDT 1h, 2y, stride 4)**: holdout log-loss **4.19**, net **−26.5%** vs B&H +12.0% → **gate REJECT**, incumbent untouched. Honest diagnosis: the label-space proxy target (quantiles over {0,1,2}) is nearly uninformative — a continuous-return target is the next lever. Both fixes and the diagnosis are in `ml-improvement-plan.md` §Challenger results (`fab7495`).
+  - `train` CLI now archives any existing bundle to `archive/<stamp>_pre-overwrite_…` before overwrite (`d435e3a`) — last night's manual incumbent recovery can't be needed again.
+
 - **2026-09-06 (later) — MTF challenger trained and REJECTED by the gate; three trainer bugs fixed**
   - **Trainer fixes** (`b50bcdc`): `mtf_context=true` had silently produced plain 42-feature models three ways — `download_mtf_context_frames()` was documented but never written (higher_frame always None); `_label_one_symbol` diffed columns against a frame the in-place attach had already mutated (diff always empty → `KeyError(())`); `df[tuple]` single-key lookup instead of `df[list]`. Also the holdout backtest rebuilt features without the MTF join and scored with base columns → `not in index`. All fixed; 425/425 tests.
   - **Real MTF run**: all 7 symbols attached `h4_trend_ema_ratio`, `h4_atr_pct`, `h4_close_vs_ema20` (features 42→45). Pooled strict holdout log-loss **0.7968** (incumbent 0.7959), holdout bracket expectancy **−0.4277 ATR over 113 trades** (incumbent −0.122). **Gate: REJECT** on both metrics — the H4 confluence features carried no incremental edge at 1h. Challenger archived under `rejected/_pooled_1h_mtf_20260906_logloss0.7968_edge-0.4277.joblib`.
@@ -93,7 +100,7 @@ Autonomous crypto futures-trading platform:
 10. ~~**RISK-003 freshness checks**~~ — deferred to Phase D.
 11. Before any real money (standing gates): bracket sweep → 4-week soak → manual approval → rotate the screenshotted Bitunix key → gateway running for retrain cron.
 12. Minor: duplicated `EstimatedNotional`/`EstimatedMargin` doc-block in `BotDtos.cs` (`afd5e5c`) — cosmetic.
-13. **Run the queued challengers + gate them** (next session): (a) MTF retrain — `mtf_context=true` already set; run `train`, feature count should grow 42→~51; (b) TFT — `pip install -e '.[tft]'` (wheel-stage pytorch-forecasting+lightning for AWS), then `train-tft` smoke (BTC-only) then full; both face the same gate — REJECT is a valid outcome.
+13. ~~**Run the queued challengers + gate them**~~ — DONE (2026-09-06), both REJECT: (a) MTF retrain ran with 45 features — log-loss 0.7968 vs 0.7959, edge −0.428 ATR vs −0.122 → archived; incumbent restored+verified. (b) TFT smoke (BTC, 2y, stride 4) completed end-to-end after 5 PF-1.8 fixes (`f637b31`) — log-loss 4.19, net −26.5% vs B&H +12% → the label-space proxy target is the weak point; continuous-return target is the next lever (see ml-improvement-plan §Challenger results).
 14. **Scanner first live pass** — enable `Scanner:Enabled` in appsettings (or env `Scanner__Enabled=true`), restart api, confirm the first scan pass writes `ScannerSignals` rows; then create one Scanner-kind Sandbox bot (5m, best league strategy) and verify it claims exactly one signal under concurrent ticks. If no signal qualifies, that is a valid honest result.
 15. **League run with real data** — `run-league --symbols BTCUSDT,ETHUSDT,SOLUSDT --intervals 1h,15m` → `docs/STRATEGY_LEAGUE.md` (top-5, TEST-split numbers only).
 16. **Phase 4/5 leftovers** — league artifacts per-strategy CSVs (T4.2), weekly Telegram league digest (T4.3), AWS deploy of the scanner (T5.1).
