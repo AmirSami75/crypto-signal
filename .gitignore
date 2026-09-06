@@ -51,3 +51,7 @@ src/signal-ml/artifacts_5m/
 wheels/*
 !wheels/.gitkeep
 devops/env/aws/
+
+# Lightning/TFT training artifacts
+src/signal-ml/lightning_logs/
+src/signal-ml/checkpoints/
