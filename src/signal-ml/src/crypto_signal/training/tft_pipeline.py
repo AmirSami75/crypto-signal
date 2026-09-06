@@ -431,7 +431,9 @@ def _build_tft_sequences(
     tp_atr = config.barrier.backtest_take_profit_atr
     sl_atr = config.barrier.backtest_stop_loss_atr
 
-    for i in range(lookback - 1, len(frame)):
+    stride = max(1, int(getattr(tft_cfg, "stride", 4)))
+    logger.info("TFT window stride=%s (1 = every candle)", stride)
+    for i in range(lookback - 1, len(frame), stride):
         if not complete[i] or not complete[i - lookback + 1 : i + 1].all():
             continue
         entry_close = float(close_col[i])
@@ -490,11 +492,10 @@ def _window_atrs(
     frame = dataset.frame
     atr_col = frame["atr"].astype(float).to_numpy()
     lookback = tft_cfg.lookback
-    # The holdout indices are into the *sequence* array, not the frame — but
-    # since sequences are built in order, holdout[i] maps to sequence i which
-    # ends at frame position lookback-1+i (approximately). We need the ATR at
-    # the window's last candle. Reconstruct from the frame directly.
-    full_atrs = atr_col[lookback - 1 :]
+    # Sequences are emitted with the configured stride, so sequence i ends at frame position
+    # lookback-1 + i*stride — not lookback-1+i. Index the frame on the same stride grid.
+    stride = max(1, int(getattr(tft_cfg, "stride", 4)))
+    full_atrs = atr_col[lookback - 1 :][::stride]
     return full_atrs[holdout]
 
 
@@ -506,9 +507,11 @@ def _window_entries(
 ) -> np.ndarray:
     """Extract the entry close of each holdout window's latest candle."""
     frame = dataset.frame
-    close_col = frame["close"].astype(float).to_numpy()
+    close_col = frame["entry_price"].astype(float).to_numpy()
     lookback = tft_cfg.lookback
-    full_closes = close_col[lookback - 1 :]
+    # Same stride grid as _window_atrs: sequence i ends at frame position lookback-1 + i*stride.
+    stride = max(1, int(getattr(tft_cfg, "stride", 4)))
+    full_closes = close_col[lookback - 1 :][::stride]
     return full_closes[holdout]
 
 
@@ -559,8 +562,10 @@ def _train_tft_and_forecast(
     # a continuous return target (the sign + magnitude of the barrier outcome).
     records = []
     for i in range(n_samples):
+        # PF requires categorical group ids as strings, not ints.
+        series_id = f"s{i}"
         for t in range(tft_cfg.lookback):
-            row: dict[str, Any] = {"series": i, "time_idx": t}
+            row: dict[str, Any] = {"series": series_id, "time_idx": t}
             for j in range(n_features):
                 row[f"feat_{j}"] = float(X_dev[i, t, j])
             row["target"] = float(y_dev[i] + 1)  # map {-1,0,1} -> {0,1,2}
@@ -575,26 +580,30 @@ def _train_tft_and_forecast(
         target="target",
         group_ids=["series"],
         static_categoricals=["series"],
-        time_varying_known_real=feature_cols,
-        time_varying_unknown_real=["target"],
-        max_encoder_length=tft_cfg.lookback,
+        time_varying_known_reals=feature_cols,
+        time_varying_unknown_reals=["target"],
+        # Each window series carries exactly `lookback` rows; asking for an
+        # encoder of the full lookback plus 1 prediction step would need
+        # lookback+1 rows and the length filter would drop every series.
+        max_encoder_length=tft_cfg.lookback - 1,
         max_prediction_length=1,
     )
 
     # Validation dataset from holdout windows.
     hold_records = []
     for i in range(len(X_hold)):
+        series_id = f"s{i}"
         for t in range(tft_cfg.lookback):
-            row = {"series": i, "time_idx": t}
+            row = {"series": series_id, "time_idx": t}
             for j in range(n_features):
                 row[f"feat_{j}"] = float(X_hold[i, t, j])
             row["target"] = float(y_dev[i % len(y_dev)] + 1)
             hold_records.append(row)
     hold_df = pd.DataFrame(hold_records)
-    validation = TimeSeriesDataSet.from_dataset(training, hold_df, stop_random_data_imputation=True)
+    validation = TimeSeriesDataSet.from_dataset(training, hold_df, stop_randomization=True)
 
     batch_size = min(tft_cfg.batch_size, max(n_samples, 1))
-    train_loader = training.to_dataloader(train=True, batch_size=batch_size, shuffle=True)
+    train_loader = training.to_dataloader(train=True, batch_size=batch_size)
     val_loader = validation.to_dataloader(train=False, batch_size=batch_size)
 
     tft = TemporalFusionTransformer.from_dataset(
@@ -603,7 +612,7 @@ def _train_tft_and_forecast(
         hidden_size=tft_cfg.hidden_size,
         attention_head_size=tft_cfg.attention_head_size,
         dropout=tft_cfg.dropout,
-        loss=QuantileLoss(),
+        loss=QuantileLoss(quantiles=list(tft_cfg.quantiles)),
         log_interval=0,
     )
 
@@ -616,7 +625,7 @@ def _train_tft_and_forecast(
     )
     trainer = pl.Trainer(
         max_epochs=tft_cfg.max_epochs,
-        gpus=0,
+        accelerator="cpu",
         gradient_clip_val=0.1,
         callbacks=[early_stop_callback],
         enable_progress_bar=False,
@@ -624,17 +633,31 @@ def _train_tft_and_forecast(
     )
     trainer.fit(tft, train_loader, val_loader)
 
-    # Extract quantile forecasts for each holdout window.
+    # Extract quantile forecasts for each holdout window via one batched predict pass.
+    # Each validation series is exactly one window: encoder = rows [0..lookback-2],
+    # prediction = the final row, so `prediction_length` outputs map 1:1 to windows.
     tft.eval()
-    quantile_forecasts = np.zeros((len(X_hold), len(tft_cfg.quantiles)), dtype=float)
-    with torch.no_grad():
-        for i in range(len(X_hold)):
-            x, _ = validation.datasets[i][0]
-            x = {k: v.unsqueeze(0) for k, v in x.items()}
-            # Predict quantiles — TFT returns one prediction per quantile level.
-            for qi, q in enumerate(tft_cfg.quantiles):
-                pred = tft.predict(x, mode="quantiles", y=[str(q)])
-                quantile_forecasts[i, qi] = float(pred[0, 0])
+    prediction = tft.predict(
+        validation,
+        mode="quantiles",
+        return_index=False,
+        batch_size=tft_cfg.batch_size,
+    )
+    # PF's predict() returns the quantile tensor directly in mode="quantiles":
+    # (n_windows, prediction_length=1, n_quantiles).
+    raw = torch.as_tensor(prediction)
+    predictions = raw.reshape(len(raw), -1)
+
+    n_hold = len(X_hold)
+    quantile_forecasts = np.zeros((n_hold, len(tft_cfg.quantiles)), dtype=float)
+    usable = min(n_hold, predictions.shape[0])
+    quantile_forecasts[:usable, :] = predictions[:usable, :len(tft_cfg.quantiles)].numpy()
+    if usable < n_hold:
+        # PF may drop series the index filter removed; fill the remainder with the median so the
+        # bundle stays shape-consistent and the gate sees honest (neutral) probabilities there.
+        logger.warning("TFT prediction rows %s < holdout windows %s; remainder filled with median",
+                       usable, n_hold)
+        quantile_forecasts[usable:, :] = np.median(quantile_forecasts[:usable, :], axis=0)
 
     # The quantiles are in the label space (0,1,2). Convert back to returns.
     # Quantile q=0.5 maps to the median label; we convert label -> return using
@@ -649,5 +672,8 @@ def _train_tft_and_forecast(
         raw = quantile_forecasts[:, qi]
         # Map [0, 2] target space to [-sl_return, +tp_return] return space.
         quantile_forecasts[:, qi] = raw * (tp_return + sl_return) / 2.0 - sl_return
+    # Quantile crossing: NN quantile heads can invert on individual rows. Project each row onto
+    # the nearest monotone curve (running max) rather than feed the bridge an impossible CDF.
+    quantile_forecasts = np.maximum.accumulate(quantile_forecasts, axis=1)
 
     return quantile_forecasts

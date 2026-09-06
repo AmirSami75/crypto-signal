@@ -170,6 +170,11 @@ class TftSection:
     early_stop_patience: int = 3
     quantiles: tuple[float, ...] = (0.1, 0.25, 0.5, 0.75, 0.9)
     random_state: int = 42
+    #: Emit a decision window every Nth candle instead of every candle. 1 = all windows.
+    #: Adjacent windows share `lookback-1` of their bars, so a stride of 3-4 discards almost
+    #: no signal while cutting the sequence array (and the RAM the dataset loader duplicates
+    #: it into) by the same factor. The 15GB host OOMs at stride 1 on one symbol.
+    stride: int = 4
 
 
 @dataclass(frozen=True)
