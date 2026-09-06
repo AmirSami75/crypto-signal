@@ -18,6 +18,7 @@ import { OverviewPage } from './pages/OverviewPage'
 import { PermissionsPage } from './pages/PermissionsPage'
 import { PlaceholderPage } from './pages/PlaceholderPage'
 import { RegisterPage } from './pages/RegisterPage'
+import { ScannerPage } from './pages/ScannerPage'
 import { RolesPage } from './pages/RolesPage'
 import { SignalPage } from './pages/SignalPage'
 import { UsersPage } from './pages/UsersPage'
@@ -114,6 +115,14 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission permission={PERMISSIONS.exchangeConnectionGet}>
             <ConnectionsPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: ROUTES.scanner,
+        element: (
+          <RequirePermission permission={PERMISSIONS.scannerGet}>
+            <ScannerPage />
           </RequirePermission>
         ),
       },

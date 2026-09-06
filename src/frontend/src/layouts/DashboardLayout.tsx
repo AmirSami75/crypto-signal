@@ -81,6 +81,7 @@ export function DashboardLayout() {
       permission: PERMISSIONS.killSwitchGet,
     },
     { to: ROUTES.connections, label: fa.nav.connections, icon: <ChipIcon />, permission: PERMISSIONS.exchangeConnectionGet },
+    { to: ROUTES.scanner, label: fa.nav.scanner, icon: <PulseIcon />, permission: PERMISSIONS.scannerGet },
     { to: ROUTES.mlEngine, label: fa.nav.ml, icon: <ModelIcon />, permission: PERMISSIONS.mlGetModel },
   ]
 

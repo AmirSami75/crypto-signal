@@ -44,7 +44,7 @@ import type {
   UserFilters,
   UserInput,
   MlTrainingStatus,
-} from './apiTypes'
+, ScannerSignal , ScannerFilters } from './apiTypes'
 
 /**
  * The single place that talks to the API.
@@ -596,6 +596,15 @@ export const api = {
     /** Ends every open run and clears the fault, so a faulted bot is restartable from the UI. */
     stop: (id: string, payload: BotStatusChange, signal?: AbortSignal) =>
       request<BotDetail>(`/api/v1/bot/${id}/stop`, { method: 'POST', body: payload, signal }),
+  },
+
+
+  scanner: {
+    paged: (query: TradingPageQuery, filters: ScannerFilters = {}, signal?: AbortSignal) =>
+      request<PagedResult<ScannerSignal>>(
+        `/api/v1/scanner${queryString({ ...filters, ...query })}`,
+        { signal },
+      ),
   },
 
   /** Venue candles routed through the API (the venue sends no CORS headers to browsers). */

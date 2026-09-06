@@ -23,6 +23,7 @@ export const ROUTES = {
   roles: '/roles',
   permissions: '/permissions',
   loginHistory: '/login-history',
+  scanner: '/scanner',
   ml: '/ml',
   mlEngine: '/m-engine',
 } as const

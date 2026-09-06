@@ -819,6 +819,11 @@ export type BotFilters = {
 }
 
 export type BotDecisionFilters = { action?: BotDecisionActionName | '' }
+export type ScannerFilters = {
+  interval?: string
+  strategy?: string
+  direction?: 'Long' | 'Short' | ''
+}
 export type KillSwitchFilters = { engagedOnly?: boolean }
 
 // ─── ML engine ────────────────────────────────────────────────────────────────────────────────────
@@ -907,4 +912,18 @@ export type MlTrainingStatus = {
   requestId: string
   onlineLearningEnabled: boolean
   markets: MlMarketTrainingStatus[]
+}
+
+/** One strategy-zoo proposal from the market scanner. */
+export type ScannerSignal = {
+  id: string
+  symbol: string
+  interval: string
+  strategyKey: string
+  direction: 'Long' | 'Short'
+  confidence: number
+  score: number
+  atrAtSignal: number
+  createdAt: string
+  reason: string
 }

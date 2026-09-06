@@ -31,6 +31,7 @@ export const PERMISSIONS = {
   // this is `Signal.*` and not a third `Ml.*` entry. It authorizes a *question*: the endpoint behind
   // it places no order, and no endpoint on the platform does.
   signalGet: 'Signal.Get',
+  scannerGet: 'Scanner.Get',
 
   botGet: 'Bot.Get',
   botGetById: 'Bot.GetById',
