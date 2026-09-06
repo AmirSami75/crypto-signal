@@ -34,6 +34,13 @@ Autonomous crypto futures-trading platform:
 
 ## 3. Recent work log (newest first)
 
+- **2026-09-06 — Plan Phases 1–3 + 6 implemented: scanner end-to-end, TFT challenger staged, strategy zoo wired**
+  - **Scanner gRPC + engine** (`6feacd2`): `ScanSymbols` RPC in `ml_engine.proto` (batch of symbol candle windows × strategy specs → signals); `application/scan_service.py` runs the 9-strategy zoo over each window (pure, no I/O); servicer handler with the standard error policy. 13 new tests (425 total, all green).
+  - **TFT challenger** (`197b53b`, Phase 6 T6.2/T6.3): `modeling/pf_bridge.py` translates quantile forecasts → (P(TP-first), P(SL-first), P(timeout)) by CDF interpolation with a conservative first-passage coupling — handles long AND short sides; 14 known-answer tests. `training/tft_pipeline.py` mirrors the LSTM pipeline (same frames, labels, purged holdout, cost-aware backtest); `TftBundle` joblibs without torch/lightning and serves the standard `predict_proba([-1,0,1])` contract. `[tft]` config section, `train-tft` CLI, `[tft]` pip extra. **Not yet run**: needs `pip install -e '.[tft]'` (pytorch-forecasting + lightning — wheel-stage for AWS per V2Ray constraint) before the first gate run.
+  - **Scanner backend** (`f36beda`, Phase 3 T3.1/T3.2/T3.4): `ScannerSignal` entity + migration; `TradingBot.Kind` (Model|Scanner) + `StrategyKey`; `BinanceFuturesTickerSource` (`/fapi/v1/ticker/24hr`, ranked `|change%| × log10(volume)`); `MarketScannerService` (5-min pass, top-20 symbols, `ScanSymbols` RPC, proposals only); **scanner-kind bot claims a signal with a conditional UPDATE (exactly one winner under concurrency)** then walks the same intent → risk → place pipeline (steps 6–8 extracted into `ActOnDecisionAsync`, shared with model bots — one safety argument, not two). `ScannerController`: `GET /api/v1/scanner` + `GET /promote/{id}` (prefill only, no trade). Backend suite 32/32.
+  - **Scanner frontend** (`8179780`, T3.3): `ScannerPage` (ranked proposals table, debounced symbol/strategy filters, pagination), `/scanner` route + nav entry (`scannerGet`), full Persian i18n, RTL audit clean (71 files), tsc clean.
+  - Strategy zoo itself (9 strategies + league runner + `STRATEGIES` registry) landed earlier in this session; 412→425 Python tests green.
+
 - **2026-09-05 — Phase 2 MTF confluence wired end-to-end + weekly retrain cron fixed**
   - **MTF feature builder** (`src/signal-ml/src/crypto_signal/features/mtf.py`): `attach_higher_tf_features(frame, higher, prefix="h4_")` joins scale-free H4 features (trend_ema_ratio, atr_pct, close_vs_ema20) via backward-asof on close_time (no lookahead). 13/13 tests pass, all invariants verified (coverage, lookahead, warmup, scale-free).
   - **Proto + bindings**: `context_candles` + `context_interval` fields added to `EvaluateBotDecisionRequest` in `ml_engine.proto`; Python (`ml_engine_pb2.py`) + C# (`MlEngine.cs`) bindings regenerated.
@@ -74,12 +81,16 @@ Autonomous crypto futures-trading platform:
 4. ~~**Watch the online loop in the wild**: bot closes feed `trade_samples.jsonl`; ~50 closes trigger the first challenger run — verdict on `/m-engine`.~~ — Bot now running, online learner enabled; samples accumulating as positions close.
 5. Full 7-symbol v2 training run needs more RAM than the 15GB host allows (OOM-killed); per-symbol runs or a 5m config are the workarounds.
 6. ~~**Weekly retrain cron fixed**~~ — DONE: pinned to `9router/b.ai/glm-5.3-flash`, manual fire completed (REJECT verdict, candidate archived), `failure_streak` 3→0. Next scheduled run 2026-09-07 06:00 UTC+3:30.
-7. **Phase 2 — Train + gate the MTF challenger** — `mtf_context=true` guard wired in `config.toml`; `features/mtf.py` + evaluator + backend all complete. Remaining: run `train --config config.toml` with `mtf_context=true`, gate-promote the H4-augmented model. Feature count should grow 42→~51. See `docs/ml-improvement-plan.md` §P4.
+7. ~~**Phase 2 — Train + gate the MTF challenger**~~ — wiring DONE; the *run* is pending (see item 13).
 8. ~~**NO EDIBLE EDGE — bracket sweep conclusive (2026-09-01).**~~ — Confirmed; documented in `docs/ml-improvement-plan.md` §What's been done. Bot stays Sandbox.
 9. ~~**EX-006 circuit breaker + backoff**~~ — deferred to Phase D (not a model-lever).
 10. ~~**RISK-003 freshness checks**~~ — deferred to Phase D.
 11. Before any real money (standing gates): bracket sweep → 4-week soak → manual approval → rotate the screenshotted Bitunix key → gateway running for retrain cron.
 12. Minor: duplicated `EstimatedNotional`/`EstimatedMargin` doc-block in `BotDtos.cs` (`afd5e5c`) — cosmetic.
+13. **Run the queued challengers + gate them** (next session): (a) MTF retrain — `mtf_context=true` already set; run `train`, feature count should grow 42→~51; (b) TFT — `pip install -e '.[tft]'` (wheel-stage pytorch-forecasting+lightning for AWS), then `train-tft` smoke (BTC-only) then full; both face the same gate — REJECT is a valid outcome.
+14. **Scanner first live pass** — enable `Scanner:Enabled` in appsettings (or env `Scanner__Enabled=true`), restart api, confirm the first scan pass writes `ScannerSignals` rows; then create one Scanner-kind Sandbox bot (5m, best league strategy) and verify it claims exactly one signal under concurrent ticks. If no signal qualifies, that is a valid honest result.
+15. **League run with real data** — `run-league --symbols BTCUSDT,ETHUSDT,SOLUSDT --intervals 1h,15m` → `docs/STRATEGY_LEAGUE.md` (top-5, TEST-split numbers only).
+16. **Phase 4/5 leftovers** — league artifacts per-strategy CSVs (T4.2), weekly Telegram league digest (T4.3), AWS deploy of the scanner (T5.1).
 
 ## 5. Environment quirks (read before building)
 
