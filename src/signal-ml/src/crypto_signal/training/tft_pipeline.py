@@ -33,6 +33,7 @@ import torch
 
 from .. import __version__
 from ..config import AppConfig
+from ..labeling import BARRIER_FEATURE_COLUMNS
 from ..log_setup import get_logger
 from ..modeling import probabilities_to_signals
 from ..modeling.pf_bridge import (
@@ -413,8 +414,10 @@ def _build_tft_sequences(
     lookback = tft_cfg.lookback
     frame = dataset.frame
     feature_columns = dataset.feature_columns
+    # The barrier dataset's context columns: `entry_price` is the candle close the decision
+    # would price from, `atr` the same ATR the labeller used. There is no `close` column.
     atr_col = frame["atr"].astype(float).to_numpy()
-    close_col = frame["close"].astype(float).to_numpy()
+    close_col = frame["entry_price"].astype(float).to_numpy()
     timestamps = frame["timestamp"].to_numpy()
     directions = frame["direction_sign"].astype(float).to_numpy()
 

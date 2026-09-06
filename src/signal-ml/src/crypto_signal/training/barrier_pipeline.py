@@ -35,6 +35,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+import shutil
 import time
 from typing import Any
 
@@ -623,6 +624,26 @@ def _train_one(
     )
 
     path = config.output.model_dir / f"{stem}.joblib"
+
+    # Archive before overwrite. The promotion-gated loop (`scripts/self_learning_loop.py`) moves
+    # the incumbent aside itself, but a bare `train` invocation lands here directly — without this,
+    # a retried or feature-changed run silently destroys the bundle the engine is serving, and the
+    # only copy of a model that took minutes to fit is gone. Same naming as the loop's archiver so
+    # everything lands in one reviewable pile.
+    if path.exists():
+        archive_dir = config.output.model_dir / "archive"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        stamped = archive_dir / (
+            f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}_pre-overwrite_{stem}.joblib"
+        )
+        shutil.move(str(path), str(stamped))
+        sidecar = path.with_suffix(".metadata.json")
+        if sidecar.exists():
+            shutil.move(str(sidecar), str(stamped.with_suffix(stamped.suffix + ".metadata.json")))
+        logger.warning(
+            "Bundle %s | archived previous bundle before overwrite -> %s", stem, stamped.name
+        )
+
     joblib.dump(
         {
             "model": model,
@@ -875,8 +896,12 @@ def _decide_window(
     if frame.empty:
         return frame
 
-    long_probabilities = _score_side(model, frame, features.columns, pair, Direction.LONG, dataset)
-    short_probabilities = _score_side(model, frame, features.columns, pair, Direction.SHORT, dataset)
+    long_probabilities = _score_side(
+        model, frame, _model_feature_columns(dataset, features.columns),
+        pair, Direction.LONG, dataset)
+    short_probabilities = _score_side(
+        model, frame, _model_feature_columns(dataset, features.columns),
+        pair, Direction.SHORT, dataset)
 
     long_value = _expected_values(long_probabilities, pair)
     short_value = _expected_values(short_probabilities, pair)
@@ -936,6 +961,18 @@ def _decide_window(
             "stop_loss_percent": stop_loss_percent,
         }
     )
+
+
+def _model_feature_columns(dataset: BarrierDataset, base_columns: tuple[str, ...]) -> tuple[str, ...]:
+    """The trained model's input columns minus the four per-variant barrier columns.
+
+    For an MTF-trained bundle this is the base feature set plus the h4_ context columns; for a
+    plain bundle it equals `base_columns`. Ordering follows `dataset.feature_columns`, which is
+    the order the model was fitted on.
+    """
+    barrier_set = set(BARRIER_FEATURE_COLUMNS)
+    model_columns = tuple(c for c in dataset.feature_columns if c not in barrier_set)
+    return model_columns if model_columns else base_columns
 
 
 def _score_side(

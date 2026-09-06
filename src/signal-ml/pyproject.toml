@@ -31,8 +31,8 @@ dev = [
   "pytest>=8.0,<9",
 ]
 tft = [
-  "pytorch-forecasting>=1.1,<1.2",
-  "lightning>=2.3,<2.5",
+  "pytorch-forecasting>=1.6,<1.9",
+  "lightning>=2.4,<2.6",
   "pytorch-lightning>=2.3,<2.5",
 ]
 
