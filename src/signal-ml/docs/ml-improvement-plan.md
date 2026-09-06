@@ -138,3 +138,20 @@ Operationalize as: at serving time, when the engine reports confidence ≥0.60, 
 - **Weekly cron** (`0 6 * * 1`): retrains pooled + per-symbol bundles, gates on purged holdout + bracket backtest. Pinned to `9router/b.ai/glm-5.3-flash`. If PROMOTE, registry hot-reloads. If REJECT, candidate archived.
 - **Online loop** (`ML_ONLINE_LEARNING=true`): every closed bot position is a labelled example. `TradeSampleStore` (JSONL, idempotent per `(bot_id, decision_candle)`) → challenger pools up-weighted samples + replayed history → gate on same holdout → atomic promote via staging+move into hot-reload registry. Rejected challengers archived with verdict in the name.
 - **Bot stays Sandbox** as data-collector. No real-money execution until gates 6-8 of `docs/LIVE_TRADING_SAFETY.md` are implemented and a positive bracket is demonstrated.
+
+---
+
+## Challenger results (2026-09-06, honest log)
+
+| Challenger | Holdout log-loss | Net (TEST) | Gate | Notes |
+|---|---|---|---|---|
+| MTF (H4 context, 45 feat) | 0.7968 (incumbent 0.7959) | −0.428 ATR (113 tr, vs −0.122) | **REJECT** | H4 confluence adds no edge at 1h; archived `rejected/` |
+| TFT (quantile→barrier bridge) | 4.188 (BTC smoke, 2y) | −26.5% vs B&H +12.0% | **REJECT** | Label-space proxy target {0,1,2} is weakly informative; quantile CDF of a 3-point target is nearly flat |
+
+**Next levers on the TFT, in order:**
+1. **Continuous-return target** — regress the horizon return directly (quantiles of a real
+   distribution), not the 3-point barrier label. The bridge then consumes a real CDF.
+2. **Decoder horizon > 1** — let the TFT quantify path uncertainty over several bars instead of one.
+3. **Encoder shortening** — 24 bars × 46 features may be past the attention horizon's useful span.
+
+The bridge itself (`pf_bridge`) is validated and stays; only the target feeding it changes.
