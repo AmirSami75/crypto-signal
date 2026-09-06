@@ -70,6 +70,19 @@ def run_league_command(
     artifact_path.write_text(json.dumps(artifact, indent=2, default=str), encoding="utf-8")
     logger.info("League artifact written | path=%s | rows=%s", artifact_path, len(league["rows"]))
 
+    # T4.2: per-(strategy, symbol, interval) TEST-split trade CSVs alongside the artifact —
+    # the lumibot-style inspectable run. The summary says how many; these say what happened.
+    trades_dir = artifact_dir / stamp / "trades"
+    trades_dir.mkdir(parents=True, exist_ok=True)
+    written = 0
+    for pair_key, trades_frame in league.get("trade_frames", {}).items():
+        safe = pair_key.replace("|", "_")
+        csv_path = trades_dir / f"{safe}.csv"
+        trades_frame.to_csv(csv_path, index=False)
+        written += 1
+    if written:
+        logger.info("League trade artifacts written | dir=%s | files=%s", trades_dir, written)
+
     return {
         "artifact_path": artifact_path,
         "rows": league["rows"],

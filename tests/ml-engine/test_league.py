@@ -90,6 +90,34 @@ class LeagueTests(unittest.TestCase):
         )
         self.assertEqual(self.result["rows"], again["rows"])
 
+    def test_trade_frames_match_summary_rows(self) -> None:
+        """T4.2: every summary row with trades carries a matching TEST-split trade frame."""
+        rows_with_trades = {
+            (r["strategy"], r["symbol"], r["interval"]): r["test"]["trades"]
+            for r in self.result["rows"]
+        }
+        for (strategy, symbol, interval), trades in rows_with_trades.items():
+            key = f"{strategy}|{symbol}|{interval}"
+            frame = self.result["trade_frames"].get(key)
+            if trades == 0:
+                self.assertIsNone(frame, f"{key} claims no trades but has a trade frame")
+            else:
+                self.assertIsNotNone(frame, f"{key} has {trades} trades but no trade frame")
+                self.assertEqual(len(frame), trades)
+                # TEST-split provenance is explicit in the artifact.
+                self.assertIn("era", frame.columns)
+                self.assertEqual(set(frame["strategy"].unique()), {strategy})
+                self.assertEqual(set(frame["symbol"].unique()), {symbol})
+
+    def test_trade_frames_carry_audit_columns(self) -> None:
+        frames = [f for f in self.result["trade_frames"].values() if len(f) > 0]
+        if not frames:
+            self.skipTest("synthetic run produced no trades")
+        sample = frames[0]
+        for column in ("decision_time", "exit_time", "direction", "fill_price", "exit_price",
+                       "gross_return", "bars_held"):
+            self.assertIn(column, sample.columns)
+
 
 if __name__ == "__main__":
     unittest.main()

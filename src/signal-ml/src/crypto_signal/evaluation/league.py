@@ -158,6 +158,8 @@ def run_league(
     """
     costs = costs or BracketCosts(fee_rate=0.0010, slippage_rate=0.0005)
     rows: list[dict[str, Any]] = []
+    # T4.2: pooled TEST-split trade frames per (strategy, symbol, interval) for CSV export.
+    trade_frames: dict[str, pd.DataFrame] = {}
     partial_path: Path | None = partial_path_override
     for name in strategy_names:
         strategy = STRATEGIES[name]
@@ -175,6 +177,7 @@ def run_league(
             train_summary = _era_metrics(_era_trades(train_decisions, interval, max_horizon, costs), train_metrics)
 
             test_rows: list[dict[str, Any]] = []
+            pooled_trades: list[pd.DataFrame] = []
             for era_index, era in enumerate(tests):
                 era_decisions = evaluate(era)
                 era_trades, era_metrics = run_bracket_backtest(
@@ -183,6 +186,9 @@ def run_league(
                 summary = _era_metrics(era_trades, era_metrics)
                 summary["era"] = era_index
                 test_rows.append(summary)
+                if not era_trades.empty:
+                    era_trades = era_trades.assign(era=era_index)
+                    pooled_trades.append(era_trades)
 
             # The league number is the *pooled* test split — every test era, not the best one.
             pooled = _pool_test(test_rows)
@@ -197,6 +203,15 @@ def run_league(
                     "test_eras": test_rows,
                 }
             )
+            # Keep the pooled TEST-split trades for T4.2 artifacts — the summary rows say how
+            # many, these say what actually happened. Train-split trades stay out of the
+            # exported set: the league's honesty rule is TEST-only in the summary, and the
+            # same rule keeps the audit trail one-sided.
+            if pooled_trades:
+                trades_frame = pd.concat(pooled_trades, axis=0, ignore_index=True)
+                trades_frame.insert(0, "symbol", symbol)
+                trades_frame.insert(0, "strategy", name)
+                trade_frames[f"{name}|{symbol}|{interval}"] = trades_frame
             if partial_path is not None:
                 _flush_partial(partial_path, rows)
 
@@ -208,6 +223,7 @@ def run_league(
     )
     return {
         "rows": rows,
+        "trade_frames": trade_frames,
         "max_horizon": max_horizon,
         "fee_rate": costs.fee_rate,
         "slippage_rate": costs.slippage_rate,
