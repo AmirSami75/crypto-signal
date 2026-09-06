@@ -136,6 +136,8 @@ public class BotController(
                 EstimatedNotional = bot.QuoteNotionalPerTrade,
                 EstimatedMargin = bot.Leverage > 0 ? bot.QuoteNotionalPerTrade / bot.Leverage : 0m,
                 CadenceSeconds = bot.CadenceSeconds,
+                Kind = bot.Kind,
+                StrategyKey = bot.StrategyKey,
                 LastTickAt = bot.LastTickAt,
                 LastEvaluatedCandleOpenTime = bot.LastEvaluatedCandleOpenTime,
                 FaultedAt = bot.FaultedAt,
@@ -193,6 +195,8 @@ public class BotController(
             MinimumConfidence = bot.MinimumConfidence,
             MaxHoldingPeriods = bot.MaxHoldingPeriods,
             CadenceSeconds = bot.CadenceSeconds,
+            Kind = bot.Kind,
+            StrategyKey = bot.StrategyKey,
             Status = bot.Status,
             StatusReason = bot.StatusReason,
             FaultedAt = bot.FaultedAt,
@@ -255,6 +259,10 @@ public class BotController(
                 ? null
                 : dto.ExpectedModelVersion.Trim(),
             ExchangeConnectionId = dto.ExchangeConnectionId,
+            Kind = dto.Kind,
+            StrategyKey = string.IsNullOrWhiteSpace(dto.StrategyKey)
+                ? null
+                : dto.StrategyKey.Trim().ToLowerInvariant(),
 
             // Never Active on creation, whatever the caller sent. Starting is its own permission and its
             // own audited action; a bot that could be born running would bypass both.
@@ -326,6 +334,10 @@ public class BotController(
             ? null
             : dto.ExpectedModelVersion.Trim();
         bot.ExchangeConnectionId = dto.ExchangeConnectionId;
+        bot.Kind = dto.Kind;
+        bot.StrategyKey = string.IsNullOrWhiteSpace(dto.StrategyKey)
+            ? null
+            : dto.StrategyKey.Trim().ToLowerInvariant();
 
         await bots.UpdateAsync(bot, saveNow: true, ct);
         await Record(bot, BotAuditEventType.ConfigurationChanged, "تنظیمات ربات ویرایش شد", ct);

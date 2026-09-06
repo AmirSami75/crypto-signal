@@ -44,7 +44,9 @@ import type {
   UserFilters,
   UserInput,
   MlTrainingStatus,
-, ScannerSignal , ScannerFilters } from './apiTypes'
+  ScannerSignal,
+  ScannerFilters
+} from './apiTypes'
 
 /**
  * The single place that talks to the API.
@@ -210,9 +212,9 @@ function normalise(body: unknown, httpStatus: number): Normalised {
   const details =
     !ok && message.includes(VALIDATION_SEPARATOR)
       ? message
-          .split(VALIDATION_SEPARATOR)
-          .map((part) => part.trim())
-          .filter(Boolean)
+        .split(VALIDATION_SEPARATOR)
+        .map((part) => part.trim())
+        .filter(Boolean)
       : []
 
   return {
@@ -261,20 +263,20 @@ function clientHints(): Record<string, string> {
 
   const os =
     /Windows NT/.test(ua) ? 'Windows'
-    : /Android/.test(ua) ? 'Android'
-    : /iPhone|iPad|iPod/.test(ua) ? 'iOS'
-    : /Mac OS X/.test(ua) ? 'macOS'
-    : /Linux/.test(ua) ? 'Linux'
-    : 'Unknown'
+      : /Android/.test(ua) ? 'Android'
+        : /iPhone|iPad|iPod/.test(ua) ? 'iOS'
+          : /Mac OS X/.test(ua) ? 'macOS'
+            : /Linux/.test(ua) ? 'Linux'
+              : 'Unknown'
 
   // Order matters: Edge and Chrome both claim to be Chrome, and Chrome claims to be Safari.
   const browser =
     /Edg\//.test(ua) ? 'Edge'
-    : /OPR\//.test(ua) ? 'Opera'
-    : /Firefox\//.test(ua) ? 'Firefox'
-    : /Chrome\//.test(ua) ? 'Chrome'
-    : /Safari\//.test(ua) ? 'Safari'
-    : 'Unknown'
+      : /OPR\//.test(ua) ? 'Opera'
+        : /Firefox\//.test(ua) ? 'Firefox'
+          : /Chrome\//.test(ua) ? 'Chrome'
+            : /Safari\//.test(ua) ? 'Safari'
+              : 'Unknown'
 
   return { 'X-ClientOS': os, 'X-ClientBrowser': browser }
 }

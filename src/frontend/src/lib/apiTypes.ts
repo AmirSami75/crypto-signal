@@ -493,6 +493,8 @@ export type ExchangeConnectionInput = {
   apiSecret: string
 }
 
+export type BotKindName = 'Model' | 'Scanner'
+
 export type BotInput = {
   name: string
   description?: string | null
@@ -518,6 +520,10 @@ export type BotInput = {
   maxSlippageBps: number
   expectedModelVersion?: string | null
   exchangeConnectionId?: string | null
+  /** Which trader this bot is: Model (default, ML advisor) or Scanner (strategy-league claims). */
+  kind?: BotKindName
+  /** Strategy-zoo key for Scanner-kind bots, e.g. "rsi". */
+  strategyKey?: string | null
 }
 
 export type BotSummary = {
@@ -537,6 +543,7 @@ export type BotSummary = {
   estimatedNotional: number
   estimatedMargin: number
   cadenceSeconds: number
+  kind: BotKindName
   lastTickAt: string | null
   lastEvaluatedCandleOpenTime: string | null
   faultedAt: string | null
@@ -606,6 +613,7 @@ export type BotDetail = {
   minimumConfidence: number
   maxHoldingPeriods: number
   cadenceSeconds: number
+  kind: BotKindName
   status: BotStatusName
   statusReason: string | null
   faultedAt: string | null
