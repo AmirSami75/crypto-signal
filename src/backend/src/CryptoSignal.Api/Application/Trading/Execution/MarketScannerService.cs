@@ -30,9 +30,6 @@ namespace CryptoSignal.Api.Application.Trading.Execution;
 /// </remarks>
 public sealed class MarketScannerService(
     IServiceScopeFactory scopeFactory,
-    IBinanceFuturesTickerSource tickerSource,
-    IMlServiceClient engine,
-    IMarketDataSourceResolver marketData,
     IOptions<ScannerOptions> options,
     ILogger<MarketScannerService> logger) : BackgroundService
 {
@@ -84,6 +81,13 @@ public sealed class MarketScannerService(
     {
         var settings = options.Value;
         var scanId = Guid.CreateVersion7();
+
+        // Scoped services (repos, ticker source, engine client) resolve per pass inside one scope.
+        using var scope = scopeFactory.CreateScope();
+        var tickerSource = scope.ServiceProvider.GetRequiredService<IBinanceFuturesTickerSource>();
+        var engine = scope.ServiceProvider.GetRequiredService<IMlServiceClient>();
+        var marketData = scope.ServiceProvider.GetRequiredService<IMarketDataSourceResolver>();
+        var signalsRepo = scope.ServiceProvider.GetRequiredService<IRepo<ScannerSignal>>();
 
         var tickers = await tickerSource.GetTickersAsync(cancellationToken);
         if (tickers.Count == 0)
@@ -139,9 +143,6 @@ public sealed class MarketScannerService(
         var tickerBySymbol = topSymbols.ToDictionary(t => t.Symbol, t => t);
         var atrBySymbol = windows.ToDictionary(
             w => w.Ticker.Symbol, w => AverageTrueRange(w.Candles, 14));
-
-        using var scope = scopeFactory.CreateScope();
-        var signalsRepo = scope.ServiceProvider.GetRequiredService<IRepo<ScannerSignal>>();
 
         var recorded = 0;
         foreach (var result in results)

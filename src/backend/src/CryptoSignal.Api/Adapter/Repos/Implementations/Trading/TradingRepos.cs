@@ -38,6 +38,9 @@ public sealed class RiskDecisionRepo(CryptoSignalDbContext ctx) : Repo<RiskDecis
 /// <inheritdoc cref="TradingBotRepo"/>
 public sealed class ExchangeOrderRepo(CryptoSignalDbContext ctx) : Repo<ExchangeOrder>(ctx);
 
+/// <summary>Scanner proposals; see <see cref="ScannerSignal"/> and the market scanner.</summary>
+public sealed class ScannerSignalRepo(CryptoSignalDbContext ctx) : Repo<ScannerSignal>(ctx);
+
 /// <inheritdoc cref="TradingBotRepo"/>
 public sealed class OrderFillRepo(CryptoSignalDbContext ctx) : Repo<OrderFill>(ctx);
 
