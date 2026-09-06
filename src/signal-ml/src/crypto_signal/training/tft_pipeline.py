@@ -262,8 +262,8 @@ def train_tft_bundle(config: AppConfig, refresh: bool = False) -> dict[str, Any]
         mtf_higher_interval=config.features.mtf_higher_interval,
     )
 
-    # Build sequence windows + labels.
-    X, y, times, feature_columns = _build_tft_sequences(dataset, tft_cfg, config)
+    # Build sequence windows + labels + the continuous horizon-return target.
+    X, y, horizon_returns, times, feature_columns = _build_tft_sequences(dataset, tft_cfg, config)
 
     logger.info(
         "TFT sequences built | windows=%s | features=%s | classes=%s",
@@ -275,12 +275,13 @@ def train_tft_bundle(config: AppConfig, refresh: bool = False) -> dict[str, Any]
     development, holdout = _chronological_split(
         times, config.barrier.holdout_fraction, config.barrier.max_horizon
     )
-    X_dev, y_dev = X[development], y[development]
+    X_dev, y_dev, r_dev = X[development], y[development], horizon_returns[development]
     X_hold, y_hold, t_hold = X[holdout], y[holdout], times[holdout]
 
-    # Train the TFT: quantile regression over horizon returns.
+    # Train the TFT: quantile regression over the REALIZED horizon return (continuous),
+    # not the 3-point label — v2, so the bridge receives a genuine return CDF.
     quantile_forecasts = _train_tft_and_forecast(
-        X_dev, y_dev, X_hold, tft_cfg, config,
+        X_dev, r_dev, X_hold, tft_cfg, config,
     )
 
     # Translate quantile forecasts -> barrier probabilities via the honest bridge.
@@ -405,11 +406,13 @@ def _build_tft_sequences(
     dataset: Any,
     tft_cfg: TftConfig,
     config: AppConfig,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, tuple[str, ...]]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, tuple[str, ...]]:
     """Build (N, lookback, n_features) windows from the barrier dataset.
 
-    Mirrors `build_lstm_sequences` but also collects the per-window ATR and
+    Mirrors `build_lstm_sequences` but also collects the per-window realized
+    horizon return (the continuous quantile target) and the per-window ATR /
     entry close so the bridge can convert barrier distances to return space.
+    Returns `(X, y, horizon_returns, times, feature_columns)`.
     """
     lookback = tft_cfg.lookback
     frame = dataset.frame
@@ -423,6 +426,7 @@ def _build_tft_sequences(
 
     windows: list[np.ndarray] = []
     labels: list[int] = []
+    horizon_returns: list[float] = []
     times: list[Any] = []
 
     feat_arr = frame[list(feature_columns)].to_numpy(dtype=float)
@@ -453,16 +457,19 @@ def _build_tft_sequences(
         )
         windows.append(window)
 
-        # Derive the barrier class from the realized horizon return.
+        # Realized horizon return (direction-adjusted) — the continuous target for the
+        # TFT's quantile regression, and the source of the discrete label below.
         horizon_end = min(i + config.barrier.max_horizon, len(frame) - 1)
         if horizon_end <= i:
             # No forward window to resolve — this is a timeout by construction
             # only if the candle has enough forward data; otherwise skip.
+            windows.pop()
             continue
         horizon_close = float(close_col[horizon_end])
         realized_return = (horizon_close - entry_close) / entry_close * float(directions[i])
         tp_return = tp_atr * entry_atr / entry_close
         sl_return = sl_atr * entry_atr / entry_close
+        horizon_returns.append(realized_return)
 
         if realized_return >= tp_return:
             labels.append(1)
@@ -477,9 +484,10 @@ def _build_tft_sequences(
 
     X = np.stack(windows, axis=0)
     y = np.array(labels, dtype=int)
+    r = np.array(horizon_returns, dtype=float)
     times_arr = np.asarray(times)
     all_cols = tuple(list(feature_columns) + list(BARRIER_FEATURE_COLUMNS)[:4])
-    return X, y, times_arr, all_cols
+    return X, y, r, times_arr, all_cols
 
 
 def _window_atrs(
@@ -534,16 +542,17 @@ def _close_at(
 
 def _train_tft_and_forecast(
     X_dev: np.ndarray,
-    y_dev: np.ndarray,
+    target_dev: np.ndarray,
     X_hold: np.ndarray,
     tft_cfg: TftConfig,
     config: AppConfig,
 ) -> np.ndarray:
     """Train a TFT on dev sequences, return quantile forecasts on holdout.
 
-    Uses pytorch-forecasting's TemporalFusionTransformer for quantile
-    regression over the horizon return. Returns ``(n_holdout, n_quantiles)``
-    quantile forecasts — the CDF samples the bridge consumes.
+    ``target_dev`` is the per-window realized horizon return (continuous) — the
+    quantile heads learn its actual distribution, so the bridge receives a real
+    CDF rather than a 3-point proxy. Returns ``(n_holdout, n_quantiles)`` in
+    RETURN space, ready for the bridge.
 
     The TFT and Lightning objects are NOT persisted; only the quantile
     forecasts are returned and packaged into the TftBundle.
@@ -568,7 +577,9 @@ def _train_tft_and_forecast(
             row: dict[str, Any] = {"series": series_id, "time_idx": t}
             for j in range(n_features):
                 row[f"feat_{j}"] = float(X_dev[i, t, j])
-            row["target"] = float(y_dev[i] + 1)  # map {-1,0,1} -> {0,1,2}
+            # v2 target: the realized horizon return itself (continuous). The final row
+            # carries the value the quantile heads learn to predict.
+            row["target"] = float(target_dev[i])
             records.append(row)
 
     training_df = pd.DataFrame(records)
@@ -597,7 +608,9 @@ def _train_tft_and_forecast(
             row = {"series": series_id, "time_idx": t}
             for j in range(n_features):
                 row[f"feat_{j}"] = float(X_hold[i, t, j])
-            row["target"] = float(y_dev[i % len(y_dev)] + 1)
+            # Placeholder target: predict() never reads it, but the column must exist
+            # and carry the training target's dtype/scale for PF's validation dataset.
+            row["target"] = float(target_dev[i % len(target_dev)])
             hold_records.append(row)
     hold_df = pd.DataFrame(hold_records)
     validation = TimeSeriesDataSet.from_dataset(training, hold_df, stop_randomization=True)
@@ -659,21 +672,8 @@ def _train_tft_and_forecast(
                        usable, n_hold)
         quantile_forecasts[usable:, :] = np.median(quantile_forecasts[:usable, :], axis=0)
 
-    # The quantiles are in the label space (0,1,2). Convert back to returns.
-    # Quantile q=0.5 maps to the median label; we convert label -> return using
-    # the barrier geometry: label -1 -> -SL_return, +1 -> +TP_return, 0 -> 0.
-    # But TFT predicts continuous quantiles, not discrete labels, so we map the
-    # quantile value through the return scale directly.
-    tp_return = config.barrier.backtest_take_profit_atr * 0.01
-    sl_return = config.barrier.backtest_stop_loss_atr * 0.01
-    # The TFT's target was label+1 in {0,1,2}; quantile prediction in that space
-    # maps to: 0 -> -sl_return, 1 -> 0, 2 -> +tp_return. Linearly interpolate.
-    for qi, q in enumerate(tft_cfg.quantiles):
-        raw = quantile_forecasts[:, qi]
-        # Map [0, 2] target space to [-sl_return, +tp_return] return space.
-        quantile_forecasts[:, qi] = raw * (tp_return + sl_return) / 2.0 - sl_return
-    # Quantile crossing: NN quantile heads can invert on individual rows. Project each row onto
-    # the nearest monotone curve (running max) rather than feed the bridge an impossible CDF.
+    # v2: predictions are already in RETURN space (the target was the realized
+    # horizon return itself). Only the monotonicity guard applies.
     quantile_forecasts = np.maximum.accumulate(quantile_forecasts, axis=1)
 
     return quantile_forecasts
