@@ -146,12 +146,17 @@ Operationalize as: at serving time, when the engine reports confidence ≥0.60, 
 | Challenger | Holdout log-loss | Net (TEST) | Gate | Notes |
 |---|---|---|---|---|
 | MTF (H4 context, 45 feat) | 0.7968 (incumbent 0.7959) | −0.428 ATR (113 tr, vs −0.122) | **REJECT** | H4 confluence adds no edge at 1h; archived `rejected/` |
-| TFT (quantile→barrier bridge) | 4.188 (BTC smoke, 2y) | −26.5% vs B&H +12.0% | **REJECT** | Label-space proxy target {0,1,2} is weakly informative; quantile CDF of a 3-point target is nearly flat |
+| TFT v1 (label-proxy target) | 4.188 (BTC smoke, 2y) | −26.5% vs B&H +12.0% | **REJECT** | Label-space proxy target {0,1,2} is weakly informative; quantile CDF of a 3-point target is nearly flat |
+| TFT v2 (continuous-return target) | 4.662 (BTC smoke, 2y) | −38.6% vs B&H +12.0% | **REJECT** | With a genuine return CDF the bridge prices bets directly and the TFT still holds no edge on these features |
 
-**Next levers on the TFT, in order:**
-1. **Continuous-return target** — regress the horizon return directly (quantiles of a real
-   distribution), not the 3-point barrier label. The bridge then consumes a real CDF.
-2. **Decoder horizon > 1** — let the TFT quantify path uncertainty over several bars instead of one.
-3. **Encoder shortening** — 24 bars × 46 features may be past the attention horizon's useful span.
+**TFT v2 verdict closes the honest loop:** the challenger loses with a real distribution as
+target, so the earlier v1 failure was not (only) a target artifact — the model class itself adds
+nothing on the current 46-feature set at 1h. Remaining TFT levers, in expected-value order:
+1. **Feature set swap** — feed the TFT the scanner's richer covariates (funding, OI, cross-symbol
+   context) rather than the same 38 scale-free features the tree model uses; the attention
+   mechanism only pays off if the covariates carry cross-sectional information.
+2. **Decoder horizon > 1** — quantify path uncertainty over several bars instead of one.
+3. If both fail: archive the TFT track and concentrate on execution-side levers (fees, brackets)
+   per the Operational levers section — the edge problem is not model-class-shaped.
 
-The bridge itself (`pf_bridge`) is validated and stays; only the target feeding it changes.
+The bridge itself (`pf_bridge`) is validated and stays; any future quantile model plugs into it.
