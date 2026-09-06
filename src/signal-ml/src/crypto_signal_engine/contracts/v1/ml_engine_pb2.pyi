@@ -433,3 +433,59 @@ class GetTrainingStatusResponse(_message.Message):
     online_learning_enabled: bool
     markets: _containers.RepeatedCompositeFieldContainer[TrainingStatus]
     def __init__(self, request_id: _Optional[str] = ..., online_learning_enabled: _Optional[bool] = ..., markets: _Optional[_Iterable[_Union[TrainingStatus, _Mapping]]] = ...) -> None: ...
+
+class ScanSymbolRequest(_message.Message):
+    __slots__ = ("symbol", "candles")
+    SYMBOL_FIELD_NUMBER: _ClassVar[int]
+    CANDLES_FIELD_NUMBER: _ClassVar[int]
+    symbol: str
+    candles: _containers.RepeatedCompositeFieldContainer[Candle]
+    def __init__(self, symbol: _Optional[str] = ..., candles: _Optional[_Iterable[_Union[Candle, _Mapping]]] = ...) -> None: ...
+
+class ScanStrategySpec(_message.Message):
+    __slots__ = ("name", "take_profit_atr", "stop_loss_atr")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    TAKE_PROFIT_ATR_FIELD_NUMBER: _ClassVar[int]
+    STOP_LOSS_ATR_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    take_profit_atr: float
+    stop_loss_atr: float
+    def __init__(self, name: _Optional[str] = ..., take_profit_atr: _Optional[float] = ..., stop_loss_atr: _Optional[float] = ...) -> None: ...
+
+class ScanSymbolResult(_message.Message):
+    __slots__ = ("symbol", "strategy", "direction", "confidence", "reason", "warning")
+    SYMBOL_FIELD_NUMBER: _ClassVar[int]
+    STRATEGY_FIELD_NUMBER: _ClassVar[int]
+    DIRECTION_FIELD_NUMBER: _ClassVar[int]
+    CONFIDENCE_FIELD_NUMBER: _ClassVar[int]
+    REASON_FIELD_NUMBER: _ClassVar[int]
+    WARNING_FIELD_NUMBER: _ClassVar[int]
+    symbol: str
+    strategy: str
+    direction: str
+    confidence: float
+    reason: str
+    warning: str
+    def __init__(self, symbol: _Optional[str] = ..., strategy: _Optional[str] = ..., direction: _Optional[str] = ..., confidence: _Optional[float] = ..., reason: _Optional[str] = ..., warning: _Optional[str] = ...) -> None: ...
+
+class ScanSymbolsRequest(_message.Message):
+    __slots__ = ("request_id", "symbols", "strategies", "interval")
+    REQUEST_ID_FIELD_NUMBER: _ClassVar[int]
+    SYMBOLS_FIELD_NUMBER: _ClassVar[int]
+    STRATEGIES_FIELD_NUMBER: _ClassVar[int]
+    INTERVAL_FIELD_NUMBER: _ClassVar[int]
+    request_id: str
+    symbols: _containers.RepeatedCompositeFieldContainer[ScanSymbolRequest]
+    strategies: _containers.RepeatedCompositeFieldContainer[ScanStrategySpec]
+    interval: str
+    def __init__(self, request_id: _Optional[str] = ..., symbols: _Optional[_Iterable[_Union[ScanSymbolRequest, _Mapping]]] = ..., strategies: _Optional[_Iterable[_Union[ScanStrategySpec, _Mapping]]] = ..., interval: _Optional[str] = ...) -> None: ...
+
+class ScanSymbolsResponse(_message.Message):
+    __slots__ = ("request_id", "results", "warning")
+    REQUEST_ID_FIELD_NUMBER: _ClassVar[int]
+    RESULTS_FIELD_NUMBER: _ClassVar[int]
+    WARNING_FIELD_NUMBER: _ClassVar[int]
+    request_id: str
+    results: _containers.RepeatedCompositeFieldContainer[ScanSymbolResult]
+    warning: str
+    def __init__(self, request_id: _Optional[str] = ..., results: _Optional[_Iterable[_Union[ScanSymbolResult, _Mapping]]] = ..., warning: _Optional[str] = ...) -> None: ...

@@ -358,6 +358,31 @@ def training_status_to_proto(
     )
 
 
+# ── market scan ─────────────────────────────────────────────────────────────
+
+def scan_symbols_response_to_proto(
+    request_id: str,
+    results,
+    warning: str = "",
+) -> pb.ScanSymbolsResponse:
+    """Build the ScanSymbolsResponse from a list of ScanResult dataclasses."""
+    return pb.ScanSymbolsResponse(
+        request_id=request_id,
+        results=[
+            pb.ScanSymbolResult(
+                symbol=r.symbol,
+                strategy=r.strategy,
+                direction=r.direction,
+                confidence=r.confidence,
+                reason=r.reason,
+                warning=r.warning or "",
+            )
+            for r in results
+        ],
+        warning=warning,
+    )
+
+
 __all__ = [
     "bot_decision_request_from_proto",
     "bot_decision_to_proto",
@@ -375,4 +400,5 @@ __all__ = [
     "trade_direction_name",
     "trade_outcome_to_proto",
     "training_status_to_proto",
+    "scan_symbols_response_to_proto",
 ]

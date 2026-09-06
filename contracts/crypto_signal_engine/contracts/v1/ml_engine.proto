@@ -40,6 +40,11 @@ service MlEngineService {
 
   // Online-learning status: sample counts per market, last training run, challenger state.
   rpc GetTrainingStatus(GetTrainingStatusRequest) returns (GetTrainingStatusResponse);
+
+  // Batch market scan: evaluate named strategies on a batch of symbol candle windows.
+  // The scanner (Phase 3) calls this; the engine runs each strategy as-is (no I/O, no state)
+  // and returns any Signal per symbol. Proposals, never orders.
+  rpc ScanSymbols(ScanSymbolsRequest) returns (ScanSymbolsResponse);
 }
 
 // ─────────────────────────────── shared value types ───────────────────────────────
@@ -474,4 +479,46 @@ message GetTrainingStatusResponse {
   string request_id = 1;
   bool online_learning_enabled = 2;
   repeated TrainingStatus markets = 3;
+}
+
+// ─────────────────────────────── market scan ───────────────────────────────
+// A single symbol's candle window, identified by symbol so the response can
+// pair results back to symbols without positional assumptions.
+
+message ScanSymbolRequest {
+  string symbol = 1;
+  repeated Candle candles = 2;
+}
+
+message ScanStrategySpec {
+  // Strategy name as registered in STRATEGIES (e.g. "rsi", "bollinger", ...).
+  string name = 1;
+  // ATR-based bracket distances (the engine's canonical bracket language).
+  double take_profit_atr = 2;
+  double stop_loss_atr = 3;
+}
+
+message ScanSymbolResult {
+  string symbol = 1;
+  string strategy = 2;
+
+  // "LONG" | "SHORT" | "" (empty means no signal from this strategy).
+  string direction = 3;
+
+  double confidence = 4;  // 1.0 for indicator strategies (deterministic).
+  string reason = 5;
+  string warning = 6;
+}
+
+message ScanSymbolsRequest {
+  string request_id = 1;
+  repeated ScanSymbolRequest symbols = 2;
+  repeated ScanStrategySpec strategies = 3;
+  string interval = 4;
+}
+
+message ScanSymbolsResponse {
+  string request_id = 1;
+  repeated ScanSymbolResult results = 2;
+  string warning = 3;  // Non-fatal: e.g. "N symbols skipped for insufficient candles"
 }

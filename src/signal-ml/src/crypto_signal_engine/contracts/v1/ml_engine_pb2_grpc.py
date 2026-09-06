@@ -82,6 +82,11 @@ class MlEngineServiceStub:
                 request_serializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetTrainingStatusRequest.SerializeToString,
                 response_deserializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetTrainingStatusResponse.FromString,
                 _registered_method=True)
+        self.ScanSymbols = channel.unary_unary(
+                '/crypto_signal.ml.v1.MlEngineService/ScanSymbols',
+                request_serializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.ScanSymbolsRequest.SerializeToString,
+                response_deserializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.ScanSymbolsResponse.FromString,
+                _registered_method=True)
 
 
 class MlEngineServiceServicer:
@@ -146,6 +151,15 @@ class MlEngineServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ScanSymbols(self, request, context):
+        """Batch market scan: evaluate named strategies on a batch of symbol candle windows.
+        The scanner (Phase 3) calls this; the engine runs each strategy as-is (no I/O, no state)
+        and returns any Signal per symbol. Proposals, never orders.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_MlEngineServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -178,6 +192,11 @@ def add_MlEngineServiceServicer_to_server(servicer, server):
                     servicer.GetTrainingStatus,
                     request_deserializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetTrainingStatusRequest.FromString,
                     response_serializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetTrainingStatusResponse.SerializeToString,
+            ),
+            'ScanSymbols': grpc.unary_unary_rpc_method_handler(
+                    servicer.ScanSymbols,
+                    request_deserializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.ScanSymbolsRequest.FromString,
+                    response_serializer=crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.ScanSymbolsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -360,6 +379,33 @@ class MlEngineService:
             '/crypto_signal.ml.v1.MlEngineService/GetTrainingStatus',
             crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetTrainingStatusRequest.SerializeToString,
             crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.GetTrainingStatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ScanSymbols(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/crypto_signal.ml.v1.MlEngineService/ScanSymbols',
+            crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.ScanSymbolsRequest.SerializeToString,
+            crypto__signal__engine_dot_contracts_dot_v1_dot_ml__engine__pb2.ScanSymbolsResponse.FromString,
             options,
             channel_credentials,
             insecure,

@@ -192,6 +192,36 @@ class MlEngineServicer(ml_engine_pb2_grpc.MlEngineServiceServicer):
 
         return self._dispatch("GetTrainingStatus", request_id, context, work)
 
+    def ScanSymbols(self, request, context):
+        request_id = _request_id(request.request_id)
+
+        def work():
+            from crypto_signal_engine.application.scan_service import (
+                ScanRequest,
+                ScanService,
+            )
+            svc = ScanService()
+            symbols = tuple(
+                (msg.symbol, tuple(mappers.candles_from_proto(msg.candles)))
+                for msg in request.symbols
+            )
+            strategies = tuple(
+                (spec.name, spec.take_profit_atr, spec.stop_loss_atr)
+                for spec in request.strategies
+            )
+            parsed = ScanRequest(
+                request_id=request_id,
+                interval=request.interval,
+                symbols=symbols,
+                strategies=strategies,
+            )
+            result = svc.scan(parsed)
+            return mappers.scan_symbols_response_to_proto(
+                result.request_id, result.results, result.warning
+            )
+
+        return self._dispatch("ScanSymbols", request_id, context, work)
+
     # ── error handling ────────────────────────────────────────────────────────────
 
     def _dispatch(
