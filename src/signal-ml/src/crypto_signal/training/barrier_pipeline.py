@@ -48,6 +48,7 @@ from ..data import fetch_historical_ohlcv, load_ohlcv, save_ohlcv, validate_ohlc
 from ..domain import BarrierPair, Direction, OutcomeProbabilities, expected_value, percent_from_atr
 from ..evaluation import BracketCosts, run_bracket_backtest
 from ..features import WARMUP_COLUMNS, build_features
+from ..features.mtf import attach_higher_tf_features
 from ..labeling import (
     BARRIER_FEATURE_COLUMNS,
     BarrierDataset,
@@ -150,6 +151,51 @@ def download_barrier_data(config: AppConfig, refresh: bool = False) -> dict[str,
     return frames
 
 
+def download_mtf_context_frames(
+    config: AppConfig, refresh: bool = False
+) -> dict[str, pd.DataFrame]:
+    """Higher-timeframe candles for every pooled symbol, when `mtf_context` is on.
+
+    Uses the same disk-or-download convention as `download_barrier_data`: a cached
+    `<SYMBOL>_<HIGHER_INTERVAL>.csv` is loaded when fresh enough, otherwise fetched through the
+    configured proxy. A symbol whose higher-TF frame cannot be produced is dropped with a warning
+    rather than failing the run — the labeller falls back to plain features for that symbol, and a
+    pooled bundle trained on a subset of symbols carrying MTF columns would be inconsistent.
+    """
+    if not config.features.mtf_context:
+        return {}
+
+    higher_interval = config.features.mtf_higher_interval
+    frames: dict[str, pd.DataFrame] = {}
+    for symbol in config.market.symbols:
+        path = config.market.data_dir / f"{symbol.upper()}_{higher_interval}.csv"
+        try:
+            if refresh or not path.exists():
+                logger.info(
+                    "Downloading MTF context | symbol=%s | interval=%s",
+                    symbol, higher_interval,
+                )
+                frame = fetch_historical_ohlcv(
+                    symbol,
+                    higher_interval,
+                    config.market.start,
+                    end=config.market.end,
+                    proxy_url=config.network.proxy_url,
+                    timeout=config.network.timeout_seconds,
+                )
+                save_ohlcv(frame, path)
+            else:
+                frame = load_ohlcv(path, higher_interval)
+        except Exception:
+            logger.exception(
+                "MTF context unavailable | symbol=%s | interval=%s | training without it",
+                symbol, higher_interval,
+            )
+            continue
+        frames[symbol] = frame
+    return frames
+
+
 def download_barrier_candles(config: AppConfig, refresh: bool = False) -> dict[str, Any]:
     """`download_barrier_data`, reported rather than returned — the CLI's `download` command.
 
@@ -191,11 +237,21 @@ def train_barrier_model(config: AppConfig, refresh: bool = False) -> dict[str, A
     )
     frames = download_barrier_data(config, refresh=refresh)
 
+    # Higher-TF context frames for the MTF confluence features. Empty when mtf_context is off;
+    # symbols missing their higher-TF frame fall back to plain features (logged by the downloader).
+    mtf_frames = download_mtf_context_frames(config, refresh=refresh)
+    if mtf_frames:
+        logger.info(
+            "MTF context frames ready | symbols=%s | interval=%s",
+            ",".join(sorted(mtf_frames)), config.features.mtf_higher_interval,
+        )
+
     pooled = _train_one(
         stem=f"{POOLED_STEM}_{config.market.interval}",
         frames=frames,
         config=config,
         is_pooled=True,
+        mtf_frames=mtf_frames,
     )
     bundles = [pooled]
 
@@ -210,6 +266,7 @@ def train_barrier_model(config: AppConfig, refresh: bool = False) -> dict[str, A
                     frames={symbol: frames[symbol]},
                     config=config,
                     is_pooled=False,
+                    mtf_frames={symbol: mtf_frames[symbol]} if symbol in mtf_frames else None,
                 )
             )
         except Exception:
@@ -482,6 +539,7 @@ def _train_one(
     frames: dict[str, pd.DataFrame],
     config: AppConfig,
     is_pooled: bool,
+    mtf_frames: dict[str, pd.DataFrame] | None = None,
 ) -> TrainedBundle:
     """Label, split, validate, fit, measure and persist one bundle."""
     barrier = config.barrier
@@ -497,6 +555,7 @@ def _train_one(
         atr_window=barrier.atr_window,
         mtf_context=config.features.mtf_context,
         mtf_higher_interval=config.features.mtf_higher_interval,
+        mtf_frames=mtf_frames,
     )
     rows, candles = len(dataset), dataset.candle_count
     logger.info(
@@ -560,6 +619,7 @@ def _train_one(
         holdout=holdout,
         frames=frames,
         config=config,
+        mtf_frames=mtf_frames,
     )
 
     path = config.output.model_dir / f"{stem}.joblib"
@@ -697,6 +757,7 @@ def _backtest_holdout(
     holdout: np.ndarray,
     frames: dict[str, pd.DataFrame],
     config: AppConfig,
+    mtf_frames: dict[str, pd.DataFrame] | None = None,
 ) -> dict[str, Any]:
     """What this model would have earned placing one fixed bracket over the holdout window.
 
@@ -732,6 +793,7 @@ def _backtest_holdout(
             pair=pair,
             dataset=dataset,
             config=config,
+            mtf_frame=mtf_frames.get(symbol) if mtf_frames else None,
         )
         if decisions.empty:
             logger.warning("Bracket backtest skipped | symbol=%s | no holdout candles in range", symbol)
@@ -768,6 +830,7 @@ def _decide_window(
     pair: BarrierPair,
     dataset: BarrierDataset,
     config: AppConfig,
+    mtf_frame: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Score every holdout candle of one symbol and turn the verdicts into a decisions frame.
 
@@ -778,6 +841,19 @@ def _decide_window(
     keeps the two from drifting apart.
     """
     features = build_features(raw, atr_window=config.barrier.atr_window)
+    # MTF context: when the model was trained with the higher-TF columns, the holdout backtest
+    # must rebuild them identically or `dataset.feature_columns` would reference columns the
+    # frame does not have. Same attach path as the labeller. Guarded with getattr because test
+    # configs build minimal namespaces that carry no [features] section at all.
+    if getattr(getattr(config, "features", None), "mtf_context", False) and mtf_frame is not None:
+        lower = raw.copy()
+        lower["timestamp"] = pd.to_datetime(lower["timestamp"], utc=True)
+        higher = mtf_frame.copy()
+        higher["timestamp"] = pd.to_datetime(higher["timestamp"], utc=True)
+        pre = frozenset(lower.columns)
+        attach_higher_tf_features(lower, higher)
+        for column in (c for c in lower.columns if c not in pre):
+            features.frame[column] = lower[column].to_numpy()
     # `features.frame` carries only feature columns — no timestamp and no OHLC — and shares `raw`'s index,
     # which is exactly how the labeller pairs the two. Rebuilding that positional join here rather than
     # merging on a timestamp column keeps the convention in one place; a merge on a column the feature

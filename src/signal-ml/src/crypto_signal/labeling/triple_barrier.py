@@ -529,11 +529,21 @@ def _label_one_symbol(
             higher_with_ts = higher_frame.copy()
             higher_with_ts["timestamp"] = pd.to_datetime(higher_with_ts["timestamp"], utc=True)
 
+            # Snapshot BEFORE attaching: `attach_higher_tf_features` adds its columns in place,
+            # so `enhanced` is this same frame — diffing after the call would always be empty.
+            base_columns = frozenset(raw_with_ts.columns)
             enhanced = attach_higher_tf_features(raw_with_ts, higher_with_ts)
             context_columns = tuple(
-                c for c in enhanced.columns if c not in raw_with_ts.columns
+                c for c in enhanced.columns if c not in base_columns
             )
-            context_features = enhanced[context_columns]
+            if not context_columns:
+                logger.warning(
+                    "MTF attach produced no context columns | symbol=%s | continuing without MTF",
+                    symbol,
+                )
+            context_features = (
+                enhanced[list(context_columns)] if context_columns else enhanced.iloc[0:0]
+            )
             for column in context_columns:
                 features.frame[column] = np.asarray(context_features[column])
             logger.info(
@@ -571,7 +581,6 @@ def _label_one_symbol(
         random_state=_symbol_seed(random_state, symbol),
     )
 
-    base = features.frame[list(features.columns)]
     timestamps = raw["timestamp"].to_numpy()
     variants: list[pd.DataFrame] = []
     shares: list[float] = []
