@@ -58,4 +58,7 @@ public enum BotAuditEventType
 
     /// <summary>An operator changed the bot's status or configuration.</summary>
     [Display(Name = "Configuration changed")] ConfigurationChanged = 15,
+
+    /// <summary>A scanner-kind bot claimed a scanner signal (atomically, one winner).</summary>
+    [Display(Name = "Scanner signal claimed")] ScannerSignalClaimed = 16,
 }

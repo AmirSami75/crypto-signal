@@ -40,6 +40,9 @@ public sealed class TradingBotCfg : BaseEntityTypeConfiguration<TradingBot>
         builder.Property(x => x.Venue).HasConversion<int>();
         builder.Property(x => x.OperatingMode).HasConversion<int>();
         builder.Property(x => x.Status).HasConversion<int>();
+        builder.Property(x => x.Kind).HasConversion<int>();
+        builder.Property(x => x.StrategyKey).HasMaxLength(60).IsUnicode(false);
+        builder.Property(x => x.SymbolsJson).HasMaxLength(2000).IsUnicode(false);
 
         #endregion
 

@@ -311,6 +311,28 @@ public sealed record MlTrainingStatus(
     bool OnlineLearningEnabled,
     IReadOnlyList<MlMarketTrainingStatus> Markets);
 
+/// <summary>One symbol's candle window for a market scan.</summary>
+public sealed record MlScanSymbol(
+    string Symbol,
+    IReadOnlyList<MlCandle> Candles);
+
+/// <summary>
+/// A strategy spec: which zoo strategy to run and the ATR-based bracket to attach to its signal.
+/// </summary>
+public sealed record MlScanStrategy(
+    string Name,
+    double TakeProfitAtr,
+    double StopLossAtr);
+
+/// <summary>One strategy's signal (or lack thereof) for one symbol.</summary>
+public sealed record MlScanResult(
+    string Symbol,
+    string Strategy,
+    string Direction,  // "LONG" | "SHORT" | ""
+    double Confidence,
+    string Reason,
+    string Warning);
+
 public sealed class MlServiceException(
     string errorCode,
     string message,

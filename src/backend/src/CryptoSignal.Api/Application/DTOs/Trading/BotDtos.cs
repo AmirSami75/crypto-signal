@@ -88,6 +88,12 @@ public sealed record BotInputDto
     /// model should stop rather than silently inherit another.
     /// </summary>
     public string? ExpectedModelVersion { get; init; }
+
+    /// <summary>Which trader this bot is (Model or Scanner). Default Model.</summary>
+    public BotKind Kind { get; init; } = BotKind.Model;
+
+    /// <summary>Strategy key from the zoo, used only by Scanner-kind bots.</summary>
+    public string? StrategyKey { get; init; }
 }
 
 /// <summary>Reason accompanying a lifecycle change. Required — an unexplained halt is not auditable.</summary>
@@ -180,6 +186,12 @@ public sealed record BotSummaryDto
     /// so both have to be shown or an operator sees "Active" and assumes it is trading.
     /// </summary>
     public bool IsBlockedByKillSwitch { get; init; }
+
+    /// <summary>Which trader this bot is (Model or Scanner). Default Model.</summary>
+    public BotKind Kind { get; init; } = BotKind.Model;
+
+    /// <summary>Strategy key from the zoo, used only by Scanner-kind bots.</summary>
+    public string? StrategyKey { get; init; }
 }
 
 /// <summary>A bot's full configuration, current status, lease and open positions.</summary>
@@ -235,6 +247,12 @@ public sealed record BotDetailDto
     public string? ExpectedModelVersion { get; init; }
 
     public Guid? ExchangeConnectionId { get; init; }
+
+    /// <summary>Which trader this bot is (Model or Scanner). Default Model.</summary>
+    public BotKind Kind { get; init; } = BotKind.Model;
+
+    /// <summary>Strategy key from the zoo, used only by Scanner-kind bots.</summary>
+    public string? StrategyKey { get; init; }
 
     public DateTime CreatedAt { get; init; }
     public DateTime? UpdatedAt { get; init; }

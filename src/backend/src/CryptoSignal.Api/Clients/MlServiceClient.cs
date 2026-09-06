@@ -415,4 +415,51 @@ public sealed class MlServiceClient(
     }
 
     private DateTime Deadline() => DateTime.UtcNow.AddSeconds(options.Value.DeadlineSeconds);
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<MlScanResult>> ScanSymbolsAsync(
+        IReadOnlyList<MlScanSymbol> symbols,
+        IReadOnlyList<MlScanStrategy> strategies,
+        string interval,
+        CancellationToken cancellationToken)
+    {
+        var grpcRequest = new ScanSymbolsRequest
+        {
+            RequestId = Guid.NewGuid().ToString(),
+            Interval = interval,
+        };
+
+        foreach (var symbol in symbols)
+        {
+            grpcRequest.Symbols.Add(new ScanSymbolRequest
+            {
+                Symbol = symbol.Symbol,
+            });
+            grpcRequest.Symbols[^1].Candles.AddRange(symbol.Candles.Select(ToProto));
+        }
+
+        foreach (var strategy in strategies)
+        {
+            grpcRequest.Strategies.Add(new ScanStrategySpec
+            {
+                Name = strategy.Name,
+                TakeProfitAtr = strategy.TakeProfitAtr,
+                StopLossAtr = strategy.StopLossAtr,
+            });
+        }
+
+        try
+        {
+            var response = await client.ScanSymbolsAsync(
+                grpcRequest, deadline: Deadline(), cancellationToken: cancellationToken);
+            return response.Results
+                .Select(r => new MlScanResult(
+                    r.Symbol, r.Strategy, r.Direction, r.Confidence, r.Reason, r.Warning))
+                .ToArray();
+        }
+        catch (RpcException exception)
+        {
+            throw Translate(exception, "scan");
+        }
+    }
 }

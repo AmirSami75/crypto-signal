@@ -40,6 +40,7 @@ public sealed class BotTickExecutor(
     IRepo<TradingBot> bots,
     IRepo<MarketCandle> candles,
     IRepo<StrategyDecision> decisions,
+    IRepo<ScannerSignal> scannerSignals,
     IRepo<OrderIntent> intents,
     IRepo<RiskDecision> riskDecisions,
     IRepo<ExchangeOrder> exchangeOrders,
@@ -197,8 +198,22 @@ public sealed class BotTickExecutor(
                 BotId: bot.Id, Symbol: bot.Symbol, CandleOpenTime: candleOpenTime),
             cancellationToken);
 
-        // ── 4. consult the engine ────────────────────────────────────────────────
+        // ── 4. produce a decision ─────────────────────────────────────────────────
+        // Scanner-kind bots never consult the ML engine: their signal comes from the market
+        // scanner's strategy league, claimed atomically from the proposal table. Model bots
+        // (the default) continue into the engine consult below.
         var openPosition = await LoadOpenPositionAsync(bot, cancellationToken);
+
+        if (bot.Kind == BotKind.Scanner)
+        {
+            var scannerOutcome = await RunScannerBotAsync(
+                bot, window, candleOpenTime, openPosition, correlationId, cancellationToken);
+            if (scannerOutcome is not null)
+                return scannerOutcome;
+
+            // No unclaimed signal this tick: a complete, recorded no-op.
+            return new TickOutcome(TickResult.Hold, correlationId, Message: "no unclaimed scanner signal");
+        }
 
         // Fetch higher-TF context candles when the bot is configured for MTF.
         // The engine uses them as confluence features; a missing context source
@@ -294,12 +309,168 @@ public sealed class BotTickExecutor(
             return new TickOutcome(TickResult.Hold, correlationId, decision.Id, Action: action);
         }
 
+        // ── 6. build the intent, ── 7. risk, ── 8. place (shared with scanner bots) ──
+        return await ActOnDecisionAsync(
+            bot, decision, action, openPosition, window, correlationId,
+            candleOpenTime, cancellationToken);
+    }
+
+    /// <summary>
+    /// The scanner-kind bot's step 4: claim the newest unclaimed scanner signal matching this bot's
+    /// market and strategy, and turn it into an OPEN decision that walks the ordinary pipeline.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The claim is a single conditional UPDATE (<c>SET TakenByBotId WHERE TakenByBotId IS NULL</c>),
+    /// so two scanner bots racing the same signal produce exactly one winner; the loser sees zero rows
+    /// affected and stands down for this tick. The claim happens <em>before</em> the decision is
+    /// written, so a bot that faults after claiming does not leave the signal for another bot — a
+    /// lost proposal is safer than a duplicated order.
+    /// </para>
+    /// <para>
+    /// The decision this method synthesizes is deliberately shaped like an engine answer: same table,
+    /// same columns, <c>ModelId = "strategy-zoo"</c> and the strategy key as its version, so the audit
+    /// chain and the risk engine need no special cases.
+    /// </para>
+    /// </remarks>
+    private async Task<TickOutcome?> RunScannerBotAsync(
+        TradingBot bot,
+        IReadOnlyList<MarketCandleData> window,
+        DateTime candleOpenTime,
+        BotPosition? openPosition,
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
+        // An open position is handled by the ordinary CLOSE path of a later tick; a scanner bot
+        // never opens a second one while the first is live.
+        if (openPosition is not null)
+            return new TickOutcome(TickResult.Hold, correlationId, Message: "position open; scanner bot holds");
+
+        var newest = window[^1];
+
+        // Oldest-first candidate: the longest-standing unclaimed proposal for this market.
+        var candidate = await scannerSignals.TableNoTracking
+            .Where(s => s.TakenByBotId == null
+                        && s.Interval == bot.Interval
+                        && (s.Symbol == bot.Symbol || bot.Symbol == "*"))
+            .Where(s => bot.StrategyKey == null || s.StrategyKey == bot.StrategyKey)
+            .OrderBy(s => s.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (candidate is null)
+            return null;
+
+        // Shorts are a bet the bot must be configured to take, same rule as the engine advisor.
+        var direction = candidate.Direction == SignalDirection.Long
+            ? TradeDirection.Long
+            : TradeDirection.Short;
+        if (direction == TradeDirection.Short && !bot.AllowShort)
+            return new TickOutcome(TickResult.Hold, correlationId,
+                Message: $"scanner signal {candidate.Id} is SHORT but the bot does not allow shorts");
+
+        // ── atomic claim: exactly one bot wins this UPDATE ────────────────────────
+        var claimed = await scannerSignals.Table
+            .Where(s => s.Id == candidate.Id && s.TakenByBotId == null)
+            .ExecuteUpdateAsync(
+                update => update.SetProperty(s => s.TakenByBotId, bot.Id),
+                cancellationToken);
+
+        if (claimed == 0)
+            return new TickOutcome(TickResult.Hold, correlationId,
+                Message: "scanner signal claimed by another bot");
+
+        var entryPrice = newest.Close;
+        var atr = candidate.AtrAtSignal;
+
+        // Bracket: the bot's ATR multiples when set, else the scanner defaults (1.5 / 1.0 ATR),
+        // expressed off the signal's ATR. Percent fields are the fallback when no ATR is known.
+        var tpAtrMultiple = bot.TakeProfitAtrMultiple ?? 1.5m;
+        var slAtrMultiple = bot.StopLossAtrMultiple ?? 1.0m;
+        decimal takeProfit, stopLoss;
+        if (atr > 0)
+        {
+            takeProfit = direction == TradeDirection.Long
+                ? entryPrice + tpAtrMultiple * atr
+                : entryPrice - tpAtrMultiple * atr;
+            stopLoss = direction == TradeDirection.Long
+                ? entryPrice - slAtrMultiple * atr
+                : entryPrice + slAtrMultiple * atr;
+        }
+        else
+        {
+            takeProfit = direction == TradeDirection.Long
+                ? entryPrice * (1 + bot.TakeProfitPercent / 100m)
+                : entryPrice * (1 - bot.TakeProfitPercent / 100m);
+            stopLoss = direction == TradeDirection.Long
+                ? entryPrice * (1 - bot.StopLossPercent / 100m)
+                : entryPrice * (1 + bot.StopLossPercent / 100m);
+        }
+
+        var decision = new StrategyDecision
+        {
+            BotId = bot.Id,
+            OperatingMode = bot.OperatingMode,
+            Symbol = candidate.Symbol,
+            Interval = candidate.Interval,
+            CandleOpenTime = candleOpenTime,
+            CandleWindowDigest = string.Empty,
+            Action = BotDecisionAction.Open,
+            Direction = direction,
+            ReasonCode = "scanner_signal",
+            Confidence = candidate.Confidence,
+            LongConfidence = direction == TradeDirection.Long ? candidate.Confidence : 0,
+            ShortConfidence = direction == TradeDirection.Short ? candidate.Confidence : 0,
+            ExpectedValue = 0,
+            EntryPrice = entryPrice,
+            TakeProfitPrice = takeProfit,
+            StopLossPrice = stopLoss,
+            Atr = atr > 0 ? atr : null,
+            ModelId = "strategy-zoo",
+            ModelVersion = candidate.StrategyKey,
+            UsedWildcardModel = false,
+            BarrierExtrapolated = false,
+            EngineRequestId = correlationId,
+            Warning = $"scanner proposal {candidate.Id} ({candidate.StrategyKey}): {candidate.Reason}",
+        };
+        await decisions.AddAsync(decision, saveNow: true, cancellationToken);
+        await MarkEvaluatedAsync(bot, candleOpenTime, cancellationToken);
+
+        await audit.AppendAsync(
+            new BotAuditEntry(
+                correlationId, BotAuditEventType.ScannerSignalClaimed, bot.OperatingMode,
+                $"Claimed scanner signal {candidate.Id} ({candidate.StrategyKey} {candidate.Direction}) " +
+                $"for {candidate.Symbol} @ ~{entryPrice}",
+                BotId: bot.Id, Symbol: bot.Symbol,
+                StrategyDecisionId: decision.Id, CandleOpenTime: candleOpenTime,
+                Detail: new { signalId = candidate.Id, candidate.StrategyKey, candidate.Score }),
+            cancellationToken);
+
+        // From here the scanner bot walks the exact same intent → risk → place path as a model bot.
+        return await ActOnDecisionAsync(
+            bot, decision, BotDecisionAction.Open, openPosition, window, correlationId,
+            candleOpenTime, cancellationToken);
+    }
+
+    /// <summary>
+    /// Steps 6–8 shared by both bot kinds: build the intent, pass risk, place and record.
+    /// Extracted verbatim from the model path so the safety argument is one pipeline, not two.
+    /// </summary>
+    private async Task<TickOutcome> ActOnDecisionAsync(
+        TradingBot bot,
+        StrategyDecision decision,
+        BotDecisionAction action,
+        BotPosition? openPosition,
+        IReadOnlyList<MarketCandleData> window,
+        string correlationId,
+        DateTime candleOpenTime,
+        CancellationToken cancellationToken)
+    {
         // ── 6. build the intent (deterministic client order id) ──────────────────
         var rules = await instrumentRules.GetRulesAsync(bot.Venue, bot.Symbol, cancellationToken);
         var intent = BuildIntent(bot, decision, action, openPosition, rules);
         if (intent is null)
         {
-            // The engine advised OPEN/CLOSE but the levels or position needed to construct an order are
+            // The decision said OPEN/CLOSE but the levels or position needed to construct an order are
             // absent. Recorded via the decision; nothing is placed.
             return new TickOutcome(TickResult.Hold, correlationId, decision.Id, Action: action,
                 Message: "no order could be constructed from the decision");
@@ -364,7 +535,6 @@ public sealed class BotTickExecutor(
             bot, decision, intent, broker, creds, rules, action, openPosition, correlationId,
             window, cancellationToken);
     }
-
 
     /// <summary>
     /// Credentials for this tick: the bot's pinned connection if it names one (and it must belong to

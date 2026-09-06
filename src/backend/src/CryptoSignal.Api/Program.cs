@@ -194,6 +194,18 @@ services
 // answerable from a log line instead of from the absence of one.
 services.AddHostedService<BotSchedulerService>();
 
+// ── Market scanner ──────────────────────────────────────────────────────────
+services
+    .AddOptions<ScannerOptions>()
+    .Bind(config.GetSection(ScannerOptions.SectionName))
+    .Validate(value => value.ScanIntervalMinutes is >= 1 and <= 1440,
+        "Scanner:ScanIntervalMinutes must be between 1 and 1440")
+    .Validate(value => value.MaxSymbolsPerPass is >= 1 and <= 500,
+        "Scanner:MaxSymbolsPerPass must be between 1 and 500")
+    .ValidateOnStart();
+services.AddHostedService<MarketScannerService>();
+services.AddScoped<IBinanceFuturesTickerSource, BinanceFuturesTickerSource>();
+
 // ── Trading: scheduler & platform risk ceilings ──────────────────────────────────
 // Two sections, deliberately: "Trading" decides when a bot is looked at, "Trading:Risk" decides
 // whether an order may be placed. Keeping them apart means a cadence change cannot widen a limit.

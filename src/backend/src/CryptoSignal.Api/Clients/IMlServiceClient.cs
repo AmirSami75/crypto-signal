@@ -40,4 +40,14 @@ public interface IMlServiceClient
     /// <summary>Online-learning status per market; null when the engine predates the RPC.</summary>
     Task<MlTrainingStatus?> GetTrainingStatusAsync(
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Batch market scan: evaluate named strategies on a batch of symbol candle windows.
+    /// Returns any signals found. The engine runs each strategy as-is (no I/O, no state).
+    /// </summary>
+    Task<IReadOnlyList<MlScanResult>> ScanSymbolsAsync(
+        IReadOnlyList<MlScanSymbol> symbols,
+        IReadOnlyList<MlScanStrategy> strategies,
+        string interval,
+        CancellationToken cancellationToken);
 }

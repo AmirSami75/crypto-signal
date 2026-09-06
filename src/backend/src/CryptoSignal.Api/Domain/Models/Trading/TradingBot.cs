@@ -150,12 +150,35 @@ public class TradingBot : BaseEntity
 
     #region Model pinning
 
-    /// <summary>
-    /// Model version this bot requires, or null to accept whatever the engine currently serves. Set it
+    /// <summary>Model version this bot requires, or null to accept whatever the engine currently serves. Set it
     /// and the engine refuses to answer after a retrain, which is the point: a bot whose limits were
     /// tuned against one model should stop rather than silently inherit another.
     /// </summary>
     public string? ExpectedModelVersion { get; set; }
+
+    #endregion
+
+    #region Scanner mode
+
+    /// <summary>
+    /// Which trader this bot is. <see cref="BotKind.Model"/> (default) consults the pooled ML model.
+    /// <see cref="BotKind.Scanner"/> consumes signals from the market scanner's strategy league
+    /// instead of asking the engine for a per-candle decision.
+    /// </summary>
+    public BotKind Kind { get; set; } = BotKind.Model;
+
+    /// <summary>
+    /// Strategy key from the zoo (e.g. <c>"rsi"</c>, <c>"bollinger"</c>). Used only when
+    /// <see cref="Kind"/> is <see cref="BotKind.Scanner"/>, to filter which scanner signals the bot claims.
+    /// Null on a Scanner bot means it accepts any unclaimed signal.
+    /// </summary>
+    public string? StrategyKey { get; set; }
+
+    /// <summary>
+    /// Explicit symbol list for scanner bots that monitor more than one market.
+    /// Null/empty inherits the single <see cref="Symbol"/> (the default behavior).
+    /// </summary>
+    public string? SymbolsJson { get; set; }
 
     #endregion
 }
