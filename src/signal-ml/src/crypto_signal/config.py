@@ -142,12 +142,7 @@ class LstmSection:
 
 @dataclass(frozen=True)
 class LstmV2Section:
-    """The advanced recurrent model: attention pooling, early stopping, seed ensemble, temperature.
-
-    Optional like `[lstm]`. Absent fields take the dataclass defaults; the section itself may be
-    absent entirely, in which case `load_config` fills in `LstmV2Section()`.
-    """
-
+    """The advanced recurrent model: attention pooling, early stopping, seed ensemble, temperature."""
     lookback: int = 32
     hidden_size: int = 96
     num_layers: int = 2
@@ -160,6 +155,21 @@ class LstmV2Section:
     validation_fraction: float = 0.15
     ensemble_seeds: int = 3
     seed_base: int = 20260831
+
+
+@dataclass(frozen=True)
+class TftSection:
+    """TFT challenger hyper-parameters (Phase 6). Optional — the engine ignores it when absent."""
+    lookback: int = 24
+    hidden_size: int = 32
+    attention_head_size: int = 4
+    dropout: float = 0.1
+    learning_rate: float = 1e-3
+    batch_size: int = 128
+    max_epochs: int = 20
+    early_stop_patience: int = 3
+    quantiles: tuple[float, ...] = (0.1, 0.25, 0.5, 0.75, 0.9)
+    random_state: int = 42
 
 
 @dataclass(frozen=True)
@@ -203,6 +213,7 @@ class AppConfig:
     source_path: Path
     lstm: LstmSection = LstmSection()
     lstm_v2: LstmV2Section = LstmV2Section()
+    tft: TftSection = TftSection()
 
 
 def _resolve(base: Path, value: str) -> Path:
@@ -352,7 +363,14 @@ def load_config(path: str | Path) -> AppConfig:
                 if key in LstmV2Section.__dataclass_fields__
             }
         ),
-    )
+        tft=TftSection(
+            **{
+                key: value
+                for key, value in (raw.get("tft", {}) or {}).items()
+                if key in TftSection.__dataclass_fields__
+            }
+        ),
+        )
     validate_config(config)
     return config
 

@@ -79,6 +79,16 @@ def build_parser() -> argparse.ArgumentParser:
     train_lstm_v2_parser.add_argument(
         "--refresh", action="store_true", help="Redownload historical data first"
     )
+    train_tft_parser = subparsers.add_parser(
+        "train-tft",
+        help="Train the pytorch-forecasting TFT challenger (quantile → barrier bridge)",
+        description="Experimental: trains a TemporalFusionTransformer quantile "
+        "forecast model and translates its outputs to barrier probabilities "
+        "via pf_bridge. Requires pytorch-forecasting + lightning.",
+    )
+    train_tft_parser.add_argument(
+        "--refresh", action="store_true", help="Redownload historical data first"
+    )
 
     train_parser = subparsers.add_parser(
         "train", help="Train the barrier-conditional model and write the serving registry"
@@ -226,6 +236,23 @@ def main(argv: list[str] | None = None) -> None:
                 print(f"  temperature: {diag.get('temperature_mean', float('nan')):.3f}")
                 print(f"  members: {diag.get('validation_log_loss_members', [])}")
                 print(f"  seed spread (mean std): {diag.get('seed_spread_mean_std', 0.0):.4f}")
+        elif args.command == "train-tft":
+            from .training.tft_pipeline import train_tft_bundle
+
+            trained = train_tft_bundle(config, refresh=args.refresh)
+            if args.json:
+                _print_json(trained)
+            else:
+                holdout = trained.get("strict_holdout", {})
+                backtest = (holdout.get("backtest") or {}).get("strategy") or {}
+                print("TFT challenger training complete")
+                print(f"  bundle: _pooled_{trained.get('interval')}_tft.joblib")
+                print(f"  holdout log loss: {holdout.get('log_loss', float('nan')):.4f}")
+                print(
+                    f"  holdout net return: {backtest.get('cumulative_return', float('nan')) * 100:.2f}%"
+                )
+                print(f"  quantiles: {trained.get('quantiles', [])}")
+                print(f"  feature_columns: {len(trained.get('feature_columns', []))}")
         elif args.command == "signal":
             signal = latest_barrier_signal(
                 config,

@@ -98,3 +98,20 @@ level = "INFO"
 log_file = "artifacts/logs/crypto_signal.log"
 max_bytes = 5000000
 backup_count = 3
+
+# ───────────────────────── TFT challenger (Phase 6, experimental) ──────────────────
+# Optional. The TFT is a quantile-regression sequence model that produces CDF
+# forecasts over horizon returns; these are translated to barrier probabilities
+# via pf_bridge. Requires pytorch-forecasting + lightning (install with
+# `pip install -e '.[tft]'`). Same safety gates as every other model.
+[tft]
+lookback = 24
+hidden_size = 32
+attention_head_size = 4
+dropout = 0.1
+learning_rate = 1e-3
+batch_size = 128
+max_epochs = 20
+early_stop_patience = 3
+quantiles = [0.1, 0.25, 0.5, 0.75, 0.9]
+random_state = 42

@@ -30,6 +30,11 @@ dev = [
   "grpcio-tools>=1.81,<1.82",
   "pytest>=8.0,<9",
 ]
+tft = [
+  "pytorch-forecasting>=1.1,<1.2",
+  "lightning>=2.3,<2.5",
+  "pytorch-lightning>=2.3,<2.5",
+]
 
 [project.scripts]
 crypto-signal = "crypto_signal.cli:main"
