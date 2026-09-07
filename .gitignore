@@ -55,3 +55,5 @@ devops/env/aws/
 # Lightning/TFT training artifacts
 src/signal-ml/lightning_logs/
 src/signal-ml/checkpoints/
+src/signal-ml/tmp/
+tmp/
