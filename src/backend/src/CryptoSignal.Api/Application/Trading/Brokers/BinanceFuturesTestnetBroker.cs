@@ -183,11 +183,19 @@ public sealed class BinanceFuturesTestnetBroker(
                 return null;
 
             using var document = JsonDocument.Parse(body);
-            if (!document.RootElement.TryGetProperty("assets", out var assets)
-                || assets.ValueKind != JsonValueKind.Array)
+            // /fapi/v2/balance returns a plain array of asset balances (the account
+            // object's "assets" shape is /fapi/v2/account). Accept both.
+            var assets = document.RootElement.ValueKind == JsonValueKind.Array
+                ? document.RootElement
+                : document.RootElement.TryGetProperty("assets", out var nested)
+                    && nested.ValueKind == JsonValueKind.Array
+                    ? nested
+                    : default(JsonElement?);
+
+            if (assets is not { } assetList)
                 return null;
 
-            foreach (var asset in assets.EnumerateArray())
+            foreach (var asset in assetList.EnumerateArray())
             {
                 var assetName = asset.TryGetProperty("asset", out var name) ? name.GetString() : null;
                 if (!string.Equals(assetName, quoteAsset, StringComparison.OrdinalIgnoreCase))
