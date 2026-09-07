@@ -61,7 +61,6 @@
         <PackageReference Include="Serilog.Formatting.Elasticsearch" Version="10.0.0" />
         <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
         <PackageReference Include="Serilog.Sinks.Async" Version="2.1.0" />
-        <PackageReference Include="SixLabors.ImageSharp" Version="4.1.1" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
         <PackageReference Include="Swashbuckle.AspNetCore.Annotations" Version="10.2.3" />
         <PackageReference Include="Swashbuckle.AspNetCore.Filters" Version="10.0.1" />
