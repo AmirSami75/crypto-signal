@@ -262,16 +262,20 @@ export function OverviewPage() {
           <h2 className="micro-label">{fa.overview.pnlByBotLabel}</h2>
           <p className="mt-1.5 mb-4 text-xs leading-relaxed text-ink-muted">{fa.overview.pnlByBotDetail}</p>
 
-          {bots.length === 0 && !isBotsLoading ? (
+          {isBotsLoading && bots.length === 0 ? (
+            <div className="space-y-3" aria-busy="true" aria-label={fa.common.loading} role="status">
+              <div className="h-4 animate-pulse rounded bg-surface-muted" />
+              <div className="h-4 animate-pulse rounded bg-surface-muted" />
+              <div className="h-4 animate-pulse rounded bg-surface-muted" />
+            </div>
+          ) : bots.length === 0 ? (
             <p className="py-6 text-center text-sm text-ink-faint">{fa.overview.pnlEmpty}</p>
           ) : (
-            <ul className="space-y-3">
+            <ul className="space-y-3" role="list" aria-label={fa.overview.pnlByBotLabel}>
               {bots.map((bot) => {
                 const share = Math.abs(bot.realizedPnl) / pnlMax
                 const tone = bot.realizedPnl > 0 ? 'bg-success' : bot.realizedPnl < 0 ? 'bg-danger' : 'bg-line'
                 return (
-                  // An amount, not a time axis, so filling from the inline start is the honest
-                  // direction here — unlike a price chart, which stays LTR by convention.
                   <li key={bot.id} className="grid grid-cols-[minmax(6rem,10rem)_1fr_auto] items-center gap-3">
                     <Link
                       to={botDetailPath(bot.id)}
@@ -280,7 +284,14 @@ export function OverviewPage() {
                       {bot.name}
                     </Link>
 
-                    <div className="h-2.5 overflow-hidden rounded-full bg-surface-muted">
+                    <div
+                      className="h-2.5 overflow-hidden rounded-full bg-surface-muted"
+                      role="progressbar"
+                      aria-valuenow={Math.round(share * 100)}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label={`${bot.name}: ${signedMoneyText(bot.realizedPnl)}`}
+                    >
                       <div
                         className={`h-full rounded-full transition-[width] ${tone}`}
                         style={{ width: `${Math.max(share * 100, bot.realizedPnl === 0 ? 0 : 2)}%` }}

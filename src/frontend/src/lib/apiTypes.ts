@@ -504,6 +504,9 @@ export type BotInput = {
   operatingMode: OperatingModeName
   takeProfitPercent: number
   stopLossPercent: number
+  /** ATR multiples — when present, the backend uses them instead of the percent brackets. */
+  takeProfitAtrMultiple?: number | null
+  stopLossAtrMultiple?: number | null
   allowShort: boolean
   leverage: number
   quoteNotionalPerTrade: number
@@ -537,6 +540,8 @@ export type BotSummary = {
   statusReason: string | null
   takeProfitPercent: number
   stopLossPercent: number
+  takeProfitAtrMultiple?: number | null
+  stopLossAtrMultiple?: number | null
   allowShort: boolean
   leverage: number
   quoteNotionalPerTrade: number
@@ -605,6 +610,8 @@ export type BotDetail = {
   operatingMode: OperatingModeName
   takeProfitPercent: number
   stopLossPercent: number
+  takeProfitAtrMultiple?: number | null
+  stopLossAtrMultiple?: number | null
   allowShort: boolean
   leverage: number
   quoteNotionalPerTrade: number

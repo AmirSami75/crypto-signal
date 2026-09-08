@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { fa } from '../i18n/fa'
 import { api } from '../lib/api'
 import { useResource } from '../lib/useResource'
@@ -51,6 +51,14 @@ export function ScannerPage() {
     setStrategyFilter('')
   }, [])
 
+  // Keep pagination honest when the search changes.
+  const prevFilterKey = useDebounced(filterKey)
+  useEffect(() => {
+    setPage(1)
+    // Only the debounced aggregate matters — raw keystrokes should not reset.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prevFilterKey])
+
   const columns: Column<ScannerSignal>[] = [
     {
       key: 'symbol',
@@ -66,7 +74,7 @@ export function ScannerPage() {
     {
       key: 'confidence',
       header: fa.scanner.confidence,
-      cell: s => `${(s.confidence * 100).toFixed(0)}%`,
+      cell: s => <span className="num">{`${(s.confidence * 100).toFixed(1)}%`}</span>,
     },
     {
       key: 'score',
@@ -76,7 +84,7 @@ export function ScannerPage() {
     {
       key: 'atr',
       header: fa.scanner.atr,
-      cell: s => s.atrAtSignal.toString(),
+      cell: s => <span className="num">{Number(s.atrAtSignal).toFixed(2)}</span>,
     },
     {
       key: 'reason',

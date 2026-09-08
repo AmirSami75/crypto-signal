@@ -44,6 +44,8 @@ type FormState = {
   operatingMode: OperatingModeName
   takeProfitPercent: string
   stopLossPercent: string
+  takeProfitAtrMultiple: string
+  stopLossAtrMultiple: string
   allowShort: boolean
   leverage: string
   quoteNotionalPerTrade: string
@@ -71,6 +73,8 @@ const EMPTY_FORM: FormState = {
   operatingMode: 'Paper',
   takeProfitPercent: '',
   stopLossPercent: '',
+  takeProfitAtrMultiple: '',
+  stopLossAtrMultiple: '',
   allowShort: false,
   leverage: '1',
   quoteNotionalPerTrade: '',
@@ -94,6 +98,8 @@ const EMPTY_FORM: FormState = {
 type NumericFieldKey =
   | 'takeProfitPercent'
   | 'stopLossPercent'
+  | 'takeProfitAtrMultiple'
+  | 'stopLossAtrMultiple'
   | 'leverage'
   | 'quoteNotionalPerTrade'
   | 'minimumConfidence'
@@ -127,6 +133,8 @@ function fromDetail(bot: BotDetail): FormState {
     operatingMode: bot.operatingMode,
     takeProfitPercent: num(bot.takeProfitPercent),
     stopLossPercent: num(bot.stopLossPercent),
+    takeProfitAtrMultiple: num((bot as any).takeProfitAtrMultiple),
+    stopLossAtrMultiple: num((bot as any).stopLossAtrMultiple),
     allowShort: bot.allowShort,
     leverage: num(bot.leverage ?? 1),
     quoteNotionalPerTrade: num(bot.quoteNotionalPerTrade),
@@ -216,6 +224,13 @@ export function BotFormModal({
         return
       }
     }
+    for (const key of ['takeProfitAtrMultiple', 'stopLossAtrMultiple'] as const) {
+      const raw = form[key]
+      if (raw !== '' && !(parseFloat(raw) > 0)) {
+        setValidationError((fa.validation as any).botAtrPositive ?? fa.validation.botPercentPositive)
+        return
+      }
+    }
 
     const payload: BotInput = {
       name: form.name.trim(),
@@ -226,6 +241,8 @@ export function BotFormModal({
       operatingMode: form.operatingMode,
       takeProfitPercent: parseFloat(form.takeProfitPercent),
       stopLossPercent: parseFloat(form.stopLossPercent),
+      takeProfitAtrMultiple: form.takeProfitAtrMultiple === '' ? null : parseFloat(form.takeProfitAtrMultiple),
+      stopLossAtrMultiple: form.stopLossAtrMultiple === '' ? null : parseFloat(form.stopLossAtrMultiple),
       allowShort: form.allowShort,
       leverage: parseInt(form.leverage, 10),
       quoteNotionalPerTrade: parseFloat(form.quoteNotionalPerTrade),
@@ -432,6 +449,8 @@ export function BotFormModal({
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {numberField('takeProfitPercent', { required: true, step: '0.1' })}
             {numberField('stopLossPercent', { required: true, step: '0.1' })}
+            {numberField('takeProfitAtrMultiple', { step: '0.1' })}
+            {numberField('stopLossAtrMultiple', { step: '0.1' })}
             {numberField('leverage', { step: '1' })}
             {numberField('quoteNotionalPerTrade', { required: true })}
           </div>

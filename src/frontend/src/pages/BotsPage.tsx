@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { PERMISSIONS, can } from '../auth/permissions'
 import { useAuth } from '../auth/AuthContext'
@@ -106,6 +106,12 @@ export function BotsPage() {
     setStatusFilter('')
     setModeFilter('')
   }, [])
+
+  const prevFilterKeyForPage = useDebounced(filterKey)
+  useEffect(() => {
+    setPage(1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prevFilterKeyForPage])
 
   const handleConfirm = useCallback(async () => {
     if (!dialog || dialog.kind === 'create' || dialog.kind === 'edit') return
@@ -245,6 +251,22 @@ export function BotsPage() {
         ) : (
           <span className="text-ink-faint">{fa.bots.noOpenPosition}</span>
         ),
+    },
+    {
+      key: 'brackets',
+      header: (fa.trading as any).bracketsLabel ?? 'حد سود / زیان',
+      cell: bot => {
+        const tpAtr = (bot as any).takeProfitAtrMultiple
+        const slAtr = (bot as any).stopLossAtrMultiple
+        if (tpAtr != null || slAtr != null) {
+          return (
+            <span className="num text-xs text-ink-soft">
+              {tpAtr != null ? `${tpAtr}×` : '—'} / {slAtr != null ? `${slAtr}×` : '—'} ATR
+            </span>
+          )
+        }
+        return <span className="num text-xs text-ink-soft">{bot.takeProfitPercent}% / {bot.stopLossPercent}%</span>
+      },
     },
     {
       key: 'pnl',

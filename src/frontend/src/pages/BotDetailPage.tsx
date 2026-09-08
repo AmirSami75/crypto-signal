@@ -367,6 +367,16 @@ function OverviewTab({ bot }: { bot: BotDetailData }) {
             <Stat label={fa.trading.stopLossPercent}>
               <span className="num">{`${bot.stopLossPercent}%`}</span>
             </Stat>
+            {(bot as any).takeProfitAtrMultiple != null && (
+              <Stat label={(fa.trading as any).takeProfitAtrMultiple ?? 'ATR حد سود'}>
+                <span className="num">{`${(bot as any).takeProfitAtrMultiple}× ATR`}</span>
+              </Stat>
+            )}
+            {(bot as any).stopLossAtrMultiple != null && (
+              <Stat label={(fa.trading as any).stopLossAtrMultiple ?? 'ATR حد ضرر'}>
+                <span className="num">{`${(bot as any).stopLossAtrMultiple}× ATR`}</span>
+              </Stat>
+            )}
             <Stat label={fa.trading.allowShort}>
               {bot.allowShort ? fa.common.active : fa.common.inactive}
             </Stat>
