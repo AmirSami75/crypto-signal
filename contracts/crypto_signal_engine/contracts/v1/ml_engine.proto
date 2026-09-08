@@ -101,6 +101,13 @@ message TradeParameters {
 
   // Below this calibrated probability the direction answers FLAT. 0 -> engine default.
   double minimum_confidence = 5;
+
+  // When both are > 0, the intended bracket in ATR multiples. They replace
+  // the percent-derived barriers for scoring, extrapolation, and levels — the
+  // orchestrator's native ATR pricing becomes the bet assessed, not a silent
+  // post-filter. Zero means absent (fallback to percents for wire compat).
+  double take_profit_atr_multiple = 6;
+  double stop_loss_atr_multiple = 7;
 }
 
 message TradeLevels {

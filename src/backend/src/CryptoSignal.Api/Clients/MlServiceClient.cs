@@ -345,6 +345,8 @@ public sealed class MlServiceClient(
     {
         TakeProfitPercent = MlWire.Money(parameters.TakeProfitPercent),
         StopLossPercent = MlWire.Money(parameters.StopLossPercent),
+        TakeProfitAtrMultiple = parameters.TakeProfitAtrMultiple,
+        StopLossAtrMultiple = parameters.StopLossAtrMultiple,
         AllowShort = parameters.AllowShort,
         MaxHoldingPeriods = parameters.MaxHoldingPeriods,
         MinimumConfidence = parameters.MinimumConfidence,

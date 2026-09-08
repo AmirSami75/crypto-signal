@@ -51,18 +51,22 @@ class Candle(_message.Message):
     def __init__(self, open_time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., open: _Optional[str] = ..., high: _Optional[str] = ..., low: _Optional[str] = ..., close: _Optional[str] = ..., volume: _Optional[str] = ...) -> None: ...
 
 class TradeParameters(_message.Message):
-    __slots__ = ("take_profit_percent", "stop_loss_percent", "allow_short", "max_holding_periods", "minimum_confidence")
+    __slots__ = ("take_profit_percent", "stop_loss_percent", "allow_short", "max_holding_periods", "minimum_confidence", "take_profit_atr_multiple", "stop_loss_atr_multiple")
     TAKE_PROFIT_PERCENT_FIELD_NUMBER: _ClassVar[int]
     STOP_LOSS_PERCENT_FIELD_NUMBER: _ClassVar[int]
     ALLOW_SHORT_FIELD_NUMBER: _ClassVar[int]
     MAX_HOLDING_PERIODS_FIELD_NUMBER: _ClassVar[int]
     MINIMUM_CONFIDENCE_FIELD_NUMBER: _ClassVar[int]
+    TAKE_PROFIT_ATR_MULTIPLE_FIELD_NUMBER: _ClassVar[int]
+    STOP_LOSS_ATR_MULTIPLE_FIELD_NUMBER: _ClassVar[int]
     take_profit_percent: str
     stop_loss_percent: str
     allow_short: bool
     max_holding_periods: int
     minimum_confidence: float
-    def __init__(self, take_profit_percent: _Optional[str] = ..., stop_loss_percent: _Optional[str] = ..., allow_short: _Optional[bool] = ..., max_holding_periods: _Optional[int] = ..., minimum_confidence: _Optional[float] = ...) -> None: ...
+    take_profit_atr_multiple: float
+    stop_loss_atr_multiple: float
+    def __init__(self, take_profit_percent: _Optional[str] = ..., stop_loss_percent: _Optional[str] = ..., allow_short: _Optional[bool] = ..., max_holding_periods: _Optional[int] = ..., minimum_confidence: _Optional[float] = ..., take_profit_atr_multiple: _Optional[float] = ..., stop_loss_atr_multiple: _Optional[float] = ...) -> None: ...
 
 class TradeLevels(_message.Message):
     __slots__ = ("entry_price", "take_profit_price", "stop_loss_price", "atr", "risk_reward_ratio", "take_profit_atr", "stop_loss_atr")

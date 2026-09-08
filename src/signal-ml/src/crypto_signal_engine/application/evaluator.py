@@ -100,14 +100,24 @@ class Assessment:
             raise ValueError("FLAT has no levels; ask for the direction you are considering")
 
         entry = self.window.entry_price
-        take_profit_percent = self.parameters.take_profit_percent
-        stop_loss_percent = self.parameters.stop_loss_percent
-        if direction is Direction.LONG:
-            take_profit = entry * (Decimal(1) + take_profit_percent / _PERCENT)
-            stop_loss = entry * (Decimal(1) - stop_loss_percent / _PERCENT)
+        # ATR-native path: bracket was requested directly in ATR multiples
+        if self.parameters.take_profit_atr_multiple > 0 and self.parameters.stop_loss_atr_multiple > 0:
+            atr_dec = quantize(self.window.atr)
+            if direction is Direction.LONG:
+                take_profit = entry + Decimal(str(self.parameters.take_profit_atr_multiple)) * atr_dec
+                stop_loss = entry - Decimal(str(self.parameters.stop_loss_atr_multiple)) * atr_dec
+            else:
+                take_profit = entry - Decimal(str(self.parameters.take_profit_atr_multiple)) * atr_dec
+                stop_loss = entry + Decimal(str(self.parameters.stop_loss_atr_multiple)) * atr_dec
         else:
-            take_profit = entry * (Decimal(1) - take_profit_percent / _PERCENT)
-            stop_loss = entry * (Decimal(1) + stop_loss_percent / _PERCENT)
+            take_profit_percent = self.parameters.take_profit_percent
+            stop_loss_percent = self.parameters.stop_loss_percent
+            if direction is Direction.LONG:
+                take_profit = entry * (Decimal(1) + take_profit_percent / _PERCENT)
+                stop_loss = entry * (Decimal(1) - stop_loss_percent / _PERCENT)
+            else:
+                take_profit = entry * (Decimal(1) - take_profit_percent / _PERCENT)
+                stop_loss = entry * (Decimal(1) + stop_loss_percent / _PERCENT)
 
         return LevelsResult(
             entry_price=quantize(entry),
@@ -251,11 +261,18 @@ class MarketEvaluator:
             atr_window=descriptor.atr_window,
         )
 
-        entry = float(window.entry_price)
-        barriers = BarrierPair(
-            take_profit_atr=atr_multiple(entry, float(parameters.take_profit_percent), window.atr),
-            stop_loss_atr=atr_multiple(entry, float(parameters.stop_loss_percent), window.atr),
-        )
+        # ATR-native bracket: orchestrator already priced the bet correctly; score it as-is
+        if parameters.take_profit_atr_multiple > 0 and parameters.stop_loss_atr_multiple > 0:
+            barriers = BarrierPair(
+                take_profit_atr=float(parameters.take_profit_atr_multiple),
+                stop_loss_atr=float(parameters.stop_loss_atr_multiple),
+            )
+        else:
+            entry = float(window.entry_price)
+            barriers = BarrierPair(
+                take_profit_atr=atr_multiple(entry, float(parameters.take_profit_percent), window.atr),
+                stop_loss_atr=atr_multiple(entry, float(parameters.stop_loss_percent), window.atr),
+            )
 
         minimum_confidence = (
             parameters.minimum_confidence
@@ -390,6 +407,12 @@ class MarketEvaluator:
                 f"parameters.minimum_confidence must be in [0, 1), got "
                 f"{parameters.minimum_confidence}; a threshold of 1 can never be met"
             )
+        for name, value in (
+            ("take_profit_atr_multiple", parameters.take_profit_atr_multiple),
+            ("stop_loss_atr_multiple", parameters.stop_loss_atr_multiple),
+        ):
+            if value != 0.0 and (not (0.1 <= value <= 10.0)):
+                raise InvalidInferenceRequest(f"parameters.{name} must be in [0.1, 10.0] when set, got {value}")
 
     def _barriers_outside_bounds(self, barriers: BarrierPair) -> tuple[tuple[str, float], ...]:
         """Which of the two requested barriers sit outside the span the model was fitted across.

@@ -52,6 +52,8 @@ class TradeParametersInput:
     allow_short: bool = False
     max_holding_periods: int = 0
     minimum_confidence: float = 0.0
+    take_profit_atr_multiple: float = 0.0
+    stop_loss_atr_multiple: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)

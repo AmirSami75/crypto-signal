@@ -98,7 +98,9 @@ public sealed record MlTradeParameters(
     decimal StopLossPercent,
     bool AllowShort,
     uint MaxHoldingPeriods = 0,
-    double MinimumConfidence = 0);
+    double MinimumConfidence = 0,
+    double TakeProfitAtrMultiple = 0,
+    double StopLossAtrMultiple = 0);
 
 /// <summary>The prices a bet resolves to, plus the same barriers in the units the model consumed.</summary>
 public sealed record MlTradeLevels(

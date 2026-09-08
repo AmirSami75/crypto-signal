@@ -123,6 +123,8 @@ def parameters_from_proto(message) -> TradeParametersInput:
         allow_short=bool(message.allow_short),
         max_holding_periods=int(message.max_holding_periods),
         minimum_confidence=float(message.minimum_confidence),
+        take_profit_atr_multiple=float(message.take_profit_atr_multiple),
+        stop_loss_atr_multiple=float(message.stop_loss_atr_multiple),
     )
 
 
