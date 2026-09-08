@@ -7,6 +7,7 @@ import { DataTable, type Column } from '../components/ui/DataTable'
 import { Pagination } from '../components/ui/Pagination'
 import { Card, Eyebrow } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
+import { Badge } from '../components/ui/Badge'
 import { DirectionBadge } from '../components/trading/TradingBadges'
 import type { ScannerSignal } from '../lib/apiTypes'
 
@@ -65,7 +66,12 @@ export function ScannerPage() {
       header: fa.scanner.symbol,
       cell: s => <span className="font-mono">{s.symbol}</span>,
     },
-    { key: 'strategy', header: fa.scanner.strategy, cell: s => s.strategyKey },
+    {
+      key: 'strategy',
+      header: fa.scanner.strategy,
+      cell: s => <Badge tone="neutral">{s.strategyKey}</Badge>,
+      className: 'whitespace-nowrap',
+    },
     {
       key: 'direction',
       header: fa.scanner.direction,
@@ -75,35 +81,50 @@ export function ScannerPage() {
       key: 'confidence',
       header: fa.scanner.confidence,
       cell: s => <span className="num">{`${(s.confidence * 100).toFixed(1)}%`}</span>,
+      className: 'whitespace-nowrap',
     },
     {
       key: 'score',
       header: fa.scanner.score,
-      cell: s => s.score.toFixed(2),
+      cell: s => <span className="num">{s.score.toFixed(2)}</span>,
+      className: 'whitespace-nowrap',
     },
     {
       key: 'atr',
       header: fa.scanner.atr,
       cell: s => <span className="num">{Number(s.atrAtSignal).toFixed(2)}</span>,
+      className: 'whitespace-nowrap',
     },
     {
       key: 'reason',
       header: fa.scanner.reason,
-      cell: s => <span title={s.reason}>{s.reason}</span>,
+      className: 'min-w-[16rem] max-w-[22rem]',
+      cell: s => (
+        <span title={s.reason} className="line-clamp-2 text-wrap break-words text-xs leading-relaxed text-ink-soft">
+          {s.reason}
+        </span>
+      ),
     },
     {
       key: 'createdAt',
       header: fa.scanner.age,
+      className: 'whitespace-nowrap',
       cell: s => (
-        <span title={new Date(s.createdAt).toLocaleString()}>{formatAge(s.createdAt)}</span>
+        <span title={new Date(s.createdAt).toLocaleString()} className="text-xs text-ink-faint">
+          {formatAge(s.createdAt)}
+        </span>
       ),
     },
   ]
 
   return (
-    <Card>
-      <Eyebrow>{fa.scanner.title}</Eyebrow>
-      <p className="mb-4 text-sm opacity-70">{fa.scanner.subtitle}</p>
+    <div className="space-y-6">
+      <header className="space-y-1">
+        <h1 className="text-[1.375rem] font-semibold text-ink">{fa.scanner.title}</h1>
+        <p className="text-sm text-ink-soft">{fa.scanner.subtitle}</p>
+      </header>
+
+      <Card className="p-6 sm:p-7">
 
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <div className="space-y-2">
@@ -144,15 +165,18 @@ export function ScannerPage() {
         emptyBody={fa.scanner.emptyBody}
       />
 
-      <Pagination
-        page={page}
-        pageSize={pageSize}
-        totalRecords={totalRecords}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
-        isBusy={isLoading || isRefreshing}
-      />
-    </Card>
+        <div className="mt-4">
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            totalRecords={totalRecords}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            isBusy={isLoading || isRefreshing}
+          />
+        </div>
+      </Card>
+    </div>
   )
 }
 

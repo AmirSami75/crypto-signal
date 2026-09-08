@@ -95,22 +95,19 @@ export function MlEnginePage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-center gap-3">
-        <h1 className="text-[1.375rem] font-semibold">{fa.nav.ml}</h1>
-        {capsLoading || modelLoading ? (
-          <Spinner size="sm" />
-        ) : (
-          <span className="flex items-center gap-1.5 text-sm">
-            <StatusDot tone={headerTone} />
-            <span>{headerLabel}</span>
-          </span>
-        )}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRefresh}
-          className="ms-auto"
-        >
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-[1.375rem] font-semibold text-ink">{fa.nav.ml}</h1>
+          {capsLoading || modelLoading ? (
+            <Spinner size="sm" />
+          ) : (
+            <span className="flex items-center gap-1.5 text-sm text-ink-soft">
+              <StatusDot tone={headerTone} />
+              <span>{headerLabel}</span>
+            </span>
+          )}
+        </div>
+        <Button variant="outline" size="sm" onClick={handleRefresh}>
           {fa.common.refresh}
         </Button>
       </header>
@@ -240,14 +237,14 @@ export function MlEnginePage() {
           )}
         </div>
 
-        <div className="mt-4 -mx-1 -mx-5 sm:mx-0 sm:overflow-x-auto">
-          <table className="w-full min-w-[38rem] border-collapse text-sm sm:min-w-0">
-            <thead>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[36rem] border-collapse text-sm" dir="ltr">
+            <thead className="border-b border-line">
               <tr>
-                <th className="text-start font-semibold">{fa.mlEngine.colSymbol}</th>
-                <th className="text-start font-semibold">{fa.mlEngine.colInterval}</th>
-                <th className="text-start font-medium">{fa.mlEngine.colVersion}</th>
-                <th className="text-start font-semibold">{fa.mlEngine.colWildcard}</th>
+                <th className="px-3 py-2 text-start font-semibold">{fa.mlEngine.colSymbol}</th>
+                <th className="px-3 py-2 text-start font-semibold">{fa.mlEngine.colInterval}</th>
+                <th className="px-3 py-2 text-start font-semibold">{fa.mlEngine.colVersion}</th>
+                <th className="px-3 py-2 text-start font-semibold">{fa.mlEngine.colWildcard}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -287,13 +284,13 @@ export function MlEnginePage() {
             : fa.mlEngine.onlineLearningNote}
         </p>
 
-        <div className="mt-4 -mx-1 -mx-5 sm:mx-0 sm:overflow-x-auto">
-          <table className="w-full min-w-[36rem] border-collapse text-sm sm:min-w-0">
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[36rem] border-collapse text-sm" dir="ltr">
             <thead>
               <tr>
-                <th className="text-start font-semibold">{fa.mlEngine.colMarket}</th>
-                <th className="text-start font-semibold">{fa.mlEngine.colSamples}</th>
-                <th className="text-start font-medium">{fa.mlEngine.colSinceTraining}</th>
+                <th className="px-3 py-2 text-start font-semibold">{fa.mlEngine.colMarket}</th>
+                <th className="px-3 py-2 text-start font-semibold">{fa.mlEngine.colSamples}</th>
+                <th className="text-start font-semibold">{fa.mlEngine.colSinceTraining}</th>
                 <th className="text-start font-semibold">{fa.mlEngine.colVerdict}</th>
               </tr>
             </thead>
@@ -329,8 +326,8 @@ export function MlEnginePage() {
                       <td className="py-2.5 font-medium" dir="ltr">
                         {`${market.symbol} ${market.interval}`}
                       </td>
-                      <td className="py-2.5 num">{market.samplesStored}</td>
-                      <td className="py-2.5 num text-ink-muted">{market.samplesSinceTraining}</td>
+                      <td className="py-2.5 num">{market.samplesStored.toLocaleString('fa-IR')}</td>
+                      <td className="py-2.5 num text-ink-muted">{market.samplesSinceTraining.toLocaleString('fa-IR')}</td>
                       <td className="py-2.5">
                         <span className="flex items-center gap-1.5">
                           {verdictTone && <StatusDot tone={verdictTone} />}
@@ -405,7 +402,7 @@ function StatValue({
   return (
     <div className="flex flex-col gap-1">
       <p className="micro-label">{label}</p>
-      <span className={`num text-lg font-semibold ${toneClass}`}>{value}</span>
+      <span className={`num truncate text-lg font-semibold ${toneClass}`} title={typeof value === 'string' ? value : undefined}>{value}</span>
       {caption && <span className="text-xs text-ink-muted">{caption}</span>}
     </div>
   )
