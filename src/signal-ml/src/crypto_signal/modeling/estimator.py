@@ -25,7 +25,7 @@ ALL_CLASSES = np.array([-1, 0, 1], dtype=int)
 logger = get_logger(__name__)
 
 
-def build_model(config: ModelConfig) -> HistGradientBoostingClassifier:
+def build_model(config: ModelConfig, verbose: int = 0) -> HistGradientBoostingClassifier:
     return HistGradientBoostingClassifier(
         learning_rate=config.learning_rate,
         max_iter=config.max_iter,
@@ -36,6 +36,7 @@ def build_model(config: ModelConfig) -> HistGradientBoostingClassifier:
         # here so early stopping cannot quietly introduce temporal leakage.
         early_stopping=False,
         random_state=config.random_state,
+        verbose=verbose,
     )
 
 
@@ -72,7 +73,7 @@ def fit_model(
         config.max_iter,
         class_weight or "none",
     )
-    model = build_model(config)
+    model = build_model(config, verbose=1)
     weights = compute_sample_weight(class_weight=class_weight, y=y) if class_weight else None
     model.fit(X, y, sample_weight=weights)
     logger.info(

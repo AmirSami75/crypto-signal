@@ -1,0 +1,71 @@
+[market]
+symbol = "BTCUSDT"
+symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "ZECUSDT", "XRPUSDT", "BNBUSDT", "DOGEUSDT", "SUIUSDT", "WLDUSDT", "UNIUSDT", "AVAXUSDT", "ARBUSDT", "NEARUSDT", "LINKUSDT", "ADAUSDT", "LTCUSDT", "INJUSDT", "TRXUSDT", "ENAUSDT", "DOTUSDT", "DASHUSDT", "TAOUSDT", "PEPEUSDT", "XLMUSDT", "FETUSDT", "CAKEUSDT", "ICPUSDT", "FILUSDT", "BCHUSDT", "ACEUSDT", "HBARUSDT", "AAVEUSDT", "PAXGUSDT", "PENDLEUSDT", "PROMUSDT"]
+interval = "1h"
+start = "2022-09-08T00:00:00Z"
+end = "2026-09-09T00:00:00Z"
+raw_data_path = "data/BTCUSDT_1h.csv"
+data_dir = "data"
+
+[features]
+prediction_horizon = 6
+label_threshold = 0.0035
+mtf_context = false
+mtf_higher_interval = "4h"
+
+[barrier]
+max_horizon = 24
+atr_window = 14
+grid_atr = [0.5, 1.0, 1.5, 2.0, 3.0]
+pairs_per_candle = 5
+holdout_fraction = 0.2
+calibration_blocks = [0.6, 0.2, 0.2]
+calibration_method = "isotonic"
+per_symbol_overrides = ["BTCUSDT"]
+backtest_take_profit_atr = 1.5
+backtest_stop_loss_atr = 1.0
+backtest_minimum_confidence = 0.5
+allow_short = true
+
+[model]
+test_fraction = 0.2
+cv_splits = 5
+probability_threshold = 0.5
+random_state = 42
+max_iter = 1000
+learning_rate = 0.03
+max_leaf_nodes = 31
+min_samples_leaf = 20
+l2_regularization = 0.5
+
+[backtest]
+fee_rate = 0.0010
+slippage_rate = 0.0005
+allow_short = false
+
+[output]
+artifact_dir = "artifacts"
+model_dir = "artifacts/models"
+legacy_dir = "artifacts/legacy"
+
+[network]
+proxy_url = "http://127.0.0.1:10808"
+timeout_seconds = 30
+
+[logging]
+level = "INFO"
+log_file = "artifacts/logs/crypto_signal.log"
+max_bytes = 5000000
+backup_count = 3
+
+[tft]
+lookback = 24
+hidden_size = 32
+attention_head_size = 4
+dropout = 0.1
+learning_rate = 0.03e-3
+batch_size = 128
+max_epochs = 20
+early_stop_patience = 3
+random_state = 42
+quantiles = [0.1, 0.25, 0.5, 0.75, 0.9]
