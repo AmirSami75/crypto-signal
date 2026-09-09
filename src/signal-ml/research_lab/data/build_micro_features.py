@@ -133,6 +133,7 @@ def main() -> int:
         if not report["pass"]:
             print("VALIDATION FAILED — features written but flagged; do NOT use")
             return 1
+    csv_path.unlink(missing_ok=True)  # reclaim disk; re-extractable from zip
     print(f"OK {symbol} {month}: {len(feats):,} buckets -> {out}/{symbol}-micro-15m-{month}.csv")
     return 0
 
