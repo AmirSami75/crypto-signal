@@ -1,0 +1,14 @@
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 10 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+=== baseline ===
+rows 806,675 | balance 0.3966
+{'log_loss': 0.6723568023296584, 'gate': {'floor': 0.6, 'trades': 6, 'expectancy_atr': -1.3322, 'pf_mean': None}, 'n_holdout': 160999}
+=== +funding ===
+rows 806,675 | balance 0.3966
+{'log_loss': 0.672117479563469, 'gate': {'floor': 0.6, 'trades': 6, 'expectancy_atr': -1.3322, 'pf_mean': None}, 'n_holdout': 160999}
+E2 VERDICT: REJECT | delta LL +0.00024 (18s)

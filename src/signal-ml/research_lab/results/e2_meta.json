@@ -1,0 +1,24 @@
+{
+  "baseline": {
+    "log_loss": 0.6723568023296584,
+    "gate": {
+      "floor": 0.6,
+      "trades": 6,
+      "expectancy_atr": -1.3322,
+      "pf_mean": null
+    },
+    "n_holdout": 160999
+  },
+  "+funding": {
+    "log_loss": 0.672117479563469,
+    "gate": {
+      "floor": 0.6,
+      "trades": 6,
+      "expectancy_atr": -1.3322,
+      "pf_mean": null
+    },
+    "n_holdout": 160999
+  },
+  "delta_log_loss": 0.00024,
+  "verdict": "REJECT"
+}
