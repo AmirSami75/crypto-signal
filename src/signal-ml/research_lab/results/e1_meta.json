@@ -1,0 +1,13 @@
+{
+  "log_loss": 0.6642145531171365,
+  "base_rate": 0.39240391920937945,
+  "label_balance_dev": 0.39677127470198603,
+  "gate_passed": false,
+  "fee_config": {
+    "take_profit_atr": 1.5,
+    "stop_loss_atr": 1.0,
+    "max_horizon": 24,
+    "fee_rate": 0.001,
+    "slippage_rate": 0.0005
+  }
+}

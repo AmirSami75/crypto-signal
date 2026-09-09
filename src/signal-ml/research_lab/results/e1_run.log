@@ -1,0 +1,16 @@
+fee_config: FeeAwareConfig(take_profit_atr=1.5, stop_loss_atr=1.0, max_horizon=24, fee_rate=0.001, slippage_rate=0.0005)
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 10 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+symbols: 35
+rows: 1,778,653 | label balance: 0.396
+development: 1,421,242 | strict holdout: 354,051 (purge 1,680 rows)
+strict holdout log loss: 0.6642 | base rate: 0.3924
+ floor  trades  expectancy_atr  pf_mean
+  0.50      42          0.0386    0.676
+  0.55       3         -0.2033      NaN
+E1 GATE: REJECT (22s)
