@@ -1,0 +1,27 @@
+OHLCV validation found 15 timestamp gaps
+  BTCUSDT: 233,848 candles
+OHLCV validation found 15 timestamp gaps
+  ETHUSDT: 233,849 candles
+OHLCV validation found 10 timestamp gaps
+  SOLUSDT: 212,476 candles
+rows 1,347,718 | dev 1,077,886 | hold 269,256 | features 39
+HGB strict LL 0.5980 | gate [{'floor': 0.45, 'trades': 474, 'expectancy_atr': -1.7924, 'pf_mean': 0.322}, {'floor': 0.5, 'trades': 26, 'expectancy_atr': -1.0762, 'pf_mean': 0.485}, {'floor': 0.55, 'trades': 5, 'expectancy_atr': 0.5062, 'pf_mean': 0.012}]
+TCN sequences: dev 359,235 × 32 × 39 (1.79 GB)
+/home/sudoix/Desktop/project/crypto-signal/src/signal-ml/research_lab/models/tcn.py:115: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /__w/pytorch/pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:822.)
+  "dir": float(l_dir), "ret": float(l_ret), "mfe": float(l_mfe), "mae": float(l_mae),
+  epoch 1/12 train 1.2241 val 1.1950 (dir 0.0829) 39.7s
+  epoch 2/12 train 1.1852 val 1.1889 (dir 0.0822) 41.2s
+  epoch 3/12 train 1.1805 val 1.1880 (dir 0.0819) 42.8s
+  epoch 4/12 train 1.1779 val 1.1856 (dir 0.0821) 45.8s
+  epoch 5/12 train 1.1756 val 1.1883 (dir 0.0824) 46.3s
+  epoch 6/12 train 1.1732 val 1.1849 (dir 0.0820) 47.1s
+  epoch 7/12 train 1.1717 val 1.1848 (dir 0.0817) 41.9s
+  epoch 8/12 train 1.1699 val 1.1938 (dir 0.0818) 45.1s
+  epoch 9/12 train 1.1687 val 1.1866 (dir 0.0817) 45.1s
+  epoch 10/12 train 1.1670 val 1.1872 (dir 0.0817) 45.8s
+  epoch 11/12 train 1.1659 val 1.1872 (dir 0.0816) 46.7s
+  epoch 12/12 train 1.1656 val 1.1883 (dir 0.0817) 41.4s
+TCN strict LL 0.6368 vs HGB(same rows) 0.5979 | gate [{'floor': 0.45, 'trades': 43286, 'expectancy_atr': -0.3238, 'pf_mean': 0.648}, {'floor': 0.5, 'trades': 112, 'expectancy_atr': -2.3088, 'pf_mean': 0.122}]
+forecast heads: {"ret_mae": 0.01517, "ret_mae_zero_baseline": 0.0151, "mfe_mae": 2.73602, "mfe_mae_mean_baseline": 3.01442, "mae_mae": 2.74059, "mae_mae_mean_baseline": 3.01697}
+E6 VERDICT: REJECT | ΔLL(TCN−HGB) +0.03886 (576s)
