@@ -69,7 +69,7 @@ def build_side_dataset(
             # label_symbol re-filters; align on timestamp to keep features/labels paired
             labelled = _label_frame(side, fee_config, sign)
             merged = side.merge(
-                labelled[["timestamp", "label", "net_atr", "resolved"]],
+                labelled[[c for c in ("timestamp", "label", "net_atr", "resolved", "fee_atr") if c in labelled.columns]],
                 on="timestamp", how="inner",
             )
             merged["symbol"] = symbol

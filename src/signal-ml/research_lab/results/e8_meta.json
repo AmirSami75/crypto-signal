@@ -1,0 +1,151 @@
+{
+  "horizon_bars": 24,
+  "symbols": 35,
+  "candles_4h": 223745,
+  "tiers": {
+    "futures": {
+      "costs": {
+        "fee_rate": 0.0005,
+        "slippage_rate": 0.0002
+      },
+      "rows": 435379,
+      "median_cost_atr": 0.05542710870196156,
+      "log_loss": 0.6729086804284524,
+      "log_loss_base": 0.6728435817131866,
+      "auc": 0.5266491995511257,
+      "unconditional": {
+        "trades": 85396,
+        "expectancy_atr": -0.0826,
+        "pf": 0.872,
+        "win_rate": 0.3996
+      },
+      "cells": [
+        {
+          "trades": 2814,
+          "expectancy_atr": 0.0231,
+          "pf": 1.039,
+          "win_rate": 0.4431,
+          "floor": 0.5
+        },
+        {
+          "trades": 586,
+          "expectancy_atr": 0.0612,
+          "pf": 1.108,
+          "win_rate": 0.4454,
+          "floor": 0.55
+        },
+        {
+          "trades": 151,
+          "expectancy_atr": 0.162,
+          "pf": 1.314,
+          "win_rate": 0.4834,
+          "floor": 0.6
+        },
+        {
+          "trades": 29,
+          "expectancy_atr": 0.7057,
+          "pf": 3.293,
+          "win_rate": 0.6897,
+          "floor": 0.65
+        },
+        {
+          "trades": 3,
+          "expectancy_atr": 0.6446,
+          "pf": 2.878,
+          "win_rate": 0.6667,
+          "floor": 0.7
+        }
+      ],
+      "passing": [
+        {
+          "trades": 2814,
+          "expectancy_atr": 0.0231,
+          "pf": 1.039,
+          "win_rate": 0.4431,
+          "floor": 0.5
+        },
+        {
+          "trades": 586,
+          "expectancy_atr": 0.0612,
+          "pf": 1.108,
+          "win_rate": 0.4454,
+          "floor": 0.55
+        },
+        {
+          "trades": 151,
+          "expectancy_atr": 0.162,
+          "pf": 1.314,
+          "win_rate": 0.4834,
+          "floor": 0.6
+        }
+      ],
+      "verdict": "PASS"
+    },
+    "lab": {
+      "costs": {
+        "fee_rate": 0.001,
+        "slippage_rate": 0.0005
+      },
+      "rows": 435379,
+      "median_cost_atr": 0.11877237578991763,
+      "log_loss": 0.6728018856602589,
+      "log_loss_base": 0.6726329071569871,
+      "auc": 0.5258822836088318,
+      "unconditional": {
+        "trades": 85396,
+        "expectancy_atr": -0.1715,
+        "pf": 0.754,
+        "win_rate": 0.399
+      },
+      "cells": [
+        {
+          "trades": 2610,
+          "expectancy_atr": -0.0289,
+          "pf": 0.954,
+          "win_rate": 0.4625,
+          "floor": 0.5
+        },
+        {
+          "trades": 434,
+          "expectancy_atr": -0.1308,
+          "pf": 0.801,
+          "win_rate": 0.3986,
+          "floor": 0.55
+        },
+        {
+          "trades": 82,
+          "expectancy_atr": 0.089,
+          "pf": 1.164,
+          "win_rate": 0.4756,
+          "floor": 0.6
+        },
+        {
+          "trades": 22,
+          "expectancy_atr": 0.3246,
+          "pf": 1.778,
+          "win_rate": 0.5909,
+          "floor": 0.65
+        },
+        {
+          "trades": 4,
+          "expectancy_atr": 0.5013,
+          "pf": 2.885,
+          "win_rate": 0.75,
+          "floor": 0.7
+        }
+      ],
+      "passing": [
+        {
+          "trades": 82,
+          "expectancy_atr": 0.089,
+          "pf": 1.164,
+          "win_rate": 0.4756,
+          "floor": 0.6
+        }
+      ],
+      "verdict": "PASS"
+    }
+  },
+  "verdict": "PASS",
+  "seconds": 15
+}

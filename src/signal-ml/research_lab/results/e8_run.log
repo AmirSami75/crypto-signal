@@ -1,0 +1,30 @@
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 10 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+symbols: 35 | 4h candles: 223,745 | span 2020-01-01 → 2026-09-08
+
+[futures] rows 435,379 | dev 346,623 | hold 85,396 | label balance 0.401 | median round-trip cost 0.05542710870196156 ATR
+[futures] strict holdout LL 0.6729 vs base-rate 0.6728 (margin -0.0001) | AUC 0.5266
+[futures]   floor 0.50: n   2814 exp 0.0231 pf 1.039 wr 0.4431
+[futures]   floor 0.55: n    586 exp 0.0612 pf 1.108 wr 0.4454
+[futures]   floor 0.60: n    151 exp 0.162 pf 1.314 wr 0.4834
+[futures]   floor 0.65: n     29 exp 0.7057 pf 3.293 wr 0.6897
+[futures]   floor 0.70: n      3 exp 0.6446 pf 2.878 wr 0.6667
+[futures]   unconditional: n 85396 exp -0.0826 pf 0.872
+[futures] VERDICT: PASS (3/5 cells)
+
+[lab] rows 435,379 | dev 346,623 | hold 85,396 | label balance 0.401 | median round-trip cost 0.11877237578991763 ATR
+[lab] strict holdout LL 0.6728 vs base-rate 0.6726 (margin -0.0002) | AUC 0.5259
+[lab]   floor 0.50: n   2610 exp -0.0289 pf 0.954 wr 0.4625
+[lab]   floor 0.55: n    434 exp -0.1308 pf 0.801 wr 0.3986
+[lab]   floor 0.60: n     82 exp 0.089 pf 1.164 wr 0.4756
+[lab]   floor 0.65: n     22 exp 0.3246 pf 1.778 wr 0.5909
+[lab]   floor 0.70: n      4 exp 0.5013 pf 2.885 wr 0.75
+[lab]   unconditional: n 85396 exp -0.1715 pf 0.754
+[lab] VERDICT: PASS (1/5 cells)
+
+E8 VERDICT (primary=futures): PASS (15s)

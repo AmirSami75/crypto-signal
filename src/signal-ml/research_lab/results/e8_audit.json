@@ -1,0 +1,130 @@
+{
+  "0.5": {
+    "n": 2814,
+    "expectancy": 0.0231,
+    "boot_ci95": [
+      -0.0229,
+      0.0693
+    ],
+    "t_stat": 0.99,
+    "positive_symbols": 15,
+    "symbols_traded": 35,
+    "top_symbol": "BCHUSDT",
+    "top_symbol_share_of_pnl": 0.9208831271418855,
+    "quarters": {
+      "2026Q1": {
+        "sum": 73.92,
+        "n": 590
+      },
+      "2026Q2": {
+        "sum": -82.28,
+        "n": 1466
+      },
+      "2026Q3": {
+        "sum": 73.24,
+        "n": 758
+      }
+    },
+    "sequential_non_overlapping": {
+      "trades": 665,
+      "expectancy_atr": -0.0743,
+      "pf": 0.883,
+      "win_rate": 0.3985
+    },
+    "candles_with_both_long_and_short": 0
+  },
+  "0.55": {
+    "n": 586,
+    "expectancy": 0.0612,
+    "boot_ci95": [
+      -0.0347,
+      0.1523
+    ],
+    "t_stat": 1.21,
+    "positive_symbols": 13,
+    "symbols_traded": 35,
+    "top_symbol": "BCHUSDT",
+    "top_symbol_share_of_pnl": 0.9311017496566475,
+    "quarters": {
+      "2026Q1": {
+        "sum": 0.33,
+        "n": 82
+      },
+      "2026Q2": {
+        "sum": -0.26,
+        "n": 358
+      },
+      "2026Q3": {
+        "sum": 35.81,
+        "n": 146
+      }
+    },
+    "sequential_non_overlapping": {
+      "trades": 211,
+      "expectancy_atr": -0.0286,
+      "pf": 0.953,
+      "win_rate": 0.4076
+    },
+    "candles_with_both_long_and_short": 0
+  },
+  "0.6": {
+    "n": 151,
+    "expectancy": 0.162,
+    "boot_ci95": [
+      -0.0252,
+      0.3576
+    ],
+    "t_stat": 1.63,
+    "positive_symbols": 13,
+    "symbols_traded": 23,
+    "top_symbol": "BCHUSDT",
+    "top_symbol_share_of_pnl": 0.6689404470118957,
+    "quarters": {
+      "2026Q1": {
+        "sum": -0.25,
+        "n": 12
+      },
+      "2026Q2": {
+        "sum": 13.91,
+        "n": 111
+      },
+      "2026Q3": {
+        "sum": 10.8,
+        "n": 28
+      }
+    },
+    "sequential_non_overlapping": {
+      "trades": 60,
+      "expectancy_atr": -0.1141,
+      "pf": 0.818,
+      "win_rate": 0.3833
+    },
+    "candles_with_both_long_and_short": 0
+  },
+  "null": {
+    "refits": 20,
+    "gate_pass_count": 7,
+    "best_expectancy_per_refit": [
+      -0.1295,
+      -0.1749,
+      -0.1257,
+      -0.0251,
+      -0.1375,
+      -0.3362,
+      0.3452,
+      0.2426,
+      0.3063,
+      -0.0154,
+      -0.0706,
+      0.0653,
+      -0.283,
+      0.0673,
+      -0.1439,
+      0.1536,
+      -0.1616,
+      0.2833,
+      -0.153,
+      -0.1148
+    ]
+  }
+}

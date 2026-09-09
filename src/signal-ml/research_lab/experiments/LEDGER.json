@@ -160,5 +160,28 @@
     "FAILURE_REASON": "range has no sign; high-range candles whipsaw/stop equally; costs at 15m = 0.55-1.17 ATR per round trip > 1.0 ATR stop",
     "RESEARCH_NOTES": "KEY FINDING: ATR-normalised costs explode at fine resolution (BTC 15m 1.17 ATR lab / 0.55 futures vs 4h 0.20/0.09). 15m is arithmetically uneconomic for ATR brackets. E8 = 4h retest with futures-tier costs",
     "RESULT_FILE": "E7_RESULT.md"
+  },
+  {
+    "EXPERIMENT_ID": "E8",
+    "DATE": "2026-09-09",
+    "DATA_VERSION": "4h\u00d735sym 2020-01\u21922026-09 (resampled from 1h, verified 0.0 diff vs native)",
+    "FEATURE_VERSION": "v1-42f@4h",
+    "MODEL": "HGB fee-aware directional, two cost tiers",
+    "HYPOTHESIS": "OHLCV direction signal becomes tradeable at 4h where costs are 0.06-0.12 ATR",
+    "TARGET": "fee-aware net-outcome binary, TP1.5/SL1.0, H=24 bars",
+    "TEST_PERIOD": "strict holdout 2026-02-15\u21922026-09-08 (85k rows)",
+    "METRICS": {
+      "ll_margin_futures": -0.0001,
+      "auc": 0.527,
+      "raw_gate": "PASS 3/5 futures cells",
+      "boot_ci_all_include_zero": true,
+      "top_symbol_share": "BCHUSDT 92-93%",
+      "sequential_expectancy": "-0.074/-0.029/-0.114 (all negative)",
+      "null_gate_pass_rate": "7/20=35%"
+    },
+    "STATUS": "REJECTED",
+    "FAILURE_REASON": "raw PASS destroyed by audit: CIs include 0, one-coin concentration, sequential book loses, 35% false-positive rate under shuffled-label null; LL margin negative",
+    "RESEARCH_NOTES": "Closes OHLCV-only family at 15m/1h/4h. GATE UPGRADE from E9: sequential non-overlapping trades, bootstrap CI lower>0, top-symbol<40%, null pass-rate<=5%, LL margin>0. Direction needs non-candle data (order flow, OI, liquidations, cross-sectional).",
+    "RESULT_FILE": "E8_RESULT.md"
   }
 ]
