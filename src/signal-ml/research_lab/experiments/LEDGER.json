@@ -203,5 +203,25 @@
     "FAILURE_REASON": "flow aggregated to 15m/12h is 2 orders of magnitude past the OFI literature horizon (seconds-minutes); signal arbitraged into kline close by then; margin 30x smaller than candle-feature margin at same resolution",
     "RESEARCH_NOTES": "Completes the map: candles(1h/4h/15m), funding, aggregated flow all tested - none carries exploitable sign at affordable horizons. Tick-level OFI is the only untested cell and is closed by cost arithmetic (needs maker/HFT market-making ops, not a model). Recommendation: freeze directional research, incumbent stays, future edge = own L2 recorder + maker execution as product decision.",
     "RESULT_FILE": "E9_RESULT.md"
+  },
+  {
+    "EXPERIMENT_ID": "E10",
+    "DATE": "2026-09-09",
+    "DATA_VERSION": "production universe 35sym 1h spot (incumbent's own data)",
+    "FEATURE_VERSION": "production v1-42f + fwd_range_atr target",
+    "MODEL": "HGB range regressor gating incumbent policy (floors 0.40/0.50)",
+    "HYPOTHESIS": "skip high-predicted-range candles improves incumbent net expectancy (E7 whipsaw finding deployed)",
+    "TARGET": "incumbent fee-aware labels; range model MAE on fwd range/ATR 24h",
+    "TEST_PERIOD": "strict holdout last 20% purged",
+    "METRICS": {
+      "range_mae_gain_1h": 0.0366,
+      "best_improvement": "+0.011 ATR (inside fee noise)",
+      "all_cells": "-0.27..-0.31 ATR",
+      "verdict_cells": 0
+    },
+    "STATUS": "REJECTED (as policy change); range model ships as dashboard signal only",
+    "FAILURE_REASON": "range skill decays from 12.2% (15m) to 3.7% (1h/24h); whipsaw channel already priced into 1h labels",
+    "RESEARCH_NOTES": "Bots policy unchanged. predicted_range_atr to dashboard as monitoring signal. Incumbent stays.",
+    "RESULT_FILE": "E10_RESULT.md"
   }
 ]

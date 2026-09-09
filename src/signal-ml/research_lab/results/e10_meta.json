@@ -1,0 +1,61 @@
+{
+  "range_mae_gain": 0.0366,
+  "q90": null,
+  "q95": null,
+  "ll": 0.6643,
+  "ll_base": 0.6687,
+  "auc": 0.5281,
+  "cells": [
+    {
+      "floor": 0.4,
+      "gate": "no-gate",
+      "trades": 64065,
+      "expectancy": -0.3071,
+      "pf": 0.606,
+      "sl_share": 0.582
+    },
+    {
+      "floor": 0.4,
+      "gate": "skip>=q90",
+      "trades": 63174,
+      "expectancy": -0.3,
+      "pf": 0.613,
+      "sl_share": 0.581
+    },
+    {
+      "floor": 0.4,
+      "gate": "skip>=q95",
+      "trades": 63935,
+      "expectancy": -0.3059,
+      "pf": 0.607,
+      "sl_share": 0.581
+    },
+    {
+      "floor": 0.5,
+      "gate": "no-gate",
+      "trades": 1654,
+      "expectancy": -0.2831,
+      "pf": 0.63,
+      "sl_share": 0.6
+    },
+    {
+      "floor": 0.5,
+      "gate": "skip>=q90",
+      "trades": 1622,
+      "expectancy": -0.2724,
+      "pf": 0.64,
+      "sl_share": 0.598
+    },
+    {
+      "floor": 0.5,
+      "gate": "skip>=q95",
+      "trades": 1651,
+      "expectancy": -0.2845,
+      "pf": 0.628,
+      "sl_share": 0.6
+    }
+  ],
+  "deployable_cells": [],
+  "verdict": "REJECT",
+  "note": "numbers transcribed from e10_run.log after results-path crash; policy unchanged, range model -> dashboard signal only"
+}
