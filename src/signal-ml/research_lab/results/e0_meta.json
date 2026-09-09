@@ -1,0 +1,83 @@
+{
+  "ran_at": "2026-09-09T06:44:11Z",
+  "symbols": [
+    "AAVEUSDT",
+    "ACEUSDT",
+    "ADAUSDT",
+    "ARBUSDT",
+    "AVAXUSDT",
+    "BCHUSDT",
+    "BNBUSDT",
+    "BTCUSDT",
+    "CAKEUSDT",
+    "DASHUSDT",
+    "DOGEUSDT",
+    "DOTUSDT",
+    "ENAUSDT",
+    "ETHUSDT",
+    "FETUSDT",
+    "FILUSDT",
+    "HBARUSDT",
+    "ICPUSDT",
+    "INJUSDT",
+    "LINKUSDT",
+    "LTCUSDT",
+    "NEARUSDT",
+    "PAXGUSDT",
+    "PENDLEUSDT",
+    "PEPEUSDT",
+    "PROMUSDT",
+    "SOLUSDT",
+    "SUIUSDT",
+    "TAOUSDT",
+    "TRXUSDT",
+    "UNIUSDT",
+    "WLDUSDT",
+    "XLMUSDT",
+    "XRPUSDT",
+    "ZECUSDT"
+  ],
+  "geometries": [
+    [
+      1.5,
+      1.0
+    ],
+    [
+      2.0,
+      1.0
+    ],
+    [
+      2.0,
+      1.5
+    ],
+    [
+      2.5,
+      1.0
+    ],
+    [
+      3.0,
+      1.0
+    ],
+    [
+      3.0,
+      1.5
+    ],
+    [
+      4.0,
+      1.5
+    ]
+  ],
+  "floors": [
+    0.36,
+    0.4,
+    0.44,
+    0.48,
+    0.52,
+    0.56
+  ],
+  "costs": {
+    "fee_rate": 0.001,
+    "slippage_rate": 0.0005
+  },
+  "holdout_candles": 11679
+}

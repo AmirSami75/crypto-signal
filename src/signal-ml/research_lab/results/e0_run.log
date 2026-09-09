@@ -1,0 +1,68 @@
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 10 timestamp gaps
+OHLCV validation found 10 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+OHLCV validation found 15 timestamp gaps
+symbols: 35
+holdout candles: 11,679
+  AAVEUSDT: done @59s
+  ACEUSDT: done @63s
+  ADAUSDT: done @67s
+  ARBUSDT: done @71s
+  AVAXUSDT: done @76s
+  BCHUSDT: done @80s
+  BNBUSDT: done @84s
+  BTCUSDT: done @89s
+  CAKEUSDT: done @93s
+  DASHUSDT: done @97s
+  DOGEUSDT: done @101s
+  DOTUSDT: done @105s
+  ENAUSDT: done @109s
+  ETHUSDT: done @114s
+  FETUSDT: done @118s
+  FILUSDT: done @122s
+  HBARUSDT: done @126s
+  ICPUSDT: done @131s
+  INJUSDT: done @135s
+  LINKUSDT: done @139s
+  LTCUSDT: done @143s
+  NEARUSDT: done @147s
+  PAXGUSDT: done @152s
+  PENDLEUSDT: done @156s
+  PEPEUSDT: done @160s
+  PROMUSDT: done @165s
+  SOLUSDT: done @169s
+  SUIUSDT: done @173s
+  TAOUSDT: done @177s
+  TRXUSDT: done @182s
+  UNIUSDT: done @186s
+  WLDUSDT: done @190s
+  XLMUSDT: done @194s
+  XRPUSDT: done @199s
+  ZECUSDT: done @203s
+ tp_atr  sl_atr  conf_floor  trades  exp_weighted   pf_mean
+    2.0     1.5        0.40   40524     -0.303269  0.749205
+    2.0     1.5        0.36   43801     -0.306277  0.748130
+    1.5     1.0        0.36   72810     -0.317483  0.660696
+    1.5     1.0        0.40   67815     -0.322023  0.656339
+    2.5     1.0        0.36   25913     -0.353051  0.692354
+    2.0     1.5        0.44   24639     -0.353951  0.702459
+    2.0     1.0        0.36   29915     -0.372886  0.644382
+    1.5     1.0        0.44   26589     -0.451529  0.561356
+    3.0     1.0        0.56      17     -0.506370  0.750449
+    3.0     1.0        0.48     208     -0.517263 10.282973
+    3.0     1.5        0.36    8912     -0.523306  0.705201
+    2.0     1.5        0.48    9479     -0.644606  0.562531
+    2.0     1.0        0.40   10308     -0.672823  0.508473
+    4.0     1.5        0.56      19     -0.680100  1.238659
+    2.5     1.0        0.40    9382     -0.692120  0.541361
+E0 complete in 203s
