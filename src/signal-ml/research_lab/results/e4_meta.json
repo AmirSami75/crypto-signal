@@ -1,0 +1,33 @@
+{
+  "log_loss": 0.5979729272640741,
+  "base_rate": 0.35110452506165135,
+  "maker_fee": 0.0002,
+  "gate": [
+    {
+      "floor": 0.45,
+      "trades": 474,
+      "expectancy_atr": -1.7924,
+      "pf_mean": 0.322
+    },
+    {
+      "floor": 0.5,
+      "trades": 26,
+      "expectancy_atr": -1.0762,
+      "pf_mean": 0.485
+    },
+    {
+      "floor": 0.55,
+      "trades": 5,
+      "expectancy_atr": 0.5062,
+      "pf_mean": 0.012
+    }
+  ],
+  "verdict": "REJECT",
+  "fee_config": {
+    "take_profit_atr": 1.5,
+    "stop_loss_atr": 1.0,
+    "max_horizon": 48,
+    "fee_rate": 0.001,
+    "slippage_rate": 0.0005
+  }
+}

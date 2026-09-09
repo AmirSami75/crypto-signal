@@ -1,0 +1,14 @@
+maker_fee=0.0002 tp=1.5 sl=1.0 horizon=48×15m=12h
+OHLCV validation found 15 timestamp gaps
+  BTCUSDT: 233,848 candles
+OHLCV validation found 15 timestamp gaps
+  ETHUSDT: 233,849 candles
+OHLCV validation found 10 timestamp gaps
+  SOLUSDT: 212,476 candles
+rows: 1,347,718 | balance: 0.3688
+development: 1,077,886 | holdout: 269,256
+strict LL 0.5980 | base rate 0.3511
+  floor 0.45: {'floor': 0.45, 'trades': 474, 'expectancy_atr': -1.7924, 'pf_mean': 0.322}
+  floor 0.5: {'floor': 0.5, 'trades': 26, 'expectancy_atr': -1.0762, 'pf_mean': 0.485}
+  floor 0.55: {'floor': 0.55, 'trades': 5, 'expectancy_atr': 0.5062, 'pf_mean': 0.012}
+E4 VERDICT: REJECT (15s)
