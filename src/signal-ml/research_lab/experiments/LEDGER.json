@@ -183,5 +183,25 @@
     "FAILURE_REASON": "raw PASS destroyed by audit: CIs include 0, one-coin concentration, sequential book loses, 35% false-positive rate under shuffled-label null; LL margin negative",
     "RESEARCH_NOTES": "Closes OHLCV-only family at 15m/1h/4h. GATE UPGRADE from E9: sequential non-overlapping trades, bootstrap CI lower>0, top-symbol<40%, null pass-rate<=5%, LL margin>0. Direction needs non-candle data (order flow, OI, liquidations, cross-sectional).",
     "RESULT_FILE": "E8_RESULT.md"
+  },
+  {
+    "EXPERIMENT_ID": "E9",
+    "DATE": "2026-09-09",
+    "DATA_VERSION": "UM futures aggTrades 24mo x3 sym, 52GB, 72/72 kline-validated (99.993% vwap-inside)",
+    "FEATURE_VERSION": "micro-15m: delta_pct+memory, large_trade_share, log size/count + ret_1/ATR14",
+    "MODEL": "HGB classifier, both sides, futures costs",
+    "HYPOTHESIS": "aggregated trade-flow carries direction sign candles lack",
+    "TARGET": "fee-aware net outcome, TP1.5/SL1.0, H=48 (12h)",
+    "TEST_PERIOD": "strict holdout 2026-05..2026-08 (70,522 rows)",
+    "METRICS": {
+      "ll_margin": 0.002,
+      "auc": 0.5125,
+      "sequential_trades": 0,
+      "note": "holdout max p < 0.50 - model never confident"
+    },
+    "STATUS": "REJECTED",
+    "FAILURE_REASON": "flow aggregated to 15m/12h is 2 orders of magnitude past the OFI literature horizon (seconds-minutes); signal arbitraged into kline close by then; margin 30x smaller than candle-feature margin at same resolution",
+    "RESEARCH_NOTES": "Completes the map: candles(1h/4h/15m), funding, aggregated flow all tested - none carries exploitable sign at affordable horizons. Tick-level OFI is the only untested cell and is closed by cost arithmetic (needs maker/HFT market-making ops, not a model). Recommendation: freeze directional research, incumbent stays, future edge = own L2 recorder + maker execution as product decision.",
+    "RESULT_FILE": "E9_RESULT.md"
   }
 ]
