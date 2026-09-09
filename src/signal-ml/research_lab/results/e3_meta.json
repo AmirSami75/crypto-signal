@@ -1,0 +1,70 @@
+{
+  "log_loss": 0.5734081087449587,
+  "base_rate": 0.3352138160314215,
+  "ll_margin_vs_base": 0.0644,
+  "gate": [
+    {
+      "floor": 0.4,
+      "trades": 21280,
+      "expectancy_atr": -0.833,
+      "pf_mean": 0.358
+    },
+    {
+      "floor": 0.42,
+      "trades": 4225,
+      "expectancy_atr": -1.1108,
+      "pf_mean": 0.304
+    },
+    {
+      "floor": 0.44,
+      "trades": 696,
+      "expectancy_atr": -1.5498,
+      "pf_mean": 0.262
+    },
+    {
+      "floor": 0.46,
+      "trades": 151,
+      "expectancy_atr": -1.8841,
+      "pf_mean": 1.201
+    },
+    {
+      "floor": 0.48,
+      "trades": 53,
+      "expectancy_atr": -1.633,
+      "pf_mean": 1.278
+    },
+    {
+      "floor": 0.5,
+      "trades": 13,
+      "expectancy_atr": -0.5946,
+      "pf_mean": 1.7
+    },
+    {
+      "floor": 0.52,
+      "trades": 5,
+      "expectancy_atr": -1.0447,
+      "pf_mean": 0.427
+    },
+    {
+      "floor": 0.55,
+      "trades": 1,
+      "expectancy_atr": -0.9974,
+      "pf_mean": null
+    }
+  ],
+  "economic_gate_ok": false,
+  "verdict": "REJECT",
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT"
+  ],
+  "rows": 1360300,
+  "fee_config": {
+    "take_profit_atr": 1.5,
+    "stop_loss_atr": 1.0,
+    "max_horizon": 24,
+    "fee_rate": 0.001,
+    "slippage_rate": 0.0005
+  }
+}
