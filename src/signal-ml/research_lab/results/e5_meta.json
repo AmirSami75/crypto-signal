@@ -1,0 +1,26 @@
+{
+  "selection": {
+    "00": {
+      "trades": 20,
+      "expectancy_atr": -14.0263,
+      "pf_mean": 0.04
+    },
+    "01": {
+      "trades": 41,
+      "expectancy_atr": -6.9221,
+      "pf_mean": 0.096
+    },
+    "10": {
+      "trades": 41,
+      "expectancy_atr": -5.5165,
+      "pf_mean": 0.085
+    },
+    "11": {
+      "trades": 156,
+      "expectancy_atr": -1.516,
+      "pf_mean": 0.382
+    }
+  },
+  "selected": [],
+  "verdict": "REJECT_NO_POSITIVE_BUCKET"
+}

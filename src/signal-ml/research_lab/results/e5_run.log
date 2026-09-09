@@ -1,0 +1,11 @@
+OHLCV validation found 15 timestamp gaps
+  BTCUSDT: 233,848 candles
+OHLCV validation found 15 timestamp gaps
+  ETHUSDT: 233,849 candles
+OHLCV validation found 10 timestamp gaps
+  SOLUSDT: 212,476 candles
+rows: 1,347,718 | balance: 0.3688
+holdout: 269,256 rows | base 0.3511
+selection half (first 50% of holdout): {"00": {"trades": 20, "expectancy_atr": -14.0263, "pf_mean": 0.04}, "01": {"trades": 41, "expectancy_atr": -6.9221, "pf_mean": 0.096}, "10": {"trades": 41, "expectancy_atr": -5.5165, "pf_mean": 0.085}, "11": {"trades": 156, "expectancy_atr": -1.516, "pf_mean": 0.382}}
+buckets selected on dev half: []
+E5 VERDICT: REJECT — no regime bucket positive on the selection half
