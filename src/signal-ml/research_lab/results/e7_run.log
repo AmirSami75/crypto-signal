@@ -1,0 +1,17 @@
+OHLCV validation found 15 timestamp gaps
+  BTCUSDT: 233,848 candles
+OHLCV validation found 15 timestamp gaps
+  ETHUSDT: 233,849 candles
+OHLCV validation found 10 timestamp gaps
+  SOLUSDT: 212,476 candles
+range model: holdout MAE 3.1697 vs mean-baseline 3.6115 (gain 12.2%), corr 0.475
+  trig 0.5 tp 1.5 sl 1.0 | uncond B exp -0.9689 pf 0.221 n 67931 | filtered B exp -1.1084 pf 0.175 n 35088
+  trig 0.5 tp 2.0 sl 1.0 | uncond B exp -0.9686 pf 0.283 n 67931 | filtered B exp -1.0955 pf 0.247 n 35088
+  trig 0.5 tp 1.0 sl 0.75 | uncond B exp -0.959 pf 0.112 n 67931 | filtered B exp -1.1137 pf 0.068 n 35088
+  trig 0.75 tp 1.5 sl 1.0 | uncond B exp -0.9582 pf 0.224 n 67925 | filtered B exp -1.0833 pf 0.181 n 35088
+  trig 0.75 tp 2.0 sl 1.0 | uncond B exp -0.9542 pf 0.289 n 67925 | filtered B exp -1.0707 pf 0.256 n 35088
+  trig 0.75 tp 1.0 sl 0.75 | uncond B exp -0.9625 pf 0.11 n 67925 | filtered B exp -1.1016 pf 0.07 n 35088
+  trig 1.0 tp 1.5 sl 1.0 | uncond B exp -0.9541 pf 0.225 n 67854 | filtered B exp -1.0674 pf 0.186 n 35086
+  trig 1.0 tp 2.0 sl 1.0 | uncond B exp -0.9433 pf 0.293 n 67854 | filtered B exp -1.0501 pf 0.262 n 35086
+  trig 1.0 tp 1.0 sl 0.75 | uncond B exp -0.9583 pf 0.11 n 67854 | filtered B exp -1.0954 pf 0.07 n 35086
+E7 VERDICT: REJECT | passing cells 0/9 (28s)

@@ -1,9 +1,164 @@
 [
-  {"EXPERIMENT_ID": "E0", "DATE": "2026-09-09", "DATA_VERSION": "1h×35sym 2024-09→2026-09", "FEATURE_VERSION": "v1-42f", "MODEL": "HGB incumbent (frozen)", "HYPOTHESIS": "Some bracket geometry × confidence floor yields positive net expectancy", "TARGET": "3-class barrier (incumbent)", "TEST_PERIOD": "strict holdout ~116k candles", "METRICS": {"best_cell_expectancy_atr": -0.303, "best_cell_pf": 0.75, "best_cell_trades": 40524}, "STATUS": "REJECTED", "FAILURE_REASON": "every cell negative; floors do not concentrate edge", "RESEARCH_NOTES": "Wall is economics, not capacity", "RESULT_FILE": "E0_RESULT.md"},
-  {"EXPERIMENT_ID": "E1", "DATE": "2026-09-09", "DATA_VERSION": "1h×35sym", "FEATURE_VERSION": "v1-42f", "MODEL": "HGB (same capacity)", "HYPOTHESIS": "Fee-aware net-outcome labels expose edge the 3-class labels hide", "TARGET": "binary P(net>0), timeout at market, fees both sides", "TEST_PERIOD": "strict holdout 354k rows", "METRICS": {"log_loss": 0.6642, "base_rate_ll": 0.6634, "best_cell": "42 trades +0.039 ATR PF 0.676"}, "STATUS": "REJECTED", "FAILURE_REASON": "LL = base rate; no learned edge", "RESEARCH_NOTES": "Gate tightened after first PASS was found dishonest (PF<1)", "RESULT_FILE": "E1_RESULT.md"},
-  {"EXPERIMENT_ID": "E2", "DATE": "2026-09-09", "DATA_VERSION": "1h×7 funded sym", "FEATURE_VERSION": "v1-42f (+2 funding)", "MODEL": "HGB A/B", "HYPOTHESIS": "Causal funding features add value beyond OHLCV", "TARGET": "binary net-outcome", "TEST_PERIOD": "strict holdout 161k rows", "METRICS": {"delta_log_loss": 0.00024}, "STATUS": "REJECTED", "FAILURE_REASON": "delta inside noise; gate cells identical", "RESEARCH_NOTES": "8h-settled funding is stale at 24-candle horizon; dead without multi-day labels", "RESULT_FILE": "E2_RESULT.md"},
-  {"EXPERIMENT_ID": "E3", "DATE": "2026-09-09", "DATA_VERSION": "15m×3sym 2020→2026", "FEATURE_VERSION": "v1-39f@15m", "MODEL": "HGB", "HYPOTHESIS": "Finer resolution exposes microstructure edge", "TARGET": "binary net-outcome, horizon 24×15m", "TEST_PERIOD": "strict holdout 272k rows", "METRICS": {"log_loss": 0.5734, "base_rate_ll": 0.6378, "ll_margin": 0.0644, "all_floors_expectancy": "negative"}, "STATUS": "PROMISING_SIGNAL_REJECTED_ECONOMICS", "FAILURE_REASON": "real ranking edge (+0.064 LL) but no positive-expectancy cell", "RESEARCH_NOTES": "First genuine signal; cost-per-signal ratio binds", "RESULT_FILE": "E3_RESULT.md"},
-  {"EXPERIMENT_ID": "E4", "DATE": "2026-09-09", "DATA_VERSION": "15m×3sym", "FEATURE_VERSION": "v1-39f@15m", "MODEL": "HGB", "HYPOTHESIS": "Maker-fill execution (limit entry, 0.02% fee) + 12h horizon clears costs", "TARGET": "binary net-outcome, maker entry fill-through required", "TEST_PERIOD": "strict holdout 269k rows", "METRICS": {"log_loss": 0.598, "best_cell": "26 trades −1.08 ATR PF 0.49 @0.50; 5 trades +0.51 @0.55 (noise)"}, "STATUS": "REJECTED", "FAILURE_REASON": "no cell ≥30 trades with exp>0 & PF>1; fill filter cuts volume 30%", "RESEARCH_NOTES": "Execution cannot rescue a signal 2-3× smaller than costs", "RESULT_FILE": "E4_RESULT.md"},
-  {"EXPERIMENT_ID": "E5", "DATE": "2026-09-09", "DATA_VERSION": "15m×3sym", "FEATURE_VERSION": "v1-39f@15m + vol/trend regimes (causal)", "MODEL": "HGB (E4) + regime gate", "HYPOTHESIS": "Edge concentrates in identifiable (vol, trend) regimes", "TARGET": "binary net-outcome", "TEST_PERIOD": "split-half holdout (select A, evaluate B)", "METRICS": {"selection_half_buckets": {"00": -14.03, "01": -6.92, "10": -5.52, "11": -1.52}}, "STATUS": "REJECTED", "FAILURE_REASON": "zero buckets positive on selection half; OOS never run", "RESEARCH_NOTES": "Regime slicing thins the edge; active-market bucket least bad", "RESULT_FILE": "E5_RESULT.md"},
-  {"EXPERIMENT_ID": "E6", "DATE": "2026-09-09", "DATA_VERSION": "15m×3sym", "FEATURE_VERSION": "v1-39f@15m, lookback 32", "MODEL": "MultiTaskTCN (dilated causal conv, focal + Huber heads) vs HGB", "HYPOTHESIS": "Sequence model + auxiliary forecasting heads extracts more edge than HGB from identical features", "TARGET": "direction P(net>0) + future return + MFE + MAE", "TRAIN_PERIOD": "dev block, 15% chronological val for early stop", "TEST_PERIOD": "strict holdout 269k rows, scored once", "METRICS": {"tcn_log_loss": 0.6368, "hgb_log_loss_same_rows": 0.5979, "delta": 0.0389, "ret_head_vs_zero": "no gain", "mfe_mae_heads_vs_mean": "9% gain", "params": 50000, "compute_seconds": 576}, "STATUS": "REJECTED", "FAILURE_REASON": "TCN worse than HGB by 0.039 LL; flatter probabilities; return head cannot beat predict-zero", "RESEARCH_NOTES": "§8 confirmed: deep model shows negative incremental value. Excursion heads learn volatility not direction — decomposes E3 signal as vol-structure", "MODEL_CHECKPOINT": "results/e6_tcn.pt", "RESULT_FILE": "E6_RESULT.md"}
+  {
+    "EXPERIMENT_ID": "E0",
+    "DATE": "2026-09-09",
+    "DATA_VERSION": "1h\u00d735sym 2024-09\u21922026-09",
+    "FEATURE_VERSION": "v1-42f",
+    "MODEL": "HGB incumbent (frozen)",
+    "HYPOTHESIS": "Some bracket geometry \u00d7 confidence floor yields positive net expectancy",
+    "TARGET": "3-class barrier (incumbent)",
+    "TEST_PERIOD": "strict holdout ~116k candles",
+    "METRICS": {
+      "best_cell_expectancy_atr": -0.303,
+      "best_cell_pf": 0.75,
+      "best_cell_trades": 40524
+    },
+    "STATUS": "REJECTED",
+    "FAILURE_REASON": "every cell negative; floors do not concentrate edge",
+    "RESEARCH_NOTES": "Wall is economics, not capacity",
+    "RESULT_FILE": "E0_RESULT.md"
+  },
+  {
+    "EXPERIMENT_ID": "E1",
+    "DATE": "2026-09-09",
+    "DATA_VERSION": "1h\u00d735sym",
+    "FEATURE_VERSION": "v1-42f",
+    "MODEL": "HGB (same capacity)",
+    "HYPOTHESIS": "Fee-aware net-outcome labels expose edge the 3-class labels hide",
+    "TARGET": "binary P(net>0), timeout at market, fees both sides",
+    "TEST_PERIOD": "strict holdout 354k rows",
+    "METRICS": {
+      "log_loss": 0.6642,
+      "base_rate_ll": 0.6634,
+      "best_cell": "42 trades +0.039 ATR PF 0.676"
+    },
+    "STATUS": "REJECTED",
+    "FAILURE_REASON": "LL = base rate; no learned edge",
+    "RESEARCH_NOTES": "Gate tightened after first PASS was found dishonest (PF<1)",
+    "RESULT_FILE": "E1_RESULT.md"
+  },
+  {
+    "EXPERIMENT_ID": "E2",
+    "DATE": "2026-09-09",
+    "DATA_VERSION": "1h\u00d77 funded sym",
+    "FEATURE_VERSION": "v1-42f (+2 funding)",
+    "MODEL": "HGB A/B",
+    "HYPOTHESIS": "Causal funding features add value beyond OHLCV",
+    "TARGET": "binary net-outcome",
+    "TEST_PERIOD": "strict holdout 161k rows",
+    "METRICS": {
+      "delta_log_loss": 0.00024
+    },
+    "STATUS": "REJECTED",
+    "FAILURE_REASON": "delta inside noise; gate cells identical",
+    "RESEARCH_NOTES": "8h-settled funding is stale at 24-candle horizon; dead without multi-day labels",
+    "RESULT_FILE": "E2_RESULT.md"
+  },
+  {
+    "EXPERIMENT_ID": "E3",
+    "DATE": "2026-09-09",
+    "DATA_VERSION": "15m\u00d73sym 2020\u21922026",
+    "FEATURE_VERSION": "v1-39f@15m",
+    "MODEL": "HGB",
+    "HYPOTHESIS": "Finer resolution exposes microstructure edge",
+    "TARGET": "binary net-outcome, horizon 24\u00d715m",
+    "TEST_PERIOD": "strict holdout 272k rows",
+    "METRICS": {
+      "log_loss": 0.5734,
+      "base_rate_ll": 0.6378,
+      "ll_margin": 0.0644,
+      "all_floors_expectancy": "negative"
+    },
+    "STATUS": "PROMISING_SIGNAL_REJECTED_ECONOMICS",
+    "FAILURE_REASON": "real ranking edge (+0.064 LL) but no positive-expectancy cell",
+    "RESEARCH_NOTES": "First genuine signal; cost-per-signal ratio binds",
+    "RESULT_FILE": "E3_RESULT.md"
+  },
+  {
+    "EXPERIMENT_ID": "E4",
+    "DATE": "2026-09-09",
+    "DATA_VERSION": "15m\u00d73sym",
+    "FEATURE_VERSION": "v1-39f@15m",
+    "MODEL": "HGB",
+    "HYPOTHESIS": "Maker-fill execution (limit entry, 0.02% fee) + 12h horizon clears costs",
+    "TARGET": "binary net-outcome, maker entry fill-through required",
+    "TEST_PERIOD": "strict holdout 269k rows",
+    "METRICS": {
+      "log_loss": 0.598,
+      "best_cell": "26 trades \u22121.08 ATR PF 0.49 @0.50; 5 trades +0.51 @0.55 (noise)"
+    },
+    "STATUS": "REJECTED",
+    "FAILURE_REASON": "no cell \u226530 trades with exp>0 & PF>1; fill filter cuts volume 30%",
+    "RESEARCH_NOTES": "Execution cannot rescue a signal 2-3\u00d7 smaller than costs",
+    "RESULT_FILE": "E4_RESULT.md"
+  },
+  {
+    "EXPERIMENT_ID": "E5",
+    "DATE": "2026-09-09",
+    "DATA_VERSION": "15m\u00d73sym",
+    "FEATURE_VERSION": "v1-39f@15m + vol/trend regimes (causal)",
+    "MODEL": "HGB (E4) + regime gate",
+    "HYPOTHESIS": "Edge concentrates in identifiable (vol, trend) regimes",
+    "TARGET": "binary net-outcome",
+    "TEST_PERIOD": "split-half holdout (select A, evaluate B)",
+    "METRICS": {
+      "selection_half_buckets": {
+        "00": -14.03,
+        "01": -6.92,
+        "10": -5.52,
+        "11": -1.52
+      }
+    },
+    "STATUS": "REJECTED",
+    "FAILURE_REASON": "zero buckets positive on selection half; OOS never run",
+    "RESEARCH_NOTES": "Regime slicing thins the edge; active-market bucket least bad",
+    "RESULT_FILE": "E5_RESULT.md"
+  },
+  {
+    "EXPERIMENT_ID": "E6",
+    "DATE": "2026-09-09",
+    "DATA_VERSION": "15m\u00d73sym",
+    "FEATURE_VERSION": "v1-39f@15m, lookback 32",
+    "MODEL": "MultiTaskTCN (dilated causal conv, focal + Huber heads) vs HGB",
+    "HYPOTHESIS": "Sequence model + auxiliary forecasting heads extracts more edge than HGB from identical features",
+    "TARGET": "direction P(net>0) + future return + MFE + MAE",
+    "TRAIN_PERIOD": "dev block, 15% chronological val for early stop",
+    "TEST_PERIOD": "strict holdout 269k rows, scored once",
+    "METRICS": {
+      "tcn_log_loss": 0.6368,
+      "hgb_log_loss_same_rows": 0.5979,
+      "delta": 0.0389,
+      "ret_head_vs_zero": "no gain",
+      "mfe_mae_heads_vs_mean": "9% gain",
+      "params": 50000,
+      "compute_seconds": 576
+    },
+    "STATUS": "REJECTED",
+    "FAILURE_REASON": "TCN worse than HGB by 0.039 LL; flatter probabilities; return head cannot beat predict-zero",
+    "RESEARCH_NOTES": "\u00a78 confirmed: deep model shows negative incremental value. Excursion heads learn volatility not direction \u2014 decomposes E3 signal as vol-structure",
+    "MODEL_CHECKPOINT": "results/e6_tcn.pt",
+    "RESULT_FILE": "E6_RESULT.md"
+  },
+  {
+    "EXPERIMENT_ID": "E7",
+    "DATE": "2026-09-09",
+    "DATA_VERSION": "15m\u00d73sym",
+    "FEATURE_VERSION": "v1-39f@15m",
+    "MODEL": "HGB regressor on range_atr + breakout straddle policy",
+    "HYPOTHESIS": "Range prediction (E6 +9%) monetises via symmetric breakout straddle",
+    "TARGET": "range_atr regression; straddle net ATR outcome",
+    "TEST_PERIOD": "split-half holdout (threshold on A, report B)",
+    "METRICS": {
+      "range_model_mae_gain": 0.122,
+      "range_corr": 0.475,
+      "cells": 9,
+      "all_cells_expectancy": "-0.94..-1.11 ATR",
+      "filtered_worse_than_unconditional": true,
+      "whipsaw_share": 0.082
+    },
+    "STATUS": "REJECTED",
+    "FAILURE_REASON": "range has no sign; high-range candles whipsaw/stop equally; costs at 15m = 0.55-1.17 ATR per round trip > 1.0 ATR stop",
+    "RESEARCH_NOTES": "KEY FINDING: ATR-normalised costs explode at fine resolution (BTC 15m 1.17 ATR lab / 0.55 futures vs 4h 0.20/0.09). 15m is arithmetically uneconomic for ATR brackets. E8 = 4h retest with futures-tier costs",
+    "RESULT_FILE": "E7_RESULT.md"
+  }
 ]

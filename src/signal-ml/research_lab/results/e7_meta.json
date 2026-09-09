@@ -1,0 +1,237 @@
+{
+  "grid_cells": 9,
+  "results": [
+    {
+      "trigger": 0.5,
+      "tp": 1.5,
+      "sl": 1.0,
+      "threshold_q": 0.5,
+      "A_expectancy": -1.0961,
+      "uncond_B": {
+        "trades": 67931,
+        "expectancy_atr": -0.9689,
+        "pf": 0.221,
+        "win_rate": 0.3573
+      },
+      "filtered_B": {
+        "trades": 35088,
+        "expectancy_atr": -1.1084,
+        "pf": 0.175,
+        "win_rate": 0.3581
+      },
+      "B_outcomes": {
+        "sl": 0.505,
+        "tp": 0.412,
+        "whipsaw": 0.082,
+        "timeout": 0.0
+      }
+    },
+    {
+      "trigger": 0.5,
+      "tp": 2.0,
+      "sl": 1.0,
+      "threshold_q": 0.5,
+      "A_expectancy": -1.1009,
+      "uncond_B": {
+        "trades": 67931,
+        "expectancy_atr": -0.9686,
+        "pf": 0.283,
+        "win_rate": 0.317
+      },
+      "filtered_B": {
+        "trades": 35088,
+        "expectancy_atr": -1.0955,
+        "pf": 0.247,
+        "win_rate": 0.3295
+      },
+      "B_outcomes": {
+        "sl": 0.565,
+        "tp": 0.352,
+        "whipsaw": 0.082,
+        "timeout": 0.0
+      }
+    },
+    {
+      "trigger": 0.5,
+      "tp": 1.0,
+      "sl": 0.75,
+      "threshold_q": 0.5,
+      "A_expectancy": -1.094,
+      "uncond_B": {
+        "trades": 67931,
+        "expectancy_atr": -0.959,
+        "pf": 0.112,
+        "win_rate": 0.3112
+      },
+      "filtered_B": {
+        "trades": 35088,
+        "expectancy_atr": -1.1137,
+        "pf": 0.068,
+        "win_rate": 0.2716
+      },
+      "B_outcomes": {
+        "sl": 0.478,
+        "tp": 0.44,
+        "whipsaw": 0.082
+      }
+    },
+    {
+      "trigger": 0.75,
+      "tp": 1.5,
+      "sl": 1.0,
+      "threshold_q": 0.5,
+      "A_expectancy": -1.0857,
+      "uncond_B": {
+        "trades": 67925,
+        "expectancy_atr": -0.9582,
+        "pf": 0.224,
+        "win_rate": 0.3606
+      },
+      "filtered_B": {
+        "trades": 35088,
+        "expectancy_atr": -1.0833,
+        "pf": 0.181,
+        "win_rate": 0.3661
+      },
+      "B_outcomes": {
+        "sl": 0.552,
+        "tp": 0.422,
+        "whipsaw": 0.026,
+        "timeout": 0.0
+      }
+    },
+    {
+      "trigger": 0.75,
+      "tp": 2.0,
+      "sl": 1.0,
+      "threshold_q": 0.5,
+      "A_expectancy": -1.0819,
+      "uncond_B": {
+        "trades": 67925,
+        "expectancy_atr": -0.9542,
+        "pf": 0.289,
+        "win_rate": 0.3215
+      },
+      "filtered_B": {
+        "trades": 35088,
+        "expectancy_atr": -1.0707,
+        "pf": 0.256,
+        "win_rate": 0.3368
+      },
+      "B_outcomes": {
+        "sl": 0.614,
+        "tp": 0.359,
+        "whipsaw": 0.026,
+        "timeout": 0.001
+      }
+    },
+    {
+      "trigger": 0.75,
+      "tp": 1.0,
+      "sl": 0.75,
+      "threshold_q": 0.5,
+      "A_expectancy": -1.0932,
+      "uncond_B": {
+        "trades": 67925,
+        "expectancy_atr": -0.9625,
+        "pf": 0.11,
+        "win_rate": 0.3088
+      },
+      "filtered_B": {
+        "trades": 35088,
+        "expectancy_atr": -1.1016,
+        "pf": 0.07,
+        "win_rate": 0.277
+      },
+      "B_outcomes": {
+        "sl": 0.528,
+        "tp": 0.446,
+        "whipsaw": 0.026,
+        "timeout": 0.0
+      }
+    },
+    {
+      "trigger": 1.0,
+      "tp": 1.5,
+      "sl": 1.0,
+      "threshold_q": 0.5,
+      "A_expectancy": -1.1083,
+      "uncond_B": {
+        "trades": 67854,
+        "expectancy_atr": -0.9541,
+        "pf": 0.225,
+        "win_rate": 0.3615
+      },
+      "filtered_B": {
+        "trades": 35086,
+        "expectancy_atr": -1.0674,
+        "pf": 0.186,
+        "win_rate": 0.3711
+      },
+      "B_outcomes": {
+        "sl": 0.559,
+        "tp": 0.427,
+        "whipsaw": 0.013,
+        "timeout": 0.0
+      }
+    },
+    {
+      "trigger": 1.0,
+      "tp": 2.0,
+      "sl": 1.0,
+      "threshold_q": 0.5,
+      "A_expectancy": -1.0942,
+      "uncond_B": {
+        "trades": 67854,
+        "expectancy_atr": -0.9433,
+        "pf": 0.293,
+        "win_rate": 0.3246
+      },
+      "filtered_B": {
+        "trades": 35086,
+        "expectancy_atr": -1.0501,
+        "pf": 0.262,
+        "win_rate": 0.3422
+      },
+      "B_outcomes": {
+        "sl": 0.62,
+        "tp": 0.366,
+        "whipsaw": 0.013,
+        "timeout": 0.001
+      }
+    },
+    {
+      "trigger": 1.0,
+      "tp": 1.0,
+      "sl": 0.75,
+      "threshold_q": 0.5,
+      "A_expectancy": -1.104,
+      "uncond_B": {
+        "trades": 67854,
+        "expectancy_atr": -0.9583,
+        "pf": 0.11,
+        "win_rate": 0.3085
+      },
+      "filtered_B": {
+        "trades": 35086,
+        "expectancy_atr": -1.0954,
+        "pf": 0.07,
+        "win_rate": 0.2763
+      },
+      "B_outcomes": {
+        "sl": 0.538,
+        "tp": 0.449,
+        "whipsaw": 0.013,
+        "timeout": 0.0
+      }
+    }
+  ],
+  "passing_cells": [],
+  "verdict": "REJECT",
+  "range_model": {
+    "mae": 3.1697044421215925,
+    "mae_mean_baseline": 3.611510989577563,
+    "corr": 0.4751245457127757
+  },
+  "seconds": 28
+}
