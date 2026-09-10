@@ -7,6 +7,8 @@ import { Badge, StatusDot } from '../components/ui/Badge'
 import { BarChart, CandleChart } from '../components/ui/Charts'
 import { Card, Eyebrow } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
+import { Reveal } from '../components/ui/Reveal'
+import { SectionHeader } from '../components/ui/SectionHeader'
 import { Spinner } from '../components/ui/Spinner'
 import { StatCard } from '../components/ui/StatCard'
 import { BotStatusBadge, OperatingModeBadge, venueLabel } from '../components/trading/TradingBadges'
@@ -181,14 +183,20 @@ export function OverviewPage() {
       <section aria-label={fa.overview.summaryLabel} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {/* The mode is also in the header and the sidebar. That repetition is deliberate — it is the
             platform's safety invariant — and this is the only one of the three with room to say what
-            the mode *means*. */}
+            the mode *means*. The accent wash marks it as the page's hero stat; the tone bar repeats
+            the mode verdict for scanners. */}
+        <Reveal index={0}>
         <StatCard
           label={fa.overview.modeCardLabel}
           value={mode}
           caption={isPaper ? fa.layout.paperModeNote : fa.layout.liveModeNote}
           trailing={<StatusDot tone={isPaper ? 'accent' : 'warn'} />}
+          tone={isPaper ? 'accent' : 'warn'}
+          className="bg-[image:var(--accent-wash)]"
         />
+        </Reveal>
 
+        <Reveal index={1}>
         <StatCard
           label={fa.overview.servicesCardLabel}
           value={`${healthyCount}/${SERVICES.length}`}
@@ -200,20 +208,25 @@ export function OverviewPage() {
               <Spinner size="sm" />
             )
           }
+          tone={!isSettled ? 'neutral' : healthyCount === SERVICES.length ? 'success' : 'danger'}
         />
+        </Reveal>
 
+        <Reveal index={2}>
         <StatCard
           label={fa.overview.lastCheckLabel}
           value={checkedAt ?? '—'}
           caption={checkedAt ? undefined : fa.overview.lastCheckPending}
           trailing={checkedAt ? <StatusDot tone="success" /> : undefined}
         />
+        </Reveal>
       </section>
 
       {/* The fleet row. Same honesty rule as the rest of the page: counts the API actually sent,
           dots only where a state is real. While the listing loads, the cards say so with a spinner
           rather than zeros — a zero that lasts 300ms still reads as "everything stopped". */}
       <section aria-label={fa.overview.botsSectionLabel} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <Reveal index={0}>
         <StatCard
           label={fa.overview.activeBotsLabel}
           value={`${countText(activeBots.length)}/${countText(totalBots)}`}
@@ -225,20 +238,28 @@ export function OverviewPage() {
               <StatusDot tone={activeBots.length > 0 && !botsError ? 'success' : 'neutral'} />
             )
           }
+          tone={isBotsLoading || botsError ? 'neutral' : activeBots.length > 0 ? 'success' : 'warn'}
         />
+        </Reveal>
 
+        <Reveal index={1}>
         <StatCard
           label={fa.overview.openPositionsLabel}
           value={isBotsLoading && !botsPage ? '—' : countText(openPositions)}
           caption={fa.overview.openPositionsCaption}
+          tone={openPositions > 0 ? 'accent' : 'neutral'}
         />
+        </Reveal>
 
+        <Reveal index={2}>
         <StatCard
           label={fa.overview.blockedBotsLabel}
           value={countText(blockedCount)}
           caption={blockedCount > 0 ? fa.overview.blockedBotsSome : fa.overview.blockedBotsZero}
           trailing={<StatusDot tone={blockedCount > 0 ? 'danger' : 'neutral'} />}
+          tone={blockedCount > 0 ? 'danger' : 'neutral'}
         />
+        </Reveal>
       </section>
 
       {/* Fleet pulse: the market one bot actually watches, beside what every bot has earned. Two
@@ -342,7 +363,7 @@ export function OverviewPage() {
           not evidence of anything. */}
       {canSeeOutcomes && outcomes && outcomes.sampleSize > 0 && (
         <Card as="section" className="p-6 sm:p-7">
-          <Eyebrow>{fa.overview.mlHealthLabel}</Eyebrow>
+          <SectionHeader title={fa.overview.mlHealthLabel} subtitle={fa.overview.calibrationDetail} />
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard label={fa.overview.mlSampleLabel} value={countText(outcomes.sampleSize)} className="border-line/60 p-4" />
@@ -362,8 +383,9 @@ export function OverviewPage() {
           <div className="mt-7 grid gap-8 lg:grid-cols-2">
             <div>
               <h3 className="text-sm font-semibold">{fa.overview.calibrationLabel}</h3>
-              <p className="mb-4 mt-1 text-xs leading-relaxed text-ink-muted">{fa.overview.calibrationDetail}</p>
-              <BarChart values={bucketValues} labels={bucketLabels} ariaLabel={fa.overview.calibrationLabel} />
+              <div className="mb-4 mt-3">
+                <BarChart values={bucketValues} labels={bucketLabels} ariaLabel={fa.overview.calibrationLabel} />
+              </div>
             </div>
 
             <div>
@@ -401,8 +423,7 @@ export function OverviewPage() {
           the platform's safety invariant and repetition of *that* kind is cheap. */}
       {canSeeBots && (
         <Card as="section" className="p-6 sm:p-7">
-          <Eyebrow>{fa.overview.botsSectionLabel}</Eyebrow>
-          <p className="mt-2.5 text-sm leading-relaxed text-ink-muted">{fa.overview.botsSectionDetail}</p>
+          <SectionHeader title={fa.overview.botsSectionLabel} subtitle={fa.overview.botsSectionDetail} />
 
           {botsError && !botsPage ? (
             <Alert tone="error" className="mt-5">{fa.overview.botsLoadFailed}</Alert>
