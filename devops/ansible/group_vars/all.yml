@@ -1,0 +1,18 @@
+---
+# Shared defaults. Per-environment files (dev.yml / prod.yml / aws.yml) override these.
+app_name: crypto-signal
+app_dir: /opt/crypto-signal
+repo_url: https://github.com/ruvnet/ruflo.git
+# Pin deployments to a tag or SHA. `latest` tracks the default branch (no rollback anchor).
+app_version: latest
+
+# Compose layers per environment (relative to app_dir/devops). Order matters.
+compose_project_dir: "{{ app_dir }}/devops"
+
+# Health gate after (re)start.
+health_api_url: http://127.0.0.1:8000/health/ready
+health_retries: 30
+health_delay: 10
+
+# Non-secret env values live here; secrets live in group_vars/<env>/vault.yml (ansible-vault).
+env_common: {}

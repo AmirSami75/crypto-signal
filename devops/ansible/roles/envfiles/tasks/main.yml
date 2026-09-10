@@ -1,0 +1,26 @@
+---
+# envfiles: render env/<env_set>/*.env from group vars + vault. Mode 0600 — these hold secrets.
+- name: Ensure env directory exists
+  ansible.builtin.file:
+    path: "{{ app_dir }}/devops/env/{{ env_set }}"
+    state: directory
+    mode: "0700"
+
+- name: Render api.env
+  ansible.builtin.template:
+    src: api.env.j2
+    dest: "{{ app_dir }}/devops/env/{{ env_set }}/api.env"
+    mode: "0600"
+
+- name: Render ml.env
+  ansible.builtin.template:
+    src: ml.env.j2
+    dest: "{{ app_dir }}/devops/env/{{ env_set }}/ml.env"
+    mode: "0600"
+
+- name: Render db.env (local-db environments only)
+  ansible.builtin.template:
+    src: db.env.j2
+    dest: "{{ app_dir }}/devops/env/{{ env_set }}/db.env"
+    mode: "0600"
+  when: manage_db_container | bool

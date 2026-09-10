@@ -1,0 +1,15 @@
+---
+# checkout: repo at a pinned version (fresh clone or update in place).
+- name: Clone or update application repo
+  ansible.builtin.git:
+    repo: "{{ repo_url }}"
+    dest: "{{ app_dir }}"
+    version: "{{ app_version }}"
+    force: false
+  register: git_out
+
+- name: Record deployed version
+  ansible.builtin.copy:
+    content: "{{ git_out.after | default(app_version) }}\n"
+    dest: "{{ app_dir }}/.ansible-deployed-version"
+    mode: "0644"

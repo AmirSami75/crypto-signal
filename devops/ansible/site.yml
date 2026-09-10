@@ -1,0 +1,19 @@
+---
+# site.yml — FRESH INSTALL of crypto-signal on a bare host.
+#
+# Usage (vault password via ~/.ansible/vault-pass, see ansible.cfg):
+#   ansible-playbook -i inventories/aws/hosts.yml site.yml -e app_version=v1.2.0
+#   ansible-playbook -i inventories/dev/hosts.yml site.yml        # local docker
+#   ansible-playbook -i inventories/prod/hosts.yml site.yml -e app_version=<sha>
+#
+# Fresh install = prereq -> checkout -> envfiles -> compose(build+up) -> health.
+# No backup role: there is no data to protect on a fresh host.
+- name: Fresh install crypto-signal
+  hosts: all
+  gather_facts: true
+  roles:
+    - prereq
+    - checkout
+    - envfiles
+    - compose
+    - health

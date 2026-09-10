@@ -1,0 +1,32 @@
+---
+# compose: build + (re)start the stack for this environment.
+#
+# Why this role injects env explicitly: three values the API needs live in NO
+# compose file (learned 2026-09-10 — a bare `up -d` drops them and the api
+# crash-loops with exit 134 or gRPC Unavailable):
+#   API_Settings__Jwt__SecretKey, Sercurity__KeyEncryptionKey (note the typo),
+#   MlService__Address. They are passed with -e so every recreate is safe.
+- name: Compose flags for this environment
+  ansible.builtin.set_fact:
+    compose_file_flags: "{{ compose_files | map('regex_replace', '^(.*)$', '-f \\1') | join(' ') }}"
+
+- name: Build images
+  ansible.builtin.shell: |
+    cd {{ compose_project_dir | quote }} && docker compose {{ compose_file_flags }} build {{ compose_services | default('') }}
+  args:
+    executable: /bin/bash
+  register: build_out
+  changed_when: "'Built' in build_out.stdout or 'built' in build_out.stdout"
+  when: compose_build | default(true) | bool
+
+- name: Start stack with required out-of-band env injected
+  ansible.builtin.shell: |
+    cd {{ compose_project_dir | quote }} && docker compose {{ compose_file_flags }} up -d {{ compose_services | default('') }}
+  args:
+    executable: /bin/bash
+  environment:
+    API_Settings__Jwt__SecretKey: "{{ vault_jwt_secret }}"
+    Sercurity__KeyEncryptionKey: "{{ vault_kek }}"
+    MlService__Address: "{{ env_api.MlService__Address }}"
+  register: up_out
+  changed_when: "'Started' in up_out.stdout or 'Recreated' in up_out.stdout"

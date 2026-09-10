@@ -1,0 +1,30 @@
+---
+# Development (local docker + local Postgres container).
+app_dir: "{{ lookup('env', 'HOME') }}/Desktop/project/crypto-signal"
+compose_files:
+  - compose.yml
+  - compose.dev.yml
+env_set: dev
+manage_db_container: true
+
+env_api:
+  ASPNETCORE_ENVIRONMENT: Development
+  ASPNETCORE_URLS: http://+:8080
+  OperatingMode: PAPER
+  MlService__Address: http://signal-ml:50051
+  MlService__DeadlineSeconds: "10"
+  MlService__MaxReceiveMessageMb: "4"
+  Cors__AllowedOrigins__0: http://localhost:5173
+  API_Settings__Db__Type: PostgreSql
+env_ml:
+  ML_ENVIRONMENT: Development
+  OPERATING_MODE: PAPER
+  ML_GRPC_HOST: 0.0.0.0
+  ML_GRPC_PORT: "50051"
+  ML_GRPC_WORKERS: "2"
+  ML_LOG_LEVEL: Information
+env_db:
+  POSTGRES_DB: crypto_signal
+  POSTGRES_USER: crypto_signal
+  POSTGRES_HOST: db
+  POSTGRES_PORT: "5432"

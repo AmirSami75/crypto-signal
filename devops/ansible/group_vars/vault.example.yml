@@ -1,0 +1,20 @@
+---
+# VAULT TEMPLATE — copy to group_vars/<env>/vault.yml and encrypt:
+#   cp group_vars/vault.example.yml group_vars/aws/vault.yml
+#   ansible-vault encrypt group_vars/aws/vault.yml
+# NEVER commit an unencrypted vault.yml (see .gitignore note in README).
+#
+# Key rules learned the hard way (2026-09-10 recreate wiped them all):
+# - API_Settings__Jwt__SecretKey: any high-entropy string. Rotating it only
+#   invalidates dashboard sessions (re-login); exchange keys use another seal.
+# - Sercurity__KeyEncryptionKey (note the upstream typo — it is real): MUST be
+#   `openssl rand -base64 32`. Rotating it DESTROYS stored ExchangeConnections;
+#   only rotate when nothing worth decrypting exists, then re-enter keys.
+vault_db_password: CHANGEME-db-password
+vault_postgres_cnn: CHANGEME-full-ado-connection-string
+vault_jwt_secret: CHANGEME-jwt-secret
+vault_jwt_issuer: crypto-signal
+vault_jwt_audience: crypto-signal-api
+vault_jwt_expiry_minutes: "60"
+vault_kek: CHANGEME-base64-32-bytes
+vault_bootstrap_admin_password: CHANGEME-admin-password

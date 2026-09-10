@@ -1,0 +1,14 @@
+---
+# backup: pg_dump before any upgrade on environments with a local db container.
+# AWS uses managed RDS (snapshots live in the AWS console, not here) — skipped there.
+- name: Dump local Postgres (pre-upgrade safety)
+  ansible.builtin.shell: |
+    cd {{ compose_project_dir | quote }} && docker compose {{ compose_files | map('regex_replace', '^(.*)$', '-f \\1') | join(' ') }} exec -T db pg_dump -U {{ env_db.POSTGRES_USER }} {{ env_db.POSTGRES_DB }} | gzip > /tmp/{{ app_name }}-backup-{{ ansible_date_time.iso8601_basic_short }}.sql.gz && ls -la /tmp/{{ app_name }}-backup-*.sql.gz | tail -1
+  args:
+    executable: /bin/bash
+  environment:
+    PGPASSWORD: "{{ vault_db_password }}"
+  register: backup_out
+  when: manage_db_container | bool
+  changed_when: false
+  failed_when: backup_out.rc != 0

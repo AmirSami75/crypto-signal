@@ -1,0 +1,23 @@
+---
+# upgrade.yml — VERSION UPGRADE of a running environment.
+#
+# Usage:
+#   ansible-playbook -i inventories/aws/hosts.yml upgrade.yml -e app_version=v1.3.0
+#   ansible-playbook -i inventories/aws/hosts.yml upgrade.yml -e "app_version=<sha> compose_services=api compose_build=true"
+#
+# Flow: checkout@version -> backup (local-db envs) -> build -> up (rolling per
+# service when compose_services names one) -> health gate.
+#
+# Rollback: the previous images keep their tags until pruned. On health failure,
+#   re-run with -e app_version=<previous SHA from .ansible-deployed-version>.
+# KEK rule: NEVER rotate vault_kek on upgrade — old ExchangeConnections seals
+#   become undecryptable. Rotate only on fresh install with empty data.
+- name: Upgrade crypto-signal
+  hosts: all
+  gather_facts: true
+  roles:
+    - checkout
+    - backup
+    - envfiles
+    - compose
+    - health

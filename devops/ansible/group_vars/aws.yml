@@ -1,0 +1,25 @@
+---
+# AWS (containers + managed RDS; no db service — it carries the `local-only` profile).
+compose_files:
+  - compose.yml
+  - compose.prod.yml
+  - compose.aws.yml
+env_set: aws
+manage_db_container: false
+
+env_api:
+  ASPNETCORE_ENVIRONMENT: Production
+  ASPNETCORE_URLS: http://+:8080
+  OperatingMode: PAPER
+  MlService__Address: http://signal-ml:50051
+  MlService__DeadlineSeconds: "10"
+  MlService__MaxReceiveMessageMb: "4"
+  API_Settings__Db__Type: PostgreSql
+env_ml:
+  ML_ENVIRONMENT: Production
+  OPERATING_MODE: PAPER
+  ML_GRPC_HOST: 0.0.0.0
+  ML_GRPC_PORT: "50051"
+  ML_GRPC_WORKERS: "8"
+  ML_LOG_LEVEL: Warning
+env_db: {}

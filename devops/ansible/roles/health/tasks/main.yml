@@ -1,0 +1,24 @@
+---
+# health: fail fast unless the API readiness endpoint answers AND no container is unhealthy.
+- name: Wait for readiness endpoint
+  ansible.builtin.uri:
+    url: "{{ health_api_url }}"
+    status_code: 200
+    timeout: 10
+  register: health_out
+  retries: "{{ health_retries }}"
+  delay: "{{ health_delay }}"
+  until: health_out.status == 200
+
+- name: List unhealthy containers
+  ansible.builtin.shell: |
+    docker ps --format '{{'{{'}}.Names{{'}}'}}:{{'{{'}}.Status{{'}}'}}' | grep -vE 'Up.*\(healthy\)|Up [0-9]+ (seconds|minutes)' || true
+  args:
+    executable: /bin/bash
+  register: unhealthy
+  changed_when: false
+
+- name: Fail on unhealthy containers
+  ansible.builtin.fail:
+    msg: "Unhealthy or non-running containers remain: {{ unhealthy.stdout_lines }}"
+  when: unhealthy.stdout | length > 0
