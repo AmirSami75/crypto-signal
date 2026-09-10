@@ -11,6 +11,7 @@ import type {
   BotPosition,
   BotStatusChange,
   BotSummary,
+  BotTearsheet,
   ChangePasswordRequest,
   DevErrorPayload,
   ExchangeConnection,
@@ -598,6 +599,18 @@ export const api = {
     /** Ends every open run and clears the fault, so a faulted bot is restartable from the UI. */
     stop: (id: string, payload: BotStatusChange, signal?: AbortSignal) =>
       request<BotDetail>(`/api/v1/bot/${id}/stop`, { method: 'POST', body: payload, signal }),
+
+    /**
+     * The performance tearsheet for one bot over the last `days` days (the server clamps to 1–365).
+     *
+     * `days` travels as a query parameter rather than as path segments: the endpoint is
+     * `[HttpGet("tearsheet")]` with `[FromQuery] int days = 30`, so there is no route value to hang it
+     * on. The response is an ordinary `ApiResult<BotTearsheet>` envelope, which `request()` unwraps and
+     * whose failures it surfaces — including the permission denial, which arrives as HTTP 200 with
+     * `isSuccess: false` like every other `CustomAuthorize` refusal.
+     */
+    tearsheet: (id: string, days: number, signal?: AbortSignal) =>
+      request<BotTearsheet>(`/api/v1/bot/${id}/tearsheet${queryString({ days })}`, { signal }),
   },
 
 

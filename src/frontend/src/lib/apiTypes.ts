@@ -646,6 +646,54 @@ export type BotDetail = {
   isBlockedByKillSwitch: boolean
 }
 
+/**
+ * The window a tearsheet covers: `days` back from `to`. All three are sent, all three are shown —
+ * a reader comparing two runs needs to know they covered the same span, which `days` alone cannot
+ * prove once the clock has moved.
+ */
+export type BotTearsheetPeriod = {
+  days: number
+  from: string
+  to: string
+}
+
+/**
+ * `GET /api/v1/bot/{botId}/tearsheet?days=30` — a lumibot-style performance summary.
+ *
+ * Every metric below is **nullable, and null is meaningful** — never NaN, never Infinity. `null` is
+ * the server saying the figure is undefined rather than zero: no trades at all (win rate, expectancy),
+ * no losing trade to divide by (profit factor), fewer than two trades or a zero-variance series
+ * (Sharpe), a zero drawdown (ROMAD). The panel renders these as an em dash, so a missing number reads
+ * as "undefined here" rather than as a computed zero.
+ *
+ * **`fillsIncluded` decides what the numbers are.** When true, the trade series is the closed
+ * positions' realized P&L and this is a trading record. When false, no fill landed in the window and
+ * the series falls back to the entry decisions' `expectedValue` (already in ATR units) as a proxy —
+ * an honest study of intent, not of results. The two cases are stated in words on the panel, because
+ * a win rate looks identical either way.
+ *
+ * `reasonBreakdown` keys are the engine's `reason_code` tokens (plus `unknown` for a blank one), and
+ * `confidenceHistogram` is always ten integer counts over confidence `[0, 0.1) … [0.9, 1.0]` — the
+ * bin index is `min(9, floor(confidence * 10))`.
+ */
+export type BotTearsheet = {
+  botId: string
+  period: BotTearsheetPeriod
+  /** Every decision in the window, HOLDs included — a quiet tick is evidence, not absence. */
+  decisions: number
+  /** Decisions that were `Open` only. */
+  entries: number
+  fillsIncluded: boolean
+  winRate: number | null
+  expectancyAtr: number | null
+  profitFactor: number | null
+  sharpe: number | null
+  maxDrawdown: number | null
+  romad: number | null
+  reasonBreakdown: Record<string, number>
+  confidenceHistogram: number[]
+}
+
 /** Start, pause and stop all take a reason. It lands in the audit trail as the actor's own words. */
 export type BotStatusChange = { reason: string }
 

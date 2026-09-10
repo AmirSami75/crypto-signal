@@ -640,6 +640,7 @@ export const fa = {
     tabOrders: 'سفارش‌ها',
     tabPositions: 'موقعیت‌ها',
     tabAudit: 'زنجیره حسابرسی',
+    tabTearsheet: 'کارنامه',
 
     runLabel: 'اجرای جاری',
     noRun: 'اجرای فعالی وجود ندارد',
@@ -864,6 +865,80 @@ export const fa = {
 
     faultedTitle: 'ربات در وضعیت خطا است',
     faultedBody: 'اجرای ربات متوقف شده؛ دلیل آن در رویدادهای حسابرسی ثبت شده است.',
+  },
+
+  /**
+   * The performance tearsheet — `GET /api/v1/bot/{botId}/tearsheet`.
+   *
+   * The single most important string here is `decisionsOnlyNotice`. Every metric on this screen can
+   * be computed two ways — from realised trades, or from the entry decisions' expected value as a
+   * proxy when no fill landed in the window — and the numbers look identical either way. The notice
+   * is what tells the reader which one they are looking at, so it is stated rather than implied by a
+   * boolean in the payload.
+   */
+  tearsheet: {
+    title: 'کارنامه عملکرد',
+    subtitle: 'خلاصه عملکرد ربات در بازه انتخابی، از تصمیم‌های ثبت‌شده',
+
+    periodLabel: 'بازه زمانی',
+    periodOption: (days: number) => `${days} روز`,
+    periodRange: 'از',
+    periodRangeTo: 'تا',
+
+    /** Shown when `fillsIncluded` is false — see the block comment above. */
+    decisionsOnlyNotice:
+      'این کارنامه فقط تصمیم‌های ربات را پوشش می‌دهد و اجراهای صرافی در آن لحاظ نشده است. اعداد از ارزش مورد انتظار تصمیم‌های ورود (بر حسب ATR) محاسبه شده‌اند، نه از معاملات واقعی.',
+    fillsIncludedNote: 'این کارنامه بر پایه معاملات بسته‌شده و اجراهای ثبت‌شده صرافی محاسبه شده است.',
+
+    metricsLabel: 'شاخص‌های عملکرد',
+    breakdownLabel: 'تفکیک دلایل تصمیم',
+    histogramLabel: 'توزیع اطمینان مدل',
+    histogramNote: 'هر ستون یک بازه اطمینان است؛ از کم به زیاد، ده بازه.',
+
+    decisions: 'تصمیم‌ها',
+    entries: 'ورودها',
+    decisionsCaption: 'شامل همه تصمیم‌ها حتی نگه‌داشتن',
+    entriesCaption: 'فقط تصمیم‌های ورود به موقعیت',
+
+    winRate: 'نرخ برد',
+    winRateCaption: 'سهم معاملات سودده از کل',
+    expectancyAtr: 'امید ریاضی هر معامله',
+    expectancyAtrCaption: 'میانگین بازده هر معامله، بر حسب ATR',
+    profitFactor: 'ضریب سوددهی',
+    profitFactorCaption: 'مجموع سود تقسیم بر مجموع زیان',
+    sharpe: 'نسبت شارپ',
+    sharpeCaption: 'میانگین بازده بر انحراف معیار؛ سالانه‌سازی نشده',
+    maxDrawdown: 'بیشترین افت سرمایه',
+    maxDrawdownCaption: 'بدترین افت از سقف تا کف منحنی سرمایه',
+    romad: 'بازده به افت سرمایه',
+    romadCaption: 'بازده کل تقسیم بر بیشترین افت سرمایه',
+
+    undefinedMetric: 'برای این شاخص داده کافی وجود ندارد',
+    breakdownEmpty: 'در این بازه دلیلی برای تصمیم‌ها ثبت نشده است',
+    histogramEmpty: 'در این بازه تصمیمی برای نمایش توزیع اطمینان ثبت نشده است',
+
+    emptyTitle: 'داده‌ای برای این بازه ثبت نشده',
+    emptyBody: 'در بازه انتخابی هیچ تصمیمی ثبت نشده است. بازه را بزرگ‌تر کنید یا اجرای ربات را بررسی کنید.',
+    loadFailed: 'بارگذاری کارنامه با خطا مواجه شد',
+
+    /**
+     * The engine's `reason_code` tokens as they appear in `reasonBreakdown`.
+     *
+     * The same vocabulary as `trading.reasonCode` — the breakdown is one of its other surfaces, so
+     * the tokens are listed here rather than reached for across pages: a report that words its own
+     * categories stays readable and reviewable on its own.
+     */
+    reasonCode: {
+      no_edge: 'برتری آماری کافی وجود ندارد',
+      confidence_below_minimum: 'اطمینان مدل کمتر از حد تعیین شده است',
+      take_profit_touched: 'قیمت به حد سود رسید',
+      stop_loss_touched: 'قیمت به حد ضرر رسید',
+      max_holding_periods_reached: 'مدت مجاز نگهداری موقعیت پایان یافت',
+      direction_reversed: 'جهت پیش‌بینی مدل برگشت',
+      short_not_allowed: 'فروش استقراضی برای این ربات مجاز نیست',
+      trailing_stop_advanced: 'حد ضرر متحرک جابه‌جا شد',
+      unknown: 'دلیل نامشخص',
+    } as Record<string, string>,
   },
 
   placeholder: {

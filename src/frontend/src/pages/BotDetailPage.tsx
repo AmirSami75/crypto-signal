@@ -21,6 +21,7 @@ import {
   riskCheckLabel,
 } from '../components/trading/TradingBadges'
 import { fa } from '../i18n/fa'
+import { TearsheetPanel } from '../components/trading/TearsheetPanel'
 import { api } from '../lib/api'
 import type {
   BotAuditEvent,
@@ -58,7 +59,7 @@ import { useResource } from '../lib/useResource'
  * strand, with the scope note from the safety policy attached.
  */
 
-const TABS = ['overview', 'decisions', 'orders', 'positions', 'audit'] as const
+const TABS = ['overview', 'decisions', 'orders', 'positions', 'audit', 'tearsheet'] as const
 type Tab = (typeof TABS)[number]
 
 const PAGE_SIZE = 10
@@ -206,6 +207,7 @@ export function BotDetailPage() {
             {t === 'orders' && fa.botDetail.tabOrders}
             {t === 'positions' && fa.botDetail.tabPositions}
             {t === 'audit' && fa.botDetail.tabAudit}
+            {t === 'tearsheet' && fa.botDetail.tabTearsheet}
           </button>
         ))}
       </div>
@@ -217,6 +219,7 @@ export function BotDetailPage() {
       {tab === 'orders' && botId && canSeeOrders && <OrdersTab botId={botId} page={page} onPageChange={setPage} />}
       {tab === 'positions' && botId && canSeePositions && <PositionsTab botId={botId} page={page} onPageChange={setPage} />}
       {tab === 'audit' && botId && canSeeAudit && <AuditTab botId={botId} page={page} onPageChange={setPage} />}
+      {tab === 'tearsheet' && botId && <TearsheetPanel botId={botId} />}
 
       {/* Per-bot kill switch confirmation */}
       <ConfirmDialog
