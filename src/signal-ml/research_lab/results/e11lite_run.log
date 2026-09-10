@@ -1,0 +1,13 @@
+DATA=/home/sudoix/Desktop/project/crypto-signal/src/signal-ml/research_lab/data/micro/BTCUSDT/lob/BTCUSDT-lob-sraz-2023-01.csv bytes=1195785420
+rows=3730870 span_ms=935587746 med_dt_ms=250.0
+roll_window_W=345600 (~24h)
+mid[0]=17181.65 mid[-1]=21337.45 med_spread_bps=0.05
+dev_start_ms=1673806248672 test_start_ms=1673979048672
+windows=33851 train/dev/test=[np.int64(16628), np.int64(6889), np.int64(10334)] purged=1
+k10: theta_dev_med=0.8008 USD balance(d/f/u)=[7425, 19106, 7320]
+k50: theta_dev_med=3.1006 USD balance(d/f/u)=[7200, 19246, 7405]
+HGB-k10 dev LL=0.9772 base=1.0422 margin=-0.0650 auc_dir=0.7242 | test LL=0.8484 margin=-0.1014
+HGB-k50 dev LL=1.0395 base=1.0398 margin=-0.0003 auc_dir=0.5924 | test LL=0.9616 margin=-0.0063
+DeepLOB-gate (HGB k50 dev LL margin>0): SKIP
+ECON n_trades=5 exp=-0.4024 pf=0.487 ci_low=-1.3379 null=0/20
+VERDICT=REJECT cells={"ll_margin_gt0": false, "expectancy_gt0": false, "ci_lower_gt0": false, "null_le1": true, "trades_ge5": true} elapsed_min=3.4

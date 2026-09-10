@@ -246,5 +246,31 @@
     "FAILURE_REASON": "sizing worse on risk-adj at both floors and worse on drawdown; sizing up high-range candles concentrates notional where whipsaw is highest",
     "RESEARCH_NOTES": "Range predicts magnitude not sign; scaling by magnitude cannot fix a zero-sign policy. Flat sizing stays.",
     "RESULT_FILE": "E12_RESULT.md"
+  },
+  {
+    "EXPERIMENT_ID": "E11-lite",
+    "DATE": "2026-09-10",
+    "DATA_VERSION": "S-razmi BTCUSDT-perp LOB 2023-01-09..20 (3.73M rows, 250ms)",
+    "FEATURE_VERSION": "trailing-24h z-scored (100,40) LOB snapshots, non-overlapping",
+    "MODEL": "HGB on flattened windows first; DeepLOB gated on HGB dev LL margin>0 (SKIP)",
+    "HYPOTHESIS": "second-level LOB snapshots carry fee-beating directional sign at futures costs",
+    "TARGET": "3-class mid-price labels k=10/k=50, dead zone=dev median |move|",
+    "TEST_PERIOD": "strict holdout last 3 days (10,334 windows; 288 15m bins)",
+    "METRICS": {
+      "hgb_k10_dev_ll_margin": -0.065,
+      "hgb_k10_auc_dir": 0.7242,
+      "hgb_k50_dev_ll_margin": -0.0003,
+      "hgb_k50_auc_dir": 0.5924,
+      "deeplob_trained": false,
+      "sequential_trades": 5,
+      "expectancy_atr": -0.4024,
+      "pf": 0.487,
+      "bootstrap_ci_lower": -1.3379,
+      "null_passes": "0/20"
+    },
+    "STATUS": "REJECTED",
+    "FAILURE_REASON": "HGB dev LL margin<=0 at both horizons (k10 -0.065, k50 -0.0003); sequential book -0.40 ATR PF 0.49 over 5 trades",
+    "RESEARCH_NOTES": "k10 ranks (auc 0.72) but miscalibrated; k50 ranking decays to 0.59. Tick-level model cell closed; maker/HFT execution remains the only untested path (E9 recommendation stands).",
+    "RESULT_FILE": "E11LITE_RESULT.md"
   }
 ]
