@@ -272,5 +272,29 @@
     "FAILURE_REASON": "HGB dev LL margin<=0 at both horizons (k10 -0.065, k50 -0.0003); sequential book -0.40 ATR PF 0.49 over 5 trades",
     "RESEARCH_NOTES": "k10 ranks (auc 0.72) but miscalibrated; k50 ranking decays to 0.59. Tick-level model cell closed; maker/HFT execution remains the only untested path (E9 recommendation stands).",
     "RESULT_FILE": "E11LITE_RESULT.md"
+  },
+  {
+    "EXPERIMENT_ID": "E13cal",
+    "DATE": "2026-09-10",
+    "DATA_VERSION": "1h production universe 35sym (1.42M dev / 175k cal / 175k eval)",
+    "FEATURE_VERSION": "production v1-42f",
+    "MODEL": "temperature scaling (T=1.063) + isotonic vs raw HGB probs",
+    "HYPOTHESIS": "post-hoc calibration improves holdout LL/ECE/floor precision (E11-lite miscalibration hint)",
+    "TARGET": "fee-aware labels; LL, ECE-15, floor-0.40 precision/recall",
+    "TEST_PERIOD": "strict holdout purged",
+    "METRICS": {
+      "ll_before": 0.65858,
+      "ll_temp": 0.65875,
+      "ll_iso": 0.65975,
+      "ece_before": 0.00363,
+      "ece_temp": 0.00896,
+      "prec_before": 0.418,
+      "prec_temp": 0.414,
+      "gate": "0/3"
+    },
+    "STATUS": "REJECTED (CALIBRATION-REJECT); no artifact promoted, serving untouched",
+    "FAILURE_REASON": "incumbent already well-calibrated (ECE 0.36%); temperature inflates coverage at worse precision, isotonic collapses to recall 0.06",
+    "RESEARCH_NOTES": "Calibration cannot create information. 0.40 floor precision 0.418 stands as honest number.",
+    "RESULT_FILE": "E13CAL_RESULT.md"
   }
 ]
