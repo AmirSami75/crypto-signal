@@ -73,6 +73,39 @@
      the drawer's. A variable is the only way they stay agreed. 3.5rem rather than the reference's
      3rem — Persian sits on a taller baseline and needs the extra 8px to breathe. */
   --app-header-height: 3.5rem;
+
+  /*
+   * Motion. One duration scale and one easing curve, shared by every Reveal-style entrance and
+   * interactive transition below. A single scale keeps staggered lists coherent; the curve is
+   * ease-out so motion settles rather than snaps. Anything time-based must honour
+   * `prefers-reduced-motion` at the usage site (see Reveal.tsx) — these tokens carry no behaviour.
+   */
+  --motion-instant: 120ms;
+  --motion-fast: 180ms;
+  --motion-base: 260ms;
+  --motion-slow: 420ms;
+  --motion-ease: cubic-bezier(0.22, 0.61, 0.21, 1);
+
+  /*
+   * Interactive elevation. The base doctrine stands — depth comes from hairlines, and `shadow-float`
+   * stays reserved for popovers and drawers. This scale is for the one exception: a control that is
+   * being pressed or hovered, where a whisper of lift tells the hand it caught. Kept near-invisible
+   * on light (alpha 0.06–0.10) so it never reads as a card shadow.
+   */
+  --lift-rest: 0 0 0 0 rgb(10 22 34 / 0);
+  --lift-hover: 0 6px 18px -10px rgb(10 22 34 / 0.16), 0 1px 4px -2px rgb(10 22 34 / 0.08);
+  --lift-pressed: 0 2px 8px -6px rgb(10 22 34 / 0.14);
+
+  /*
+   * Accent surfaces. The primary action and the hero stat keep the flat `--brand-fill` — these are
+   * for the glow *around* them, never a replacement fill. Translucent brand tints so both palettes
+   * work without a second definition; the -ink token stays the text colour.
+   */
+  --accent-glow: 0 0 0 4px rgb(62 164 236 / 0.14);
+  --accent-wash: linear-gradient(180deg, rgb(62 164 236 / 0.10), rgb(62 164 236 / 0.02));
+
+  /* Focus. One ring everywhere: 2px brand with a ground-coloured halo so it reads on any surface. */
+  --focus-ring: 0 0 0 2px var(--ground), 0 0 0 4px var(--ring);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -110,6 +143,23 @@
   --danger: #ff6d70;
   --danger-ink: #ff9092;
   --info: #79aad8;
+
+  /* Dark values for the interactive tokens: lift reads stronger on dark grounds, so the alphas rise;
+     the glow/wash reuse the bright hue, which is already the readable one here. */
+  --motion-instant: 120ms;
+  --motion-fast: 180ms;
+  --motion-base: 260ms;
+  --motion-slow: 420ms;
+  --motion-ease: cubic-bezier(0.22, 0.61, 0.21, 1);
+
+  --lift-rest: 0 0 0 0 rgb(0 0 0 / 0);
+  --lift-hover: 0 8px 22px -10px rgb(0 0 0 / 0.55), 0 1px 4px -2px rgb(0 0 0 / 0.4);
+  --lift-pressed: 0 3px 10px -6px rgb(0 0 0 / 0.5);
+
+  --accent-glow: 0 0 0 4px rgb(76 169 255 / 0.22);
+  --accent-wash: linear-gradient(180deg, rgb(76 169 255 / 0.14), rgb(76 169 255 / 0.03));
+
+  --focus-ring: 0 0 0 2px var(--ground), 0 0 0 4px var(--ring);
 
   --float: 0 22px 50px -18px rgb(0 0 0 / 0.66), 0 2px 10px -3px rgb(0 0 0 / 0.5);
   --scrim: rgb(4 7 10 / 0.66);
@@ -159,6 +209,16 @@
   --radius-2xl: 1.25rem;
 
   --shadow-float: var(--float);
+
+  /* Interactive tokens, mapped into the namespaces Tailwind generates utilities from. Durations
+     need no mapping — `duration-*` accepts any number in v4 — and the wash/ring are applied
+     directly via `var()` at the usage site (a gradient is not a color, a ring is not a shadow). */
+  --ease-motion: var(--motion-ease);
+
+  --shadow-lift-rest: var(--lift-rest);
+  --shadow-lift-hover: var(--lift-hover);
+  --shadow-lift-pressed: var(--lift-pressed);
+  --shadow-accent-glow: var(--accent-glow);
 }
 
 /*

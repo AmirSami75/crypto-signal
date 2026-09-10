@@ -242,3 +242,33 @@ export function CandleChart({ candles, height = 120, ariaLabel }: CandleChartPro
     </svg>
   )
 }
+
+/**
+ * A sparkline: the LineChart's shape without the fill, for inline metric contexts.
+ *
+ * Same projection and LTR doctrine, thinner stroke, no threshold prop — a sparkline that needs a
+ * reference line has outgrown the name and should be a LineChart.
+ */
+export function Sparkline({ values, height = 28, ariaLabel }: { values: number[]; height?: number; ariaLabel: string }) {
+  const WIDTH = 120
+  const points = project(values, WIDTH, height)
+
+  if (points.length === 0) return null
+
+  const last = values[values.length - 1] ?? 0
+  const first = values[0] ?? 0
+  const tone = last >= first ? 'var(--success)' : 'var(--danger)'
+
+  return (
+    <svg
+      viewBox={`0 0 ${WIDTH} ${height}`}
+      preserveAspectRatio="none"
+      className="w-full"
+      style={{ height, direction: 'ltr' }}
+      role="img"
+      aria-label={ariaLabel}
+    >
+      <path d={toPath(points)} fill="none" stroke={tone} strokeWidth="1.5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+    </svg>
+  )
+}
