@@ -223,5 +223,28 @@
     "FAILURE_REASON": "range skill decays from 12.2% (15m) to 3.7% (1h/24h); whipsaw channel already priced into 1h labels",
     "RESEARCH_NOTES": "Bots policy unchanged. predicted_range_atr to dashboard as monitoring signal. Incumbent stays.",
     "RESULT_FILE": "E10_RESULT.md"
+  },
+  {
+    "EXPERIMENT_ID": "E12",
+    "DATE": "2026-09-10",
+    "DATA_VERSION": "production universe 35sym 1h spot (incumbent's own data)",
+    "FEATURE_VERSION": "production v1-42f + fwd_range_atr target",
+    "MODEL": "HGB range regressor sizing incumbent policy (floors 0.40/0.50), size=clip(pred/median,0.5,2.0)",
+    "HYPOTHESIS": "scaling (not gating) by predicted range improves risk-adjusted expectancy (E10 gating bought +0.011 ATR)",
+    "TARGET": "incumbent fee-aware labels; expectancy-per-unit-risk, expectancy/stdev, exposure-normalized maxDD",
+    "TEST_PERIOD": "strict holdout last 20% purged",
+    "METRICS": {
+      "range_mae_gain_1h": 0.0374,
+      "floor_0.40_flat_risk_adj": -0.24729,
+      "floor_0.40_sized_risk_adj": -0.25482,
+      "floor_0.40_flat_maxdd": 20346.815,
+      "floor_0.40_sized_maxdd": 21479.791,
+      "floor_0.40_exp_per_unit_risk_flat_vs_sized": "-0.3071 vs -0.3277",
+      "deployable": 0
+    },
+    "STATUS": "REJECTED (as policy change); range size signal ships as dashboard signal only",
+    "FAILURE_REASON": "sizing worse on risk-adj at both floors and worse on drawdown; sizing up high-range candles concentrates notional where whipsaw is highest",
+    "RESEARCH_NOTES": "Range predicts magnitude not sign; scaling by magnitude cannot fix a zero-sign policy. Flat sizing stays.",
+    "RESULT_FILE": "E12_RESULT.md"
   }
 ]

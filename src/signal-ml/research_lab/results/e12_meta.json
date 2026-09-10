@@ -1,0 +1,60 @@
+{
+  "median_range_atr": 5.4377,
+  "range_mae_gain": 0.0374,
+  "ll": 0.6643104391794875,
+  "ll_base": 0.6687476945802626,
+  "policies": [
+    {
+      "floor": 0.4,
+      "policy": "flat",
+      "trades": 64065,
+      "expectancy": -0.3071,
+      "pf": 0.606,
+      "expectancy_per_unit_risk": -0.3071,
+      "risk_adj": -0.24729,
+      "maxdd": 20346.815,
+      "total": -19674.06,
+      "mean_size": 1.0
+    },
+    {
+      "floor": 0.4,
+      "policy": "vol-sized",
+      "trades": 64065,
+      "expectancy": -0.337,
+      "pf": 0.587,
+      "expectancy_per_unit_risk": -0.3277,
+      "risk_adj": -0.25482,
+      "maxdd": 21479.791,
+      "total": -21590.75,
+      "mean_size": 1.0284
+    },
+    {
+      "floor": 0.5,
+      "policy": "flat",
+      "trades": 1654,
+      "expectancy": -0.2831,
+      "pf": 0.63,
+      "expectancy_per_unit_risk": -0.2831,
+      "risk_adj": -0.22556,
+      "maxdd": 536.369,
+      "total": -468.17,
+      "mean_size": 1.0
+    },
+    {
+      "floor": 0.5,
+      "policy": "vol-sized",
+      "trades": 1654,
+      "expectancy": -0.2925,
+      "pf": 0.61,
+      "expectancy_per_unit_risk": -0.3054,
+      "risk_adj": -0.22824,
+      "maxdd": 568.945,
+      "total": -483.78,
+      "mean_size": 0.9578
+    }
+  ],
+  "deployable": [],
+  "verdict": "REJECT",
+  "note": "sizing does not clear the gate; range signal stays dashboard-only, flat sizing unchanged",
+  "seconds": 28
+}
