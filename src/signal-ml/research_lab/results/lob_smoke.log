@@ -1,0 +1,15 @@
+2026-09-10 12:24:58,331 INFO BTCUSDT resync #1 snap=11521359240349
+2026-09-10 12:24:58,331 INFO connect wss://fstream.binance.com/stream?streams=btcusdt@depth@500ms
+2026-09-10 12:24:59,726 INFO ws connected
+2026-09-10 12:25:00,177 INFO BTCUSDT resync #2 snap=11521359336697
+2026-09-10 12:54:59,225 INFO BTCUSDT done: {'deltas': 3580, 'resyncs': 2, 'gaps': 1, 'last_u': 11521508882606, 'bytes': 18283768, 'lines': 3580}
+{
+ "BTCUSDT": {
+  "deltas": 3580,
+  "resyncs": 2,
+  "gaps": 1,
+  "last_u": 11521508882606,
+  "bytes": 18283768,
+  "lines": 3580
+ }
+}
