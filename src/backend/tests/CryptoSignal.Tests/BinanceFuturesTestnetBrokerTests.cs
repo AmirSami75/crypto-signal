@@ -117,4 +117,48 @@ public sealed class BinanceFuturesTestnetBrokerTests
         Assert.False(broker.Supports(OperatingMode.Paper, MarketVenue.BinanceFuturesTestnet));
         Assert.False(broker.Supports(OperatingMode.Sandbox, MarketVenue.BinanceMainnet));
     }
+
+    [Fact]
+    public async Task Omits_reduceOnly_on_entry_orders()
+    {
+        // Binance error -1106: `reduceOnly` sent when not required. Entries must omit it entirely.
+        var handler = new FakeHttpMessageHandler();
+        handler.Respond("/fapi/v1/leverage", HttpStatusCode.OK, "{}");
+        handler.Respond("/fapi/v1/order", HttpStatusCode.OK,
+            "{\"orderId\":124,\"symbol\":\"BTCUSDT\",\"status\":\"FILLED\"," +
+            "\"clientOrderId\":\"oid-entry\",\"executedQty\":\"0.01\",\"avgPrice\":\"100.0\"," +
+            "\"updateTime\":" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}");
+        var broker = MakeBroker(handler, out _);
+
+        var request = new BrokerOrderRequest(
+            "oid-entry", "BTCUSDT", MarketVenue.BinanceFuturesTestnet, Rules, TradeDirection.Long,
+            OrderSide.Buy, OrderType.Market, 0.01m, 100m, Leverage: 2);
+
+        var placement = await broker.PlaceAsync(request, Creds, CancellationToken.None);
+
+        Assert.Equal(BrokerOutcome.Accepted, placement.Outcome);
+        var query = handler.Requests.First(r => r.RequestUri!.AbsolutePath == "/fapi/v1/order").RequestUri!.Query;
+        Assert.DoesNotContain("reduceOnly", query, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Sends_reduceOnly_on_closing_orders()
+    {
+        var handler = new FakeHttpMessageHandler();
+        handler.Respond("/fapi/v1/order", HttpStatusCode.OK,
+            "{\"orderId\":125,\"symbol\":\"BTCUSDT\",\"status\":\"FILLED\"," +
+            "\"clientOrderId\":\"oid-close\",\"executedQty\":\"0.01\",\"avgPrice\":\"100.0\"," +
+            "\"updateTime\":" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}");
+        var broker = MakeBroker(handler, out _);
+
+        var request = new BrokerOrderRequest(
+            "oid-close", "BTCUSDT", MarketVenue.BinanceFuturesTestnet, Rules, TradeDirection.Flat,
+            OrderSide.Sell, OrderType.Market, 0.01m, 100m, Leverage: 2);
+
+        var placement = await broker.PlaceAsync(request, Creds, CancellationToken.None);
+
+        Assert.Equal(BrokerOutcome.Accepted, placement.Outcome);
+        var query = handler.Requests.First(r => r.RequestUri!.AbsolutePath == "/fapi/v1/order").RequestUri!.Query;
+        Assert.Contains("reduceOnly=true", query, StringComparison.OrdinalIgnoreCase);
+    }
 }

@@ -115,10 +115,16 @@ public sealed class BinanceFuturesTestnetBroker(
             new("type", MapOrderType(request.Type)),
             new("quantity", BinanceJson.Number(request.Quantity)),
             new("positionSide", request.Direction == TradeDirection.Short ? "SHORT" : "LONG"),
-            new("reduceOnly", (request.Direction is not (TradeDirection.Long or TradeDirection.Short)).ToString().ToLowerInvariant()),
+            // Binance error -1106: `reduceOnly` may ONLY be sent when it is required (a
+            // closing order). Sending `reduceOnly=false` on an entry is itself a rejection,
+            // so the parameter is omitted entirely unless this order closes a position.
             new("newClientOrderId", request.ClientOrderId),
             new("newOrderRespType", "RESULT"),
         };
+        if (request.Direction is not (TradeDirection.Long or TradeDirection.Short))
+        {
+            parameters.Add(new("reduceOnly", "true"));
+        }
 
         if (request.Type != OrderType.Market)
         {
