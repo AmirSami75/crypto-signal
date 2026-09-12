@@ -28,5 +28,6 @@
     API_Settings__Jwt__SecretKey: "{{ vault_jwt_secret }}"
     Sercurity__KeyEncryptionKey: "{{ vault_kek }}"
     MlService__Address: "{{ env_api.MlService__Address }}"
+    Trading__SchedulerEnabled: "true"
   register: up_out
   changed_when: "'Started' in up_out.stdout or 'Recreated' in up_out.stdout"
