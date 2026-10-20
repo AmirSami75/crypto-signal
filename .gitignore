@@ -25,6 +25,8 @@ src/signal-ml/data/*
 src/signal-ml/artifacts/*
 !src/signal-ml/data/.gitkeep
 !src/signal-ml/artifacts/.gitkeep
+src/signal-ml/research_lab/data/micro/*
+src/signal-ml/research_lab/results/*
 
 # The model registry directory itself is tracked, empty. The signal-ml image does
 # `COPY src/signal-ml/artifacts/models` — an untracked directory is present on the machine that
