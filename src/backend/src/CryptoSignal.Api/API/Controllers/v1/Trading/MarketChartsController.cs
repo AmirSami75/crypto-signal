@@ -45,6 +45,12 @@ public class MarketChartsController(IMarketDataSourceResolver marketData) : Base
         if (!Enum.TryParse<MarketVenue>(venue, ignoreCase: true, out var parsedVenue))
             throw new BadRequestException($"unknown venue '{venue}'");
 
+        // `*` is the wildcard marker a scanner bot carries, never a market. Asking the venue for it
+        // surfaces as an opaque 400 from the exchange and a 500 with a stack trace here; say what the
+        // problem is instead of relaying the venue's wording.
+        if (string.IsNullOrWhiteSpace(symbol) || symbol.Trim() == "*")
+            throw new BadRequestException("a chart needs a concrete market; '*' is not a symbol");
+
         // Charts need tens of candles, not the model's 300; cap so a stray client cannot ask a
         // paged source for unbounded pages.
         limit = Math.Clamp(limit, 10, 300);
