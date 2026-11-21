@@ -11,6 +11,13 @@
 **/node_modules
 **/dist
 src/signal-ml/data
+# Generated research output: 35 GB of experiment artifacts that the engine image never serves.
+# Leaving it in the build context turned every `compose build` into a multi-gigabyte transfer.
+src/signal-ml/research_lab
+src/signal-ml/checkpoints
+src/signal-ml/lightning_logs
+src/signal-ml/tmp
+**/.venv
 src/signal-ml/artifacts/*
 !src/signal-ml/artifacts/model.joblib
 !src/signal-ml/artifacts/metadata.json

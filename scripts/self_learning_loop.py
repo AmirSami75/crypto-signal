@@ -131,6 +131,18 @@ def main() -> int:
 
     config = load_config(ML_ROOT / "config.toml")
 
+    # Snapshot what is serving *before* the trainer overwrites it. `train_barrier_model` archives the
+    # pre-overwrite bundle itself, but a reject has to put it back — and the run-level `metadata.json`
+    # is the baseline the next gate reads, so restoring only the joblib would leave the gate comparing
+    # the next candidate against this rejected one.
+    serving_snapshot = {
+        name: (MODELS_DIR / name).read_bytes()
+        for name in MANAGED_BUNDLES
+        if (MODELS_DIR / name).exists()
+    }
+    metadata_path = MODELS_DIR / "metadata.json"
+    metadata_snapshot = metadata_path.read_text() if metadata_path.exists() else None
+
     log("step 1/3 — refreshing candles" if not args.no_refresh else "step 1/3 — skipping refresh")
     result = train_barrier_model(config, refresh=not args.no_refresh)
 
@@ -172,36 +184,49 @@ def main() -> int:
         return 0
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
-    if promoted and incumbent_metadata_path.exists():
-        for name in MANAGED_BUNDLES:
-            path = MODELS_DIR / name
-            if path.exists():
-                archive_bundle(path, ARCHIVE_DIR, "incumbent")
-        shutil.move(str(incumbent_metadata_path), ARCHIVE_DIR / f"{stamp}_incumbent_metadata.json")
 
-    # Record this run's scores as the next run's incumbent baseline. `result` IS the metadata
-    # structure — passing `result.get("metadata")` wrote a baseline with no bundles, which
-    # extract_scores then read as "no incumbent" and the gate waved through as a first
-    # generation. Every future retrain would have promoted unconditionally: a gate that cannot
-    # see the incumbent is not a gate.
-    (MODELS_DIR / "metadata.json.previous").write_text(
-        json.dumps(
-            {
-                "archived_at": datetime.now(timezone.utc).isoformat(),
-                "promoted": promoted,
-                **result,
-            },
-            indent=2,
-            default=str,
+    if promoted:
+        if incumbent_metadata_path.exists():
+            for name in MANAGED_BUNDLES:
+                path = MODELS_DIR / name
+                if path.exists():
+                    archive_bundle(path, ARCHIVE_DIR, "incumbent")
+            shutil.move(str(incumbent_metadata_path), ARCHIVE_DIR / f"{stamp}_incumbent_metadata.json")
+
+        # The next run's baseline is the bundle that is now serving.
+        (MODELS_DIR / "metadata.json.previous").write_text(
+            json.dumps(
+                {
+                    "archived_at": datetime.now(timezone.utc).isoformat(),
+                    "promoted": True,
+                    **result,
+                },
+                indent=2,
+                default=str,
+            )
         )
-    )
-
-    if not promoted:
-        log("candidate archived under rejected/ for review")
-    else:
         log(f"model live at {MODELS_DIR} — registry hot-reloads, no restart needed")
+        log(f"done at {stamp}")
+        return 0
+
+    # REJECT — the branch that used to lie. `train_barrier_model` has already overwritten the serving
+    # files, so without this the loser stays live while the log says "archived for review". Move the
+    # candidate to `rejected/`, put the pre-run snapshot back, and restore the run metadata so the next
+    # gate compares against the incumbent rather than against this rejected candidate.
+    restored = 0
+    for name in MANAGED_BUNDLES:
+        live = MODELS_DIR / name
+        if live.exists():
+            archive_bundle(live, REJECTED_DIR, "rejected")
+        blob = serving_snapshot.get(name)
+        if blob is not None:
+            live.write_bytes(blob)
+            restored += 1
+    if metadata_snapshot is not None:
+        metadata_path.write_text(metadata_snapshot)
+    log(f"candidate archived under rejected/; restored {restored} serving bundle(s) from the pre-run snapshot")
     log(f"done at {stamp}")
-    return 0 if promoted or args.dry_run else 1
+    return 1
 
 
 if __name__ == "__main__":

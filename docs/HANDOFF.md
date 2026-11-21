@@ -4,7 +4,12 @@
 > of the work: what changed, what was verified, what remains. The next agent (Hermes, Cline, OpenCode,
 > Claude Code, or a human) starts here.
 >
-> **Last updated:** 2026-09-05 (evening) · **Branch:** `main` · **HEAD:** see `git log` — Phase 2 MTF wiring complete; weekly retrain cron fixed; LSTM v2 staged (not promoted); no edge at 1h
+> **Last updated:** 2026-11-21 · **Branch:** `main` · **HEAD:** see `git log` — local-only environment;
+> clean DB + fresh Binance Futures **testnet** connection; one wildcard **scanner bot**
+> (`binance-demo-scanner-5m`, Sandbox, 5m, 10 USDT/trade, TP 2 ATR / SL 1 ATR) trades the whole market
+> on a real venue. First sandbox round trip closed: FETUSDT short, entry 0.1075 → exit 0.1074,
+> **+0.0013 USDT net**. Two broker defects found and fixed on the way (priceless RESULT responses,
+> closing orders refused by the side guard). Nothing committed since `f879b66`.
 
 ---
 
@@ -33,6 +38,295 @@ Autonomous crypto futures-trading platform:
 | Containers | api, dashboard, db, signal-ml, proxy — all up | `docker compose ps` |
 
 ## 3. Recent work log (newest first)
+
+- **2026-11-21 — visual pass: the dashboard reads like a trading terminal**
+
+  Design-system upgrade (ui-ux-pro-max `--design-system` on "crypto trading dashboard dark data
+  dense", dials density 8 / motion 5), applied at the token + primitive layer so every page inherits it.
+
+  - **Palette.** Dark ground moved from neutral grey (#17191c) to a cool, deep navy (#070b12) with
+    layered surfaces (#0d141e / #121b27 / #172130) and cool hairlines; brand nudged to #2f8fff and
+    success to #2ee0a5 so profit reads as light rather than as a green sticker. Light keeps a white
+    panel on a barely-cool ground (#f6f8fb). `--ink-faint` on light was **3.36:1** — under AA — and is
+    now #6f6f74 (4.9:1).
+  - **Backdrop.** New `.app-aurora` layer: two wide radial washes (brand from the trailing corner,
+    emerald from the leading one) plus a 72px hairline grid masked to the top, `pointer-events: none`
+    and `aria-hidden`. Applied to the dashboard shell and the sign-in shell, so the product's tone is
+    visible before authentication.
+  - **Panels.** `Card` now renders `.panel`: hairline + a one-pixel inset top highlight (a lit bezel)
+    and a subtle vertical gradient, radius 16px. New `interactive` prop adds lift-on-hover. Stat
+    values moved to `.stat-value` (28px, tabular, `-0.02em`) and the tone bar became a vertical bloom
+    instead of a solid stripe.
+  - **Tables.** `.data-table`: sticky `thead` with an 8px backdrop blur, zebra as a tint instead of a
+    stripe, whole-row hover lit with 8% brand, row hairlines that stop at the last row.
+  - **Shell.** Sidebar and drawer are translucent with `backdrop-blur-xl`; the active nav entry carries
+    a `nav-rail` gradient marker on the leading edge; the mode badge in the header gained a breathing
+    `.live-dot` (disabled under `prefers-reduced-motion`); the operating-mode readout is now a lit
+    inset panel.
+  - **Bug found by exercising the surface.** `isSessionShape` never validated `fullName`, which
+    `UserMenu` calls `.trim()` on — a stored session from an older build (or a hand-edited one) passed
+    the check and crashed the whole layout into the error boundary. It is now required, so a stale
+    session signs out instead of white-screening.
+  - **Verified in the real browser** (1440/768/375, both themes): 18 panels and 12 nav entries render,
+    aurora and nav marker present, sticky+blurred table headers on `/scanner` and `/bots`, no horizontal
+    overflow at any width, contrast on both palettes — ink 16.8/19.8, muted 7.5/6.3, faint 4.8/4.9,
+    accent 10.7/5.7, success 13.1/5.4, danger 8.5/6.5 (all ≥ AA). `npm run check` (typecheck + 77-file
+    RTL audit) and `npm run build` pass.
+
+- **2026-11-21 — clean slate + first live sandbox bot on Binance Futures testnet**
+
+  The DB was wiped (schema dropped, rebuilt by migrations + seeders: 20 tables, 6 migrations, 1 user,
+  2 roles, 42 permissions; pre-wipe dump at `~/crypto-signal-db-backups/pre-wipe-20261121-111024.dump`)
+  and the trust in the old trading book went with it: 152 scanner proposals on the first pass, zero bots.
+
+  - **Connection:** user supplied a fresh `Bianance-Demo-Future` key. Signed `/fapi/v2/balance` → 200,
+    **5,000 USDT + 5,000 USDC + 0.01 BTC available**. The old Bitunix demo key authenticated but its
+    futures account was empty on every margin coin (and Bitunix publishes no demo API at all — the app's
+    50,000 USDT virtual account is unreachable from a key), so this venue is now the operational one.
+  - **Bot:** `binance-demo-scanner-5m` — Kind=Scanner, wildcard `*`, BinanceFuturesTestnet, Sandbox, 5m,
+    10 USDT/trade, leverage 1, TP 2.0 ATR / SL 1.0 ATR (percent fields 0.6/0.3 as fallback only),
+    max 1 position, max daily loss 10, 30 orders/day. Created and started through the API (not SQL) so
+    the config went through its own validation.
+  - **Account must be in Hedge Mode.** The adapter always sends `positionSide` (LONG/SHORT); a one-way
+    account rejects every order with `-4061 Order's position side does not match user's setting`. Set
+    `dualSidePosition=true` on the testnet account once; from then on orders are accepted.
+  - **Defect 1 — priceless fills.** The synchronous RESULT response can report `executedQty > 0` with
+    `avgPrice` **and** `cumQuote` both `0.0000000`. The parser only synthesised a fill when it had a
+    price, so no fill row was built: `BotPositions` stayed empty while the venue held a real FETUSDT
+    short (93 @ 0.1075). Fixed twice: `cumQuote / executedQty` as a first fallback, and a follow-up
+    `GET /fapi/v1/order` when both are zero (POST only, so the reconcile cannot recurse).
+  - **Defect 2 — no close could ever be sent.** The adapter rejected any order whose side was the
+    opposite of its direction, which is exactly the executor's close shape (position direction + opposite
+    side). Every stop-loss exit died with "the futures order side does not match the intended position
+    direction". The guard is gone; `reduceOnly` is never sent (Hedge Mode rejects it, and
+    `positionSide` + side already express the reduction). `positionSide` for `TradeDirection.Flat` is BOTH.
+  - **Verified end to end on the venue:** scan (250 symbols → 152 proposals) → claim → decision
+    (FETUSDT short, confidence 0.50) → risk allowed → order accepted → position row written → next candle
+    touched the stop → exit order **filled** → position closed. Real numbers: entry 0.1075, exit 0.1074,
+    gross +0.0093, fees 0.0080, **net +0.0013 USDT**, reason `stop_loss_touched`. The second trade
+    (BERAUSDT short 133.3 @ 0.075) opened with its fill priced, i.e. the fix holds on the entry path too.
+  - **Tests:** backend `BinanceFuturesTestnet` 20/20 (three new: priceless RESULT, close shape accepted,
+    Flat order omits reduceOnly). `FakeHttpMessageHandler` now supports per-method scripting
+    (`Respond("GET", path, …)`), which the follow-up test needs.
+  - **Reconciled by hand** (the two defects predate their fixes): `BotPositions` rows written/closed from
+    venue truth and `ExchangeOrders.AverageFillPrice` backfilled. No further divergence is expected now.
+  - **Wildcard symbol reaching the charts endpoint.** A scanner bot's symbol is `*`, and the monitor's
+    price panel passed it straight to `/api/v1/charts/{venue}/candles`, so the venue answered
+    `400 (Bad Request)` and the card showed that raw text. `LivePriceCard` now charts the market the bot
+    actually holds (`openPositions[0].symbol`) and falls back to BTCUSDT while flat; the overview's
+    `MarketPulse` does the same for `*`. The endpoint also refuses `*` up front with a clear message
+    instead of relaying the venue's 400 and a 500 stack trace. `npm run check` (77 files) and
+    `npm run build` both pass.
+
+- **2026-11-10 (11:40–12:15) — one bot on the Bitunix demo account**
+
+  Every bot was retired (soft-deleted, 8 of them) and a single scanner bot now runs the Bitunix demo
+  connection: venue Bitunix, mode SANDBOX, wildcard `*`, 5m, 5 USDT per trade, shorts allowed. Making that
+  possible needed three things the venue never had:
+
+  - **Bitunix could not claim SANDBOX** — `Supports` was `Live`-only, so a demo bot resolved to no broker
+    and faulted. Bitunix publishes no separate demo host (a demo key authenticates against the same
+    `fapi.bitunix.com`), so Sandbox now resolves to the same adapter; the live gate stays in the risk layer.
+  - **Bitunix had no instrument rules**, and the provider throws for a venue it cannot ask — so no intent
+    was ever built (silently: the tick just ended). Added `FetchBitunixAsync`, which indexes the public
+    `trading_pairs` listing (794 contracts, cached 6h) and derives the grid from `basePrecision` /
+    `quotePrecision` (`10^-n`), with `minTradeVolume` and `maxMarketOrderVolume` as the quantity bounds.
+  - **The order body was missing `tradeSide`**, which Bitunix requires to tell an opening order from a
+    closing one; it answered `10002 Parameter error`. Now sends `tradeSide` (OPEN/CLOSE from side vs
+    direction) and `effect` (`IOC` for market).
+  - **The balance check only covered buys**, so a futures SHORT — which reserves margin exactly like a
+    long — shipped with 0 available and was refused by the venue instead of by us. `CheckSufficientBalance`
+    now checks any order that opens exposure.
+  - Current blocker, honestly: the demo account reports **0 available USDT**, so every proposal is denied
+    locally with `SufficientBalance: available balance 0 is below the required margin ~4.98`. The wiring is
+    proven up to the venue boundary (signature accepted, parameters valid); the account needs funding.
+
+- **2026-11-10 (10:20–10:50) — restart after power-off; the close path had never worked**
+
+  The machine came back from an unclean shutdown. `db` recovered from WAL, `api` needed a
+  `docker restart` (its `dotnet watch` had exited when Postgres was down), and the league campaign had
+  already finished at its 23:55 deadline (`FINAL.md`, 1,398 rows). Bringing the stack up exposed four
+  more defects, all on the exit path:
+
+  - **Every close violated a check constraint.** `ApplyToPositionAsync` set `Quantity = 0m` on the closed
+    position, but `CK_BotPositions_Quantity_Positive` requires `Quantity > 0` — so the save always threw
+    `23514`, the tick ended, and the position stayed `Open` while the venue-side fill was already
+    recorded. Fixed by keeping the closed size (status says "closed", not a zeroed quantity). Verified:
+    ZKUSDT now settles at exit 0.00919, realized **−0.1896 USDT**, reason StopLossTouched.
+  - **A close was denied by its own exposure limit.** `CheckExposure` counted the closing order against
+    `MaxConcurrentPositions`, so a bot at its cap could open but never flatten. `RiskSnapshot` now
+    carries `ReducesExposure` (side opposite the direction) and the check returns early for it.
+  - **A stranded intent left the book wrong.** If a tick dies between "venue filled it" and "position
+    saved", the intent stays `Submitted` and the position stays open on a flat book. Added
+    `SettleStrandedIntentsAsync`, called at the start of every tick before the already-evaluated
+    shortcut: it finishes the position from the recorded fill and marks the intent `Filled`. That is what
+    actually settled ZKUSDT.
+  - **Paper mode refused every SHORT.** `PaperBroker` refused shorts with a "every venue is spot" comment
+    that is false for the futures venues — so every scanner SHORT proposal was rejected in paper. Now only
+    spot venues refuse.
+  - **The learning loop could not write.** `artifacts` is mounted `:ro` while `ML_TRADE_SAMPLES_PATH`
+    pointed inside it — the whole online-learning store silently failed with `Read-only file system`.
+    `compose.dev.yml` now mounts `artifacts/online` as its own writable volume (the rest stays ro) and
+    sets `ML_CALIBRATION_PATH` explicitly. Verified: a real closed trade now stores a sample.
+  - Exit decisions are booked on the **tick's** candle, with an existence check: booking on the candle
+    that originally touched the level collided with the `(BotId, CandleOpenTime)` unique index and killed
+    the scheduler cycle.
+  - Tests: backend **44 pass**; ML **453 pass**.
+
+- **2026-11-09 (18:40–19:05) — wildcard bot could not price a fill, and could not exit**
+
+  Three silent defects, all on the wildcard (`Symbol = "*"`) scanner path, found by watching one real
+  paper trade end to end:
+
+  - **Rules were resolved for the bot's symbol, not the market's.** `GetRulesAsync(bot.Venue, bot.Symbol)`
+    asked the venue about `*`. Binance answered BTCUSDT's grid, so a 0.2341 FRAXUSDT entry quantised onto
+    a 0.10 tick and filled at **0.30**, and a 156-unit order was refused a 120-unit cap that belonged to
+    BTC. Fixed in two places: the executor resolves rules for `decision.Symbol`, and
+    `InstrumentRuleProvider` now detects that the venue ignored the `symbol` filter (Binance's futures
+    testnet does, answering with its flagship pair) and resolves from a cached full listing instead of
+    silently borrowing the wrong instrument. Verified live: ZKUSDT opened at **0.00925** (market price),
+    2164 units, 20 USDT notional. 3 new tests in `InstrumentRuleProviderTests.cs`.
+  - **A scanner position could never close.** `RunScannerBotAsync` returned `Hold` whenever a position was
+    open; nothing emitted `BotDecisionAction.Close` anywhere in the codebase. Added
+    `EvaluateScannerExitAsync`: tests the last closed candle against the position's own bracket, stop first
+    when one candle touches both (an ambiguous bar must not book the better outcome), plus
+    `max_holding_periods_reached`. Verified live: the open position is now managed
+    (`position open; no exit level touched`) instead of skipped.
+  - **Outcome reporting named the wrong market.** `ReportTradeOutcomeAsync` sent `bot.Symbol` (`*`) and the
+    bot's configured percentages rather than the ATR bracket actually traded — so even a closed trade
+    would have taught the calibrator about a market that does not exist. Now sends `position.Symbol` and
+    the bracket implied by the position's own TP/SL.
+  - **Quantity cap moved into sizing:** `BuildIntent` clamps to the venue's `MARKET_LOT_SIZE.maxQty`
+    before quantising, so a large order is reduced rather than denied by the risk layer.
+  - Tests: backend **44 pass** (41 previous + 3 new), ML **453 pass**. Position book reset once because the
+    three rows created before these fixes carried a `*` symbol and a wrong entry price.
+
+- **2026-11-09 (18:20–18:40) — fast learning loop + scanner deadline + campaign watchdog**
+
+  - **Per-trade calibration (`online_calibration.py`).** After every closed trade the engine re-prices
+    the decision that opened it (the outcome RPC already carries the candle window and the bracket, so
+    no wire change was needed), stores `(predicted confidence, won)` per `SYMBOL|INTERVAL`, and — once a
+    market has 60 resolved trades — applies a binned, shrunk, **isotonic** map to `p_win` before the
+    candidates are priced. Loss/timeout mass is scaled so every row still sums to 1. Curves are refit on
+    load from a JSON store (`ML_CALIBRATION_PATH`, default `artifacts/online/calibration.json`), so a
+    restart does not forget the market. Verified by `tests/ml-engine/test_online_calibration.py` (9
+    tests: readiness threshold, flat-curve rejection, monotonicity, row normalisation, and a
+    `choose_direction` case where the correction turns a qualified bet flat). Full ML suite: **450 pass**.
+  - **Scanner deadline scaled to the listing.** Every pass since ~18:00 failed with
+    `DeadlineExceeded`: the market-wide scan shared the interactive 10 s gRPC budget while the league
+    campaign saturated the CPU. `ScanSymbolsAsync` now takes a per-call deadline and `ScannerOptions`
+    exposes `ScanDeadlineSeconds` (180). Verified live: pass `01a1c0d3` → **19 signals from 248 symbols,
+    19 model-priced, 19 with a points head, ~25 s**. Before the fix: four consecutive cycle failures.
+  - **Campaign survives the session (`scripts/model_league/watchdog.sh`).** The runner is resumable; the
+    watchdog restarts it every 2 min if absent and stops at the same 23:55 deadline. It was needed: both
+    earlier launches died with their parent shell. Running detached under `setsid`.
+  - **`scripts/status_board.sh`** — one read-only screen (containers, health, last passes, league rows,
+    calibration markets) for whoever picks the box up next.
+  - Still open: the order path after risk (testnet key 401), and no closed trades yet — so the
+    calibration store is legitimately empty and the loop is test-verified, not live-proven.
+
+- **2026-11-09 (evening) — model league campaign (runs until 23:55)**
+  - New harness `src/signal-ml/scripts/model_league/` (`core.py`, `candidates.py`, `runner.py`): 14
+    candidates — prior baseline, logistic, ridge on R, Gaussian NB, decision tree, random forest, extra
+    trees, HGB classifier + R head, LightGBM ×2, XGBoost ×2, MLP on R — over one shared barrier dataset.
+  - Scoring: purged chronological 70/15/15 by timestamp, holdout scored once, ranked at a **4.5 / 3.0
+    ATR** bracket (fee ≈ 0.2R) with the production **1.5 / 1.0** bracket reported alongside; fees
+    10 bps + 5 bps slippage per side are subtracted per trade. Zero-trade models are ranked last with a
+    ⚠, not as winners.
+  - Resumable by construction: one forked process per candidate with a per-model timeout, append-only
+    `artifacts/model_league/results.jsonl`, `REPORT.md` regenerated after every model, Telegram digest
+    every 90 min. Restart skips rows that already exist.
+  - First split (1h · seed 42, 7 symbols) — every family is **negative after fees**; best was the R head
+    `hist_gb_r` at **−0.134 R/trade over 14,884 trades**, `mlp_r` −0.134, `lightgbm_r` −0.133; the
+    prior baseline −0.149; classifiers with zero trades ranked last. The honest finding is the fee drag,
+    not a winner: gross expectancy is ~0 while fees cost ~0.2R per trade at this stop.
+  - Campaign command (still running): `python -m scripts.model_league.runner --until 23:55 --intervals
+    1h,5m --seeds 42,7 --symbols-5m BTCUSDT --digest-minutes 90`. Log:
+    `artifacts/model_league/campaign.log`.
+
+- **2026-11-09 (later) — live scanner bot + professional desk page**
+  - **5m bundle retrained with the points head** (`config_5m.toml` at cv_splits 3 / max_iter 180, BTCUSDT,
+    382 s). Holdout: log loss 0.6859, balanced accuracy 0.4068, points Spearman **−0.0098**, expectancy
+    at the zero threshold **+0.048R** (95 % lower bound +0.043) over 181,932 rows. The positive mean is
+    the barrier geometry, not ranking skill — no edge claim. Copied to `artifacts/models/` (old bundle
+    archived); engine serves it (`version=d0d2ba384510`) and reports `points_available=true`.
+  - **Wildcard scanner bot made operational** (`scanner-test rsi 5m`, Kind=Scanner, Symbol=`*`,
+    BinanceFuturesTestnet Sandbox, $20/trade, 2×): start gate now accepts `*` for Scanner bots; the tick
+    reads its clock window from BTCUSDT and the claimed market's own price after the claim; it claims the
+    **highest-scoring** unclaimed proposal (not the oldest), only within `ScannerMaxSignalAgeMinutes`
+    (30) and `ScannerMinimumScore` (0.05R in dev), and only for symbols the risk allowlist permits.
+    Repeated ticks no longer re-record the same candle, and a no-op advances `LastTickAt`.
+  - **Risk provenance fixed for wildcard bots:** the allowlist / kill-switch symbol checks and the order
+    intent now use the **decision's** symbol, not the bot's `*` placeholder. Before the fix every scanner
+    order was denied with `SignalProvenance: the intent is for * but the bot trades ARBUSDT`; after it the
+    only remaining denial is the balance.
+  - **Broker diagnostics:** a non-200 balance read now logs status + a 240-char body excerpt instead of
+    returning null silently. First honest reading: `status=401, {"code":-2015,"msg":"Invalid API-key, IP,
+    or permissions for action"}` — the stored `Demo-Binance` testnet key is dead.
+  - **Dashboard:** new `/desk` page (`DeskPage.tsx`) — live pill + served-model stamp, 5 KPI tiles,
+    top-12 opportunity board (signed score in R, confidence, strategy, ATR, age), bot fleet cards with an
+    audit timeline, and a merged live event feed; 15 s refresh, per-source error banners, skeletons.
+    `npm run check` (typecheck + RTL audit, 77 files) and `npm run build` both exit 0.
+  - **Verified this round:** ML 441 passed · backend 41 passed · frontend check+build clean · scanner pass
+    **249 symbols → 21 model-priced proposals** · bot claimed `model Long TRADOORUSDT`, built an intent,
+    and was denied by the risk engine **only** on `DataFreshness,SufficientBalance` (the dead key). The
+    order path downstream of risk is therefore unproven until the key is replaced.
+
+- **2026-11-09 — Points (R-multiple) objective + all-symbol scanner (uncommitted)**
+  - **Labels:** every barrier variant now carries `r_multiple` — `+risk_reward_ratio` on a take-profit,
+    exactly `-1` on a stop, `timeout_return_atr / stop_loss_atr` on a timeout. Kept beside the 3-class
+    `target`, never in `feature_columns` (`labeling/triple_barrier.py`).
+  - **Points head:** `train` fits a `HistGradientBoostingRegressor` on realized R with the same features
+    and folds, scores it once on the strict holdout, stores it as `points_model` in the bundle and
+    records MAE / Spearman / top-decile R / `expectancy_at_threshold` (with a one-sided 95 % lower
+    bound) under `metadata.bundles[].points` (`modeling/estimator.py`, `training/barrier_pipeline.py`).
+  - **Serving:** `ModelRegistry` loads `points_model` when present (`has_points` on the descriptor;
+    `None` on every pre-points bundle, verified by restarting signal-ml against the existing bundles).
+    `choose_direction` ranks by expected points when the head exists and enforces
+    `minimum_expected_points`; the ATR expected-value rule remains for bundles without one. A broken
+    head logs and degrades instead of refusing the request. Wire: `points_available` + `expected_points`
+    on `GetSignalResponse` / `EvaluateBotDecisionResponse` / `ScanSymbolResult`.
+  - **Gate:** the reject branch now moves the candidate to `rejected/`, restores the pre-run snapshot of
+    every managed bundle, and restores `metadata.json` so the next gate compares against the incumbent
+    instead of the rejected candidate (`scripts/self_learning_loop.py`).
+  - **All-symbol scanner:** candle fetch is a bounded fan-out (`MaxConcurrency`, default 8), the symbol
+    list is filtered to uppercase tickers (Binance lists non-ASCII names the engine's contract cannot
+    address), and `ScanSymbolsRequest.model` asks the engine to price every symbol in the same call.
+    A model row replaces the zoo duplicate for that symbol; `StrategyKey="model"`, `Score` = expected
+    points when a head exists, else calibrated confidence.
+  - **Verified:** 441 ML tests + 41 backend tests pass; a smoke `train` on BTC 1h wrote a bundle with
+    `points_model` (holdout Spearman 0.034, expectancy −0.003 R over 21,506 trades — the 1h edge is still
+    absent, now measured in the metric that matters); a live pass scanned **248 symbols** and recorded
+    **28 model-priced proposals** at confidence ≥ 0.50 in ~90 s.
+  - **Not done yet:** the 5m bundle (what the scanner trades) predates the head, so every model row
+    reports `points_available=false` until it is retrained; bot decision DTOs/UI do not surface
+    `expected_points` yet; the fast per-trade calibration loop is still the LSTM-v2/50-sample design.
+
+- **2026-11-09 — AWS retired; local stack is now the operational environment**
+  - All three images rebuilt from a clean daemon (no cached images): `signal-ml`, `api`, `dashboard`;
+    `db` on postgres 18.3-alpine, `proxy` (socat 10809) reused. `docker compose ps` →
+    api/dashboard/db/signal-ml/proxy all up, api + ml healthy.
+  - **Verified live:** `GET /health/ready` → healthy (postgres + python-ml, `mode=PAPER, markets=3`);
+    `cs-admin` login → token; `GET /api/v1/bot` → 8 bots; `GET /api/v1/ml/model?symbol=BTCUSDT&interval=1h`
+    → 200 (`trainedAt 2026-11-09T02:40:33Z`, 42 features); dashboard `:5173` → 200 (Persian title).
+  - **Scheduler + scanner running:** `Bot scheduler started … polling every 10s`; scanner first pass
+    `7 signals from 20 symbols, 5 strategies each`, 7 `ScannerSignals` rows written (verified in SQL).
+    All 8 existing bots are Stopped (4) or Faulted (5) from stale September faults — no ticks yet.
+  - **Infra fixes needed for this host (uncommitted):**
+    - `devops/compose.dev.yml`: db publishes on **127.0.0.1:55432** (host 5432 belongs to Hindsight's
+      embedded Postgres, `--network host`); build steps no longer use `network: host` (Docker 29 refuses
+      it without a `network.host` entitlement that compose cannot grant) — the signal-ml build reaches
+      the V2Ray relay via `host.docker.internal:10809` through the socat `proxy` service instead.
+    - `.dockerignore`: exclude `src/signal-ml/research_lab` (35 GB), `checkpoints`, `lightning_logs`,
+      `tmp`, `**/.venv` — the build context was transferring >14 GB before it was cut.
+  - **Honest state of the served model:** the 06:00 weekly retrain REJECTed (`metadata.json.previous`
+    carries `promoted: false`), but the reject branch still archives nothing and restores nothing, so
+    `artifacts/models/_pooled_1h.joblib` + `BTCUSDT_1h.joblib` are the **rejected candidate**; the
+    pre-overwrite pair sits in `archive/20261109T02{3858,4033}_pre-overwrite_*`. Not restored — flagged
+    for a decision, because every weekly candidate has been left live, so `archive/` also holds
+    previously-rejected bundles and "the incumbent" has no clean definition yet.
+  - Binance futures reachable through the proxy again (`/fapi/v1/klines` 200, weight 1) — the September
+    429 faults are stale, not an outage.
 
 - **2026-09-06 (evening) — TFT smoke run completed end-to-end; both challengers gated**
   - Machine rebooted mid-session (tmpfs wiped — logs now under `src/signal-ml/tmp/`, reboot-safe path). All containers restarted healthy.

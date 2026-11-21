@@ -3,16 +3,24 @@ services:
     env_file:
       - ./env/dev/db.env
     ports:
-      - "127.0.0.1:5432:5432"
+      # 5432 on the host belongs to Hindsight's embedded Postgres (agent-memory, --network host),
+      # so the dev database publishes on 55432 instead. Containers still reach it as `db:5432`
+      # through the compose network; only host-side psql needs the shifted port.
+      - "127.0.0.1:55432:5432"
     volumes:
       - postgres_dev_data:/var/lib/postgresql
 
   signal-ml:
     build:
-      network: host
+      # The default bridge routes out through the host's V2Ray relay (the socat `proxy` service
+      # listens on 0.0.0.0:10809). Docker 29 refuses `network: host` at build time unless the
+      # builder is given `network.host` entitlements, and compose exposes no flag for that, so the
+      # build reaches the relay through host-gateway instead of sharing the host network.
       target: development
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
       args:
-        PIP_PROXY: ${PIP_PROXY:-http://127.0.0.1:10808}
+        PIP_PROXY: ${PIP_PROXY:-http://host.docker.internal:10809}
     env_file:
       - ./env/dev/ml.env
     command: ["python", "-m", "crypto_signal_engine"]
@@ -21,6 +29,10 @@ services:
     volumes:
       - ../src/signal-ml/src:/app/src:ro
       - ../src/signal-ml/artifacts:/app/artifacts:ro
+      # The one writable slice: the online learner appends samples here and the calibration curve is
+      # refit on every closed trade. Mounted as its own volume because the rest of artifacts stays
+      # read-only — a serving container should not be able to rewrite its own model files.
+      - ../src/signal-ml/artifacts/online:/app/artifacts/online
       - ../src/signal-ml/artifacts_5m:/app/artifacts_5m:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -35,12 +47,12 @@ services:
       # it survives restarts; training is disabled until an operator sets ML_ONLINE_LEARNING=true.
       ML_ONLINE_LEARNING: "true"
       ML_TRADE_SAMPLES_PATH: /app/artifacts/online/trade_samples.jsonl
+      ML_CALIBRATION_PATH: /app/artifacts/online/calibration.json
       ML_TRAINING_CONFIG: /app/config.toml
       ML_ONLINE_TRAINING_MIN_SAMPLES: "50"
 
   api:
     build:
-      network: host
       target: development
     env_file:
       - ./env/dev/api.env
@@ -51,12 +63,12 @@ services:
     environment:
       DOTNET_CLI_HOME: /tmp/dotnet
       NUGET_PACKAGES: /tmp/nuget
-      HTTP_PROXY: http://host.docker.internal:10808
-      HTTPS_PROXY: http://host.docker.internal:10808
-      ALL_PROXY: http://host.docker.internal:10808
-      http_proxy: http://host.docker.internal:10808
-      https_proxy: http://host.docker.internal:10808
-      all_proxy: http://host.docker.internal:10808
+      HTTP_PROXY: http://host.docker.internal:10809
+      HTTPS_PROXY: http://host.docker.internal:10809
+      ALL_PROXY: http://host.docker.internal:10809
+      http_proxy: http://host.docker.internal:10809
+      https_proxy: http://host.docker.internal:10809
+      all_proxy: http://host.docker.internal:10809
       NO_PROXY: localhost,127.0.0.1,db,signal-ml,host.docker.internal
       no_proxy: localhost,127.0.0.1,db,signal-ml,host.docker.internal
       DOTNET_SYSTEM_NET_HTTP_USESOCKETSHTTPHANDLER: "1"
@@ -86,7 +98,6 @@ services:
 
   dashboard:
     build:
-      network: host
       target: development
     command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
     ports:
