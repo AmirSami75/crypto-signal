@@ -74,6 +74,63 @@ public sealed class BinanceFuturesTestnetBrokerTests
     }
 
     [Fact]
+    public async Task Synthesises_the_fill_from_cumQuote_when_avgPrice_is_still_zero()
+    {
+        // Observed live on 2026-11-21 (FETUSDT): the RESULT response can report executedQty > 0 with
+        // avgPrice "0.0000000" while cumQuote is already priced. Without the derivation no fill is
+        // built, the position row is never written, and the bot trades on believing it is flat.
+        var handler = new FakeHttpMessageHandler();
+        handler.Respond("/fapi/v1/leverage", HttpStatusCode.OK, "{}");
+        handler.Respond("/fapi/v1/order", HttpStatusCode.OK,
+            "{\"orderId\":359082947,\"symbol\":\"FETUSDT\",\"status\":\"FILLED\"," +
+            "\"clientOrderId\":\"oid-zero-avg\",\"executedQty\":\"93\",\"avgPrice\":\"0.0000000\"," +
+            "\"cumQuote\":\"9.9975000\",\"updateTime\":" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}");
+        var broker = MakeBroker(handler, out _);
+
+        var request = new BrokerOrderRequest(
+            "oid-zero-avg", "FETUSDT", MarketVenue.BinanceFuturesTestnet, Rules, TradeDirection.Short,
+            OrderSide.Sell, OrderType.Market, 93m, 0.1075m, Leverage: 1);
+
+        var placement = await broker.PlaceAsync(request, Creds, CancellationToken.None);
+
+        var fill = Assert.Single(placement.Fills);
+        Assert.Equal(93m, fill.Quantity);
+        Assert.Equal(9.9975m / 93m, fill.Price);
+    }
+
+    [Fact]
+    public async Task Follows_up_the_order_when_the_RESULT_carries_no_price_at_all()
+    {
+        // Live shape on 2026-11-21: POST /fapi/v1/order answered FILLED with executedQty 93 but
+        // avgPrice AND cumQuote both "0.0000000". The follow-up GET carries the real price; without it
+        // no fill row exists and the position (or its close) is never recorded.
+        var handler = new FakeHttpMessageHandler();
+        handler.Respond("/fapi/v1/leverage", HttpStatusCode.OK, "{}");
+        handler.Respond("POST", "/fapi/v1/order", HttpStatusCode.OK,
+            "{\"orderId\":359085336,\"symbol\":\"FETUSDT\",\"status\":\"FILLED\"," +
+            "\"clientOrderId\":\"oid-priceless\",\"executedQty\":\"93\",\"avgPrice\":\"0.0000000\"," +
+            "\"cumQuote\":\"0.0000000\",\"updateTime\":" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}");
+        handler.Respond("GET", "/fapi/v1/order", HttpStatusCode.OK,
+            "{\"orderId\":359085336,\"symbol\":\"FETUSDT\",\"status\":\"FILLED\"," +
+            "\"clientOrderId\":\"oid-priceless\",\"executedQty\":\"93\",\"avgPrice\":\"0.1074000\"," +
+            "\"cumQuote\":\"9.9882000\",\"updateTime\":" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}");
+        var broker = MakeBroker(handler, out _);
+
+        var request = new BrokerOrderRequest(
+            "oid-priceless", "FETUSDT", MarketVenue.BinanceFuturesTestnet, Rules, TradeDirection.Short,
+            OrderSide.Buy, OrderType.Market, 93m, 0.1074m, Leverage: 1);
+
+        var placement = await broker.PlaceAsync(request, Creds, CancellationToken.None);
+
+        Assert.Equal(BrokerOutcome.Accepted, placement.Outcome);
+        var fill = Assert.Single(placement.Fills);
+        Assert.Equal(93m, fill.Quantity);
+        Assert.Equal(0.1074m, fill.Price);
+        Assert.Contains(handler.Requests,
+            r => r.Method == HttpMethod.Get && r.RequestUri!.AbsolutePath == "/fapi/v1/order");
+    }
+
+    [Fact]
     public async Task Rejects_when_no_credentials_configured()
     {
         var handler = new FakeHttpMessageHandler();
@@ -142,7 +199,34 @@ public sealed class BinanceFuturesTestnetBrokerTests
     }
 
     [Fact]
-    public async Task Sends_reduceOnly_on_closing_orders()
+    public async Task Accepts_the_executors_close_shape_and_never_sends_reduceOnly()
+    {
+        // What BotTickExecutor actually sends for a stop-loss exit on a short: the position direction is
+        // carried and the side is the opposite one. The adapter must treat that as a close (hedge mode),
+        // not reject it — this shipped as a live bug on 2026-11-21 (FETUSDT exit refused by the guard).
+        var handler = new FakeHttpMessageHandler();
+        handler.Respond("/fapi/v1/leverage", HttpStatusCode.OK, "{}");
+        handler.Respond("/fapi/v1/order", HttpStatusCode.OK,
+            "{\"orderId\":126,\"symbol\":\"FETUSDT\",\"status\":\"FILLED\"," +
+            "\"clientOrderId\":\"oid-exit\",\"executedQty\":\"93\",\"avgPrice\":\"0.1081\"," +
+            "\"updateTime\":" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + "}");
+        var broker = MakeBroker(handler, out _);
+
+        var request = new BrokerOrderRequest(
+            "oid-exit", "FETUSDT", MarketVenue.BinanceFuturesTestnet, Rules, TradeDirection.Short,
+            OrderSide.Buy, OrderType.Market, 93m, 0.1081m, Leverage: 1);
+
+        var placement = await broker.PlaceAsync(request, Creds, CancellationToken.None);
+
+        Assert.Equal(BrokerOutcome.Accepted, placement.Outcome);
+        var query = handler.Requests.First(r => r.RequestUri!.AbsolutePath == "/fapi/v1/order").RequestUri!.Query;
+        Assert.Contains("positionSide=SHORT", query, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("side=BUY", query, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("reduceOnly", query, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Omits_reduceOnly_on_flat_orders_too()
     {
         var handler = new FakeHttpMessageHandler();
         handler.Respond("/fapi/v1/order", HttpStatusCode.OK,
@@ -159,6 +243,7 @@ public sealed class BinanceFuturesTestnetBrokerTests
 
         Assert.Equal(BrokerOutcome.Accepted, placement.Outcome);
         var query = handler.Requests.First(r => r.RequestUri!.AbsolutePath == "/fapi/v1/order").RequestUri!.Query;
-        Assert.Contains("reduceOnly=true", query, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("reduceOnly", query, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("positionSide=BOTH", query, StringComparison.OrdinalIgnoreCase);
     }
 }

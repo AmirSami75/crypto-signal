@@ -82,10 +82,10 @@ public sealed class BinanceFuturesTestnetBroker(
             || request.Quantity < request.Rules.MinQuantity)
             return Rejected("quantity is not on the futures instrument grid");
 
-        // Opening orders carry a position direction; closing orders must match the open one.
-        if (request.Direction == TradeDirection.Long && request.Side != OrderSide.Buy
-            || request.Direction == TradeDirection.Short && request.Side != OrderSide.Sell)
-            return Rejected("the futures order side does not match the intended position direction");
+        // Opening orders carry a position direction; a closing order carries the same direction with the
+        // opposite side (the executor's shape). Both are valid here: positionSide names the book and side
+        // says add-or-reduce. Refusing the opposite side refused every stop-loss exit on this venue
+        // (2026-11-21, FETUSDT).
 
         // Set leverage is idempotent for the symbol and must succeed before an opening order.
         if (request.Direction is TradeDirection.Long or TradeDirection.Short)
@@ -114,17 +114,18 @@ public sealed class BinanceFuturesTestnetBroker(
             new("side", request.Side == OrderSide.Buy ? "BUY" : "SELL"),
             new("type", MapOrderType(request.Type)),
             new("quantity", BinanceJson.Number(request.Quantity)),
-            new("positionSide", request.Direction == TradeDirection.Short ? "SHORT" : "LONG"),
-            // Binance error -1106: `reduceOnly` may ONLY be sent when it is required (a
-            // closing order). Sending `reduceOnly=false` on an entry is itself a rejection,
-            // so the parameter is omitted entirely unless this order closes a position.
+            // Hedge-mode book selector. This adapter trades a Hedged account, where the server rejects
+            // `reduceOnly` outright: positionSide + side already express "reduce the SHORT", and the side
+            // opposite the position's direction is the close.
+            new("positionSide", request.Direction switch
+            {
+                TradeDirection.Short => "SHORT",
+                TradeDirection.Flat => "BOTH",
+                _ => "LONG",
+            }),
             new("newClientOrderId", request.ClientOrderId),
             new("newOrderRespType", "RESULT"),
         };
-        if (request.Direction is not (TradeDirection.Long or TradeDirection.Short))
-        {
-            parameters.Add(new("reduceOnly", "true"));
-        }
 
         if (request.Type != OrderType.Market)
         {
@@ -186,7 +187,17 @@ public sealed class BinanceFuturesTestnetBroker(
                 HttpMethod.Get, "/fapi/v2/balance", emptyParams, venueCreds, cancellationToken);
 
             if (status != HttpStatusCode.OK)
+            {
+                // A silent null here is the failure mode that looks exactly like dead keys from the
+                // outside, and the risk engine turns it into "balance unknown". Name the status and a
+                // body excerpt (never the signature) so an operator can tell a 401 from a 451 or a
+                // rate limit without decrypting anything.
+                _logger.LogWarning(
+                    "BinanceFuturesTestnet balance read failed | status={Status} | body={Body}",
+                    (int)status,
+                    body.Length > 240 ? body[..240] : body);
                 return null;
+            }
 
             using var document = JsonDocument.Parse(body);
             // /fapi/v2/balance returns a plain array of asset balances (the account
@@ -269,7 +280,34 @@ public sealed class BinanceFuturesTestnetBroker(
         var responseHash = Sha256(body);
 
         if (status == HttpStatusCode.OK)
-            return ParseFuturesOrderResponse(body, requestHash, responseHash, clientOrderId);
+        {
+            var placement = ParseFuturesOrderResponse(body, requestHash, responseHash, clientOrderId);
+
+            // A synchronous RESULT can report a fill with no price at all — both avgPrice and cumQuote
+            // come back "0.0000000" — so the parser builds no fill row. Downstream that means no
+            // position is written (or a closing position never settles) while the venue is holding the
+            // real thing. Only the POST is followed up, so the reconcile GET cannot recurse.
+            if (method == HttpMethod.Post
+                && placement.Outcome != BrokerOutcome.Rejected
+                && placement.Fills.Count == 0
+                && placement.FilledQuantity > 0)
+            {
+                var symbol = parameters.FirstOrDefault(p => p.Key == "symbol").Value;
+                if (!string.IsNullOrEmpty(symbol))
+                {
+                    var priced = await ReconcileAsync(symbol, clientOrderId, credentials, cancellationToken);
+                    if (priced.Fills.Count > 0)
+                        placement = priced with
+                        {
+                            RequestHash = requestHash,
+                            ResponseHash = responseHash,
+                            VenueUpdatedAt = priced.VenueUpdatedAt ?? placement.VenueUpdatedAt,
+                        };
+                }
+            }
+
+            return placement;
+        }
 
         var detail = DescribeError(body, status);
 
@@ -364,6 +402,19 @@ public sealed class BinanceFuturesTestnetBroker(
             && decimal.TryParse(avgElement.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var avg)
             ? (decimal?)avg
             : null;
+
+        // A synchronous RESULT response can come back with executedQty > 0 and avgPrice still
+        // "0.0000000" — the venue has filled the order (cumQuote is populated) but has not aggregated
+        // the average yet. Without deriving the price from cumQuote the placement looks accepted but
+        // priceless, no synthetic fill is built, and the position row is never written while the venue
+        // holds a live position: the bot then believes it is flat and the book diverges (2026-11-21,
+        // FETUSDT -4061 follow-up).
+        if (filled > 0 && (avgPrice is null || avgPrice <= 0m))
+        {
+            var cumQuote = BinanceJson.DecimalOrDefault(root, "cumQuote", 0m);
+            if (cumQuote > 0)
+                avgPrice = cumQuote / filled;
+        }
 
         var fills = new List<BrokerFill>();
         // Futures /fapi v1/order?newOrderRespType=RESULT does not return a fills array;

@@ -30,6 +30,11 @@ public sealed class FakeHttpMessageHandler : HttpMessageHandler
     public void Respond(string path, HttpStatusCode status, string body) =>
         _responses[path] = (status, body);
 
+    /// <summary>Script one method on a path, for handlers that answer the same path differently
+    /// (POST /fapi/v1/order vs the GET reconcile of the same order).</summary>
+    public void Respond(string method, string path, HttpStatusCode status, string body) =>
+        _responses[$"{method.ToUpperInvariant()} {path}"] = (status, body);
+
     /// <summary>Make the next/the only send throw, to simulate transport timeouts/connection failures.</summary>
     public void Throw(Exception exception) => _throw = exception;
 
@@ -48,9 +53,12 @@ public sealed class FakeHttpMessageHandler : HttpMessageHandler
             return Task.FromException<HttpResponseMessage>(ex);
 
         var path = request.RequestUri!.AbsolutePath;
-        var (status, body) = _responses.TryGetValue(path, out var r)
-            ? r
-            : (HttpStatusCode.NotFound, "{\"code\":-1,\"msg\":\"no scripted response\"}");
+        var methodKey = $"{request.Method.Method.ToUpperInvariant()} {path}";
+        var (status, body) = _responses.TryGetValue(methodKey, out var scriptedByMethod)
+            ? scriptedByMethod
+            : _responses.TryGetValue(path, out var r)
+                ? r
+                : (HttpStatusCode.NotFound, "{\"code\":-1,\"msg\":\"no scripted response\"}");
 
         var response = new HttpResponseMessage(status)
         {
