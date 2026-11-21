@@ -27,8 +27,9 @@ export function AuthLayout() {
   const isPaper = mode.toUpperCase() === 'PAPER'
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="flex h-(--app-header-height) shrink-0 items-center px-4 sm:px-7">
+    <div className="relative flex min-h-dvh flex-col">
+      <div className="app-aurora" aria-hidden="true" />
+      <header className="relative z-10 flex h-(--app-header-height) shrink-0 items-center px-4 sm:px-7">
         <Link to={ROUTES.login} className="flex items-center gap-2.5">
           <BrandMark />
           <span className="text-sm font-semibold">{fa.app.name}</span>
@@ -40,13 +41,13 @@ export function AuthLayout() {
         </div>
       </header>
 
-      <main className="flex flex-1 items-center justify-center px-5 py-8 sm:py-12">
+      <main className="relative z-10 flex flex-1 items-center justify-center px-5 py-8 sm:py-12">
         <div className="w-full max-w-[26rem]">
           <Outlet />
         </div>
       </main>
 
-      <footer className="shrink-0 px-5 pb-8">
+      <footer className="relative z-10 shrink-0 px-5 pb-8">
         <div className="mx-auto flex max-w-[26rem] flex-wrap items-center justify-center gap-x-2.5 gap-y-2">
           <Badge tone={isPaper ? 'accent' : 'warn'}>
             <StatusDot tone={isPaper ? 'accent' : 'warn'} />

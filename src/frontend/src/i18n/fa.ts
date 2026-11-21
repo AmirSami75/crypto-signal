@@ -168,6 +168,7 @@ export const fa = {
 
   nav: {
     overview: 'نمای کلی',
+    desk: 'میز معاملات',
     signal: 'سیگنال لحظه‌ای',
     bots: 'ربات‌های معاملاتی',
     killSwitches: 'توقف اضطراری',
@@ -1156,6 +1157,73 @@ export const fa = {
       500: 'خطایی در سرور رخ داده است',
       503: 'سرور در حال حاضر قادر به پاسخگویی نیست',
     } as Record<number, string>,
+  },
+
+  /**
+   * The live desk: one operator screen over the fleet, the scanner board and the audit tail.
+   *
+   * `secondsAgo` is the only relative-time unit not already carried by `scanner.*`; the minute,
+   * hour and day words are reused from there so the two screens cannot drift apart.
+   */
+  desk: {
+    title: 'میز معاملات زنده',
+    subtitle: 'وضعیت لحظه‌ای ناوگان، فرصت‌های بازار و جریان رویدادهای حسابرسی در یک نگاه',
+
+    statusLive: 'زنده',
+    statusStale: 'بی‌به‌روز',
+    statusConnecting: 'در حال اتصال',
+    lastRefresh: 'آخرین به‌روزرسانی',
+    refreshEvery: 'به‌روزرسانی خودکار هر 15 ثانیه',
+    secondsAgo: 'ثانیه پیش',
+
+    modelLabel: 'مدل سرویس‌دهنده',
+    modelNoAccess: 'دسترسی به اطلاعات مدل نیست',
+
+    kpiLabel: 'شاخص‌های میز',
+    kpiActiveBots: 'ربات‌های فعال',
+    kpiActiveBotsCaption: 'از کل ربات‌های ناوگان',
+    kpiOpenPositions: 'موقعیت‌های باز',
+    kpiOpenPositionsCaption: 'مجموع موقعیت‌های باز همه ربات‌ها',
+    kpiProposals: 'فرصت‌های بازار',
+    kpiProposalsCaption: 'پیشنهادهای تازه اسکنر',
+    kpiBestScore: 'بهترین امتیاز مورد انتظار',
+    kpiBestScoreCaption: 'بالاترین امتیاز میان فرصت‌های فعلی',
+    kpiBlockedBots: 'ربات‌های مسدودشده',
+    kpiBlockedBotsCaption: 'زیر پوشش توقف اضطراری — نیازمند بررسی',
+    kpiBlockedBotsNone: 'هیچ رباتی مسدود نیست',
+
+    opportunitiesTitle: 'فرصت‌های بازار',
+    opportunitiesSubtitle: '12 پیشنهاد برتر اسکنر، مرتب‌شده بر پایه امتیاز مورد انتظار',
+    opportunitiesEmptyTitle: 'فرصتی روی میز نیست',
+    opportunitiesEmptyBody:
+      'اسکنر در این دوره پیشنهادی پیدا نکرده است؛ این بخش هر 15 ثانیه تازه می‌شود.',
+    scannerNoAccessTitle: 'دسترسی به اسکنر بازار نیست',
+    scannerNoAccessBody: 'برای دیدن فرصت‌های بازار، دسترسی Scanner.Get لازم است.',
+    colScore: 'امتیاز مورد انتظار',
+
+    fleetTitle: 'ناوگان ربات‌ها',
+    fleetSubtitle: 'ربات‌های در حال اجرا و آخرین ضربان هر کدام',
+    fleetLink: 'همه ربات‌ها',
+    fleetEmptyTitle: 'رباتی در ناوگان نیست',
+    fleetEmptyBody: 'برای دیدن وضعیت زنده، ابتدا یک ربات بسازید و آن را اجرا کنید.',
+    timelineLabel: 'آخرین رویدادهای ربات فعال',
+    noAuditEvents: 'هنوز رویدادی برای این ربات ثبت نشده است',
+    auditNoAccess: 'برای دیدن زنجیره حسابرسی، دسترسی BotHistory.GetAudit لازم است.',
+
+    feedTitle: 'جریان زنده',
+    feedSubtitle: 'آخرین رویدادهای حسابرسی ناوگان، تازه‌ترین اول',
+    feedEmptyTitle: 'جریانی در کار نیست',
+    feedEmptyBody: 'با اجرای ربات‌ها، رویداد هر تیک همین‌جا ثبت می‌شود.',
+    feedNoAccessTitle: 'دسترسی به جریان رویدادها نیست',
+    feedCapNote: 'حداکثر 12 رویداد از 3 رویداد آخر هر ربات',
+
+    partialFailureTitle: 'برخی منابع به‌روز نشدند',
+    botsLoadFailed: 'بارگذاری ناوگان ربات‌ها ناموفق بود',
+    scannerLoadFailed: 'بارگذاری فرصت‌های بازار ناموفق بود',
+    modelLoadFailed: 'بارگذاری اطلاعات مدل ناموفق بود',
+    feedLoadFailed: 'بارگذاری جریان رویدادها ناموفق بود',
+    feedPartialFailed: 'بارگذاری رویدادهای برخی ربات‌ها ناموفق بود',
+    unknownBot: 'ربات',
   },
 
   /** Market scanner: strategy-zoo proposals ranked by change and volume. */

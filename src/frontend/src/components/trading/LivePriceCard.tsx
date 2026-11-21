@@ -17,6 +17,11 @@ type ChartInterval = (typeof INTERVALS)[number]
 export function LivePriceCard({ bot }: { bot: BotDetail }) {
   const [interval, setIntervalState] = useState<ChartInterval>('15m')
 
+  // A wildcard scanner bot has no market of its own — its symbol is `*`, which the venue rejects as
+  // klines input (400). Show the market it currently holds, and while it is flat the reference market
+  // the scanner prices against, so the panel never asks for a market that does not exist.
+  const displaySymbol = bot.symbol === '*' ? (bot.openPositions[0]?.symbol ?? 'BTCUSDT') : bot.symbol
+
   return (
     <section className="space-y-3 rounded-xl border border-line bg-surface p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -37,7 +42,7 @@ export function LivePriceCard({ bot }: { bot: BotDetail }) {
           ))}
         </div>
       </div>
-      <PriceChartBody venue={bot.venue} symbol={bot.symbol} interval={interval} />
+      <PriceChartBody venue={bot.venue} symbol={displaySymbol} interval={interval} />
     </section>
   )
 }

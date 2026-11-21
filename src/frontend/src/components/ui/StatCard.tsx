@@ -36,15 +36,17 @@ export function StatCard({
   /** Optional icon rendered at the inline-end of the label row, before `trailing`. */
   icon?: ReactNode
 }) {
+  // A soft vertical bloom rather than a hard bar: the tone should read as light coming off the card
+  // edge, not as a coloured stripe glued to it.
   const bar: Record<NonNullable<typeof tone>, string> = {
-    neutral: 'bg-line-strong',
-    accent: 'bg-accent',
-    success: 'bg-success',
-    warn: 'bg-warn',
-    danger: 'bg-danger',
+    neutral: 'bg-gradient-to-b from-line-strong to-transparent',
+    accent: 'bg-gradient-to-b from-accent to-transparent',
+    success: 'bg-gradient-to-b from-success to-transparent',
+    warn: 'bg-gradient-to-b from-warn to-transparent',
+    danger: 'bg-gradient-to-b from-danger to-transparent',
   }
   return (
-    <Card as="article" className={`p-5 ${className}`}>
+    <Card as="article" className={`group p-5 transition-colors hover:border-line-strong ${className}`}>
       <div className="flex items-start gap-3">
         {tone && <span aria-hidden="true" className={`mt-0.5 w-1 shrink-0 self-stretch rounded-full ${bar[tone]}`} />}
         <p className="micro-label min-w-0 flex-1">{label}</p>
@@ -52,7 +54,7 @@ export function StatCard({
         {trailing}
       </div>
 
-      <p className="num mt-3 text-2xl font-semibold text-ink">{value}</p>
+      <p className="stat-value mt-3 text-[1.75rem] font-semibold text-ink">{value}</p>
       {delta && <p className="mt-1.5 text-xs leading-relaxed text-ink-soft">{delta}</p>}
       {caption && <p className="mt-1.5 text-xs leading-relaxed text-ink-muted">{caption}</p>}
     </Card>

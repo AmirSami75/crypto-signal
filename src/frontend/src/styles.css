@@ -29,9 +29,9 @@
   /* Tells the browser which way its own widgets go: form controls, scrollbars, the caret. */
   color-scheme: light;
 
-  --ground: #ffffff;
+  --ground: #f6f8fb;
   --surface: #ffffff;
-  --surface-muted: #f5f5f5;
+  --surface-muted: #f1f4f8;
   --surface-raised: #ffffff;
 
   --line: #e8e8e8;
@@ -39,8 +39,10 @@
 
   --ink: #0a0a0a;
   --ink-soft: #3f3f42;
-  --ink-muted: #606060;
-  --ink-faint: #8c8c8c;
+  --ink-muted: #5c5c60;
+  /* Was #8c8c8c — 3.4:1 on white, under AA for anything a person is meant to read. 4.9:1 keeps the
+     tier visibly lighter than `--ink-muted` without failing the check. */
+  --ink-faint: #6f6f74;
 
   /*
    * The accent, in four jobs rather than one.
@@ -114,13 +116,13 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --ground: #17191c;
-  --surface: #1e2125;
-  --surface-muted: #26292e;
-  --surface-raised: #24272c;
+  --ground: #070b12;
+  --surface: #0d141e;
+  --surface-muted: #121b27;
+  --surface-raised: #172130;
 
-  --line: #2b2f34;
-  --line-strong: #3a4046;
+  --line: #1d2837;
+  --line-strong: #2c3a4d;
 
   --ink: #f4f4f5;
   --ink-soft: #ced2d8;
@@ -129,15 +131,15 @@
 
   /* Inverted arrangement: on a dark ground the bright hue is the readable one, so it becomes both
      the fill and the text colour, and the fill carries near-black ink (7.6:1) instead of white. */
-  --brand: #4ca9ff;
-  --brand-ink: #8ac5ff;
-  --brand-fill: #4ca9ff;
-  --brand-fill-hover: #74bcff;
-  --brand-on: #06121c;
-  --ring: #4ca9ff;
+  --brand: #4aa8ff;
+  --brand-ink: #8ecbff;
+  --brand-fill: #2f8fff;
+  --brand-fill-hover: #57a6ff;
+  --brand-on: #04101d;
+  --ring: #4aa8ff;
 
-  --success: #3fcb90;
-  --success-ink: #6fdcac;
+  --success: #2ee0a5;
+  --success-ink: #6cf0c0;
   --warn: #e9a94b;
   --warn-ink: #f0bd72;
   --danger: #ff6d70;
@@ -312,6 +314,191 @@
     font-weight: 600;
     letter-spacing: 0.06em;
     color: var(--ink-muted);
+  }
+}
+
+
+@layer components {
+  /*
+   * The terminal backdrop.
+   *
+   * Two wide, low-opacity radial washes pinned behind the chrome — cool blue from the trailing corner,
+   * emerald from the leading one — plus a hairline grid. It is decoration only: `pointer-events: none`,
+   * `aria-hidden` at the usage site, and it disappears entirely under `prefers-reduced-transparency`
+   * style conditions by fading to the flat ground.
+   */
+  .app-aurora {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(58rem 32rem at 88% -12%, color-mix(in oklab, var(--brand) 16%, transparent), transparent 68%),
+      radial-gradient(46rem 28rem at 4% 8%, color-mix(in oklab, var(--success) 11%, transparent), transparent 70%);
+  }
+
+  .app-aurora::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(to right, color-mix(in oklab, var(--line) 55%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklab, var(--line) 55%, transparent) 1px, transparent 1px);
+    background-size: 72px 72px;
+    mask-image: radial-gradient(75% 60% at 50% 0%, black, transparent 78%);
+    opacity: 0.5;
+  }
+
+  /*
+   * A panel. The hairline stays — it is what makes the card a card — but it now carries a one-token
+   * top highlight (a lit edge, like a bezel) and a very low ground gradient, so a stack of panels
+   * reads as layers rather than as a white sheet with boxes drawn on it.
+   */
+  .panel {
+    position: relative;
+    border: 1px solid var(--line);
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--surface-raised) 92%, transparent), var(--surface) 42%),
+      var(--surface);
+    box-shadow: inset 0 1px 0 color-mix(in oklab, #fff 6%, transparent);
+  }
+
+  .panel-lit {
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, #fff 8%, transparent),
+      0 0 0 1px color-mix(in oklab, var(--brand) 22%, transparent),
+      0 18px 40px -28px color-mix(in oklab, var(--brand) 65%, transparent);
+  }
+
+  .panel-hover {
+    transition:
+      border-color var(--motion-fast) var(--motion-ease),
+      box-shadow var(--motion-fast) var(--motion-ease),
+      transform var(--motion-fast) var(--motion-ease);
+  }
+
+  .panel-hover:hover {
+    border-color: var(--line-strong);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, #fff 7%, transparent),
+      var(--lift-hover);
+    transform: translateY(-1px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .panel-hover,
+    .panel-hover:hover {
+      transition: none;
+      transform: none;
+    }
+  }
+
+  /* The hero figure on a stat card: tight tracking, tabular digits, and a soft accent bloom behind. */
+  .stat-value {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+  }
+
+  .stat-value-lit {
+    background: linear-gradient(120deg, var(--ink) 30%, color-mix(in oklab, var(--brand) 85%, var(--ink)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /*
+   * Tables. A sticky header that stays legible over scrolled rows, zebra that is a tint rather than a
+   * stripe, and a row hover that lights the whole row instead of only the cell under the pointer.
+   */
+  .data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: color-mix(in oklab, var(--surface) 88%, transparent);
+    backdrop-filter: blur(8px);
+    border-block-end: 1px solid var(--line);
+  }
+
+  .data-table tbody tr:nth-child(even) {
+    background: color-mix(in oklab, var(--surface-muted) 55%, transparent);
+  }
+
+  .data-table tbody tr {
+    transition: background-color var(--motion-fast) var(--motion-ease);
+  }
+
+  .data-table tbody tr:hover {
+    background: color-mix(in oklab, var(--brand) 8%, var(--surface));
+  }
+
+  .data-table tbody td {
+    border-block-end: 1px solid color-mix(in oklab, var(--line) 70%, transparent);
+  }
+
+  .data-table tbody tr:last-child td {
+    border-block-end: 0;
+  }
+
+  /* A nav entry's active marker: a short accent bar on the leading edge, drawn with logical props. */
+  .nav-rail {
+    position: relative;
+  }
+
+  .nav-rail[aria-current='page']::before {
+    content: '';
+    position: absolute;
+    inset-block: 25%;
+    inset-inline-start: 0;
+    width: 3px;
+    border-start-end-radius: 3px;
+    border-end-end-radius: 3px;
+    background: linear-gradient(180deg, var(--brand), color-mix(in oklab, var(--success) 70%, var(--brand)));
+  }
+
+  /* A live indicator that breathes. Motion is the only thing that separates "streaming" from "a dot". */
+  .live-dot {
+    position: relative;
+    display: inline-flex;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background: currentColor;
+  }
+
+  .live-dot::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 9999px;
+    border: 1px solid currentColor;
+    opacity: 0.5;
+    animation: live-breathe 2.4s var(--motion-ease) infinite;
+  }
+
+  @keyframes live-breathe {
+    0% { transform: scale(0.7); opacity: 0.55; }
+    70% { transform: scale(1.5); opacity: 0; }
+    100% { transform: scale(1.5); opacity: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .live-dot::after { animation: none; opacity: 0.25; }
+  }
+
+  /* Section heading with a rule that fades out — a divider that does not cut the page in half. */
+  .section-rule {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .section-rule::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to left, var(--line), transparent);
   }
 }
 

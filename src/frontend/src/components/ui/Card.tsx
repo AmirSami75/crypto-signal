@@ -14,15 +14,19 @@ type CardProps = {
   className?: string
   /** Filled with the muted surface instead of the card surface, for a panel inside a panel. */
   muted?: boolean
+  /** Lifts on hover — for panels that are themselves a link or a drill-down target. */
+  interactive?: boolean
   as?: 'div' | 'article' | 'section' | 'li'
 }
 
-export function Card({ children, className = '', muted = false, as: Tag = 'div' }: CardProps) {
+export function Card({ children, className = '', muted = false, interactive = false, as: Tag = 'div' }: CardProps) {
   return (
     <Tag
       className={[
-        'rounded-xl',
-        muted ? 'border border-transparent bg-surface-muted' : 'border border-line bg-surface',
+        'rounded-2xl',
+        muted
+          ? 'border border-transparent bg-surface-muted'
+          : `panel${interactive ? ' panel-hover' : ''}`,
         className,
       ].join(' ')}
     >

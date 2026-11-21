@@ -10,6 +10,8 @@ export const ROUTES = {
   changePassword: '/change-password',
 
   overview: '/overview',
+  /** The operator's live desk: fleet, scanner proposals and the audit tail on one screen. */
+  desk: '/desk',
 
   signal: '/signal',
   bots: '/bots',

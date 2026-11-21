@@ -66,11 +66,11 @@ export function DataTable<T>({
     <div className="space-y-3">
       {error && <Alert tone="error">{error}</Alert>}
 
-      <div className="overflow-hidden rounded-xl border border-line bg-surface">
+      <div className="panel overflow-hidden rounded-2xl">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[44rem] border-collapse text-sm">
+          <table className="data-table w-full min-w-[44rem] border-collapse text-sm">
             <thead>
-              <tr className="border-b border-line bg-surface-muted/60">
+              <tr>
                 {columns.map((column) => (
                   <th
                     key={column.key}
@@ -96,7 +96,7 @@ export function DataTable<T>({
             >
               {isLoading
                 ? Array.from({ length: skeletonRows }, (_, index) => (
-                    <tr key={`skeleton-${index}`} className="border-b border-line last:border-b-0">
+                    <tr key={`skeleton-${index}`}>
                       {columns.map((column) => (
                         <td key={column.key} className={cellPadding}>
                           <Skeleton className="h-4 w-full max-w-[10rem]" />
@@ -105,10 +105,7 @@ export function DataTable<T>({
                     </tr>
                   ))
                 : rows.map((row) => (
-                    <tr
-                      key={rowKey(row)}
-                      className="border-b border-line transition-colors last:border-b-0 hover:bg-surface-muted/50"
-                    >
+                    <tr key={rowKey(row)}>
                       {columns.map((column) => (
                         <td
                           key={column.key}

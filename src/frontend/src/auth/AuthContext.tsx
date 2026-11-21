@@ -66,6 +66,10 @@ function isSessionShape(value: unknown): value is SessionUser {
     typeof candidate.token === 'string' &&
     typeof candidate.userId === 'string' &&
     typeof candidate.userName === 'string' &&
+    // `fullName` is rendered directly by the user menu (`.trim()` on it). A session written by an
+    // older build that lacked the field used to pass this check and then crash the whole layout into
+    // an error boundary; requiring it here turns that into an ordinary sign-out.
+    typeof candidate.fullName === 'string' &&
     typeof candidate.tokenExpiry === 'string' &&
     typeof candidate.isSuperAdmin === 'boolean' &&
     Array.isArray(candidate.permissions) &&

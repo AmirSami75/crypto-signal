@@ -9,6 +9,7 @@ import { BotDetailPage } from './pages/BotDetailPage'
 import { BotMonitorPage } from './pages/BotMonitorPage'
 import { ChangePasswordPage } from './pages/ChangePasswordPage'
 import { ConnectionsPage } from './pages/ConnectionsPage'
+import { DeskPage } from './pages/DeskPage'
 import { KillSwitchesPage } from './pages/KillSwitchesPage'
 import { LoginHistoryPage } from './pages/LoginHistoryPage'
 import { MlEnginePage } from './pages/MlEnginePage'
@@ -70,6 +71,14 @@ export const router = createBrowserRouter([
     ),
     children: [
       { path: ROUTES.overview, element: <OverviewPage /> },
+      {
+        path: ROUTES.desk,
+        element: (
+          <RequirePermission permission={PERMISSIONS.botGet}>
+            <DeskPage />
+          </RequirePermission>
+        ),
+      },
       {
         path: ROUTES.signal,
         element: (

@@ -114,6 +114,9 @@ export function OverviewPage() {
 
   /** Market pulse anchors to the first active bot's market, else the first bot there is. */
   const pulseBot = activeBots[0] ?? bots[0]
+  // A wildcard scanner bot's symbol is `*`, which no venue accepts as klines input; the pulse shows the
+  // reference market instead of asking for a market that does not exist.
+  const pulseSymbol = pulseBot ? (pulseBot.symbol === '*' ? 'BTCUSDT' : pulseBot.symbol) : null
 
 
   /**
@@ -271,11 +274,11 @@ export function OverviewPage() {
             <div className="flex flex-wrap items-start justify-between gap-2">
               <h2 className="micro-label">{fa.overview.marketPulseLabel}</h2>
               <span className="num text-xs text-ink-faint" dir="ltr">
-                {pulseBot.symbol}
+                {pulseSymbol}
               </span>
             </div>
             <p className="mt-1.5 mb-3 text-xs leading-relaxed text-ink-muted">{fa.overview.marketPulseDetail}</p>
-            <MarketPulse venue={pulseBot.venue} symbol={pulseBot.symbol} />
+            <MarketPulse venue={pulseBot.venue} symbol={pulseSymbol ?? 'BTCUSDT'} />
           </Card>
         )}
 

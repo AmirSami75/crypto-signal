@@ -72,6 +72,7 @@ export function DashboardLayout() {
 
   const mainNav: NavEntry[] = [
     { to: ROUTES.overview, label: fa.nav.overview, icon: <GridIcon /> },
+    { to: ROUTES.desk, label: fa.nav.desk, icon: <DeskIcon />, permission: PERMISSIONS.botGet },
     { to: ROUTES.signal, label: fa.nav.signal, icon: <PulseIcon />, permission: PERMISSIONS.signalGet },
     { to: ROUTES.bots, label: fa.nav.bots, icon: <BotIcon />, permission: PERMISSIONS.botGet },
     {
@@ -141,7 +142,7 @@ export function DashboardLayout() {
 
       {/* The operating mode is the platform's safety invariant, so it is always on screen — not
           folded into a menu. */}
-      <div className="shrink-0 border-t border-line px-4 py-4">
+      <div className="m-3 shrink-0 rounded-xl border border-line bg-surface-muted/60 px-3 py-3">
         <p className="micro-label">{fa.layout.operatingMode}</p>
         <p className="mt-2 flex items-center gap-2 text-sm">
           <StatusDot tone={isPaper ? 'accent' : 'warn'} />
@@ -155,7 +156,10 @@ export function DashboardLayout() {
   )
 
   return (
-    <div className="min-h-dvh lg:grid lg:grid-cols-[16.5rem_1fr]">
+    <div className="relative min-h-dvh lg:grid lg:grid-cols-[16.5rem_1fr]">
+      {/* Decorative only: two cool washes and a hairline grid behind the chrome. `aria-hidden` because
+          it carries no information, and it never takes a pointer event. */}
+      <div className="app-aurora" aria-hidden="true" />
       {/* Skip link: with the sidebar first in tab order on every page, a keyboard user would
           otherwise walk the whole menu before reaching the content. */}
       <a
@@ -167,7 +171,7 @@ export function DashboardLayout() {
 
       {/* Persistent sidebar, wide screens. First grid column, so `dir="rtl"` places it on the right;
           `border-e` is the edge that faces the content, which is the left in RTL. */}
-      <aside className="sticky top-0 hidden h-dvh flex-col border-e border-line bg-surface lg:flex">
+      <aside className="sticky top-0 z-10 hidden h-dvh flex-col border-e border-line bg-surface/85 backdrop-blur-xl lg:flex">
         {renderSidebar()}
       </aside>
 
@@ -190,8 +194,8 @@ export function DashboardLayout() {
         </>
       )}
 
-      <div className="flex min-w-0 flex-col">
-        <header className="sticky top-0 z-30 flex h-(--app-header-height) shrink-0 items-center gap-2 border-b border-line bg-ground/85 px-3 backdrop-blur sm:px-5 lg:px-7">
+      <div className="relative z-10 flex min-w-0 flex-col">
+        <header className="sticky top-0 z-30 flex h-(--app-header-height) shrink-0 items-center gap-2 border-b border-line bg-ground/70 px-3 backdrop-blur-xl sm:px-5 lg:px-7">
           <IconButton
             label={fa.common.openMenu}
             aria-expanded={isDrawerOpen}
@@ -206,7 +210,9 @@ export function DashboardLayout() {
           {/* ms-auto pushes the controls to the trailing edge — left in RTL. */}
           <div className="ms-auto flex items-center gap-1 sm:gap-2">
             <Badge tone={isPaper ? 'accent' : 'warn'}>
-              <StatusDot tone={isPaper ? 'accent' : 'warn'} />
+              {/* The pad/live feed is the thing an operator checks without reading: a still dot says
+                  "a label", a breathing one says "streaming". Decorative, so it is aria-hidden. */}
+              <span aria-hidden="true" className={`live-dot ${isPaper ? 'text-accent' : 'text-warn'}`} />
               <span className="num font-semibold">{mode}</span>
             </Badge>
             <ThemeToggle />
@@ -247,9 +253,9 @@ function NavGroup({
               onClick={onNavigate}
               className={({ isActive }) =>
                 [
-                  'flex h-10 items-center gap-2.5 rounded-xl px-3 text-sm transition-colors',
+                  'nav-rail flex h-10 items-center gap-2.5 rounded-xl px-3 text-sm transition-colors',
                   isActive
-                    ? 'bg-accent/10 font-semibold text-accent-ink'
+                    ? 'bg-accent/12 font-semibold text-accent-ink shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
                     : 'text-ink-soft hover:bg-surface-muted hover:text-ink',
                 ].join(' ')
               }
@@ -410,6 +416,17 @@ function GridIcon() {
       <rect x="13.5" y="3.5" width="7" height="7" rx="2" />
       <rect x="3.5" y="13.5" width="7" height="7" rx="2" />
       <rect x="13.5" y="13.5" width="7" height="7" rx="2" />
+    </svg>
+  )
+}
+
+/** A terminal screen with a tape line — the live desk's icon. */
+function DeskIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className={iconClass} aria-hidden="true">
+      <rect x="3" y="4.5" width="18" height="13" rx="2.5" />
+      <path d="M6.5 13.5l2.8-3 2.4 2.2 2.5-3.2 3.3 4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8.5 20.5h7" strokeLinecap="round" />
     </svg>
   )
 }
