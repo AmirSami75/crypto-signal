@@ -59,3 +59,6 @@ src/signal-ml/lightning_logs/
 src/signal-ml/checkpoints/
 src/signal-ml/tmp/
 tmp/
+
+# Model-league campaign output written by scripts/model_league (logs, never sources)
+src/signal-ml/scripts/artifacts/
