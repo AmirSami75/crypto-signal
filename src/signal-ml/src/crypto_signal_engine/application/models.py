@@ -55,6 +55,11 @@ class TradeParametersInput:
     take_profit_atr_multiple: float = 0.0
     stop_loss_atr_multiple: float = 0.0
 
+    #: The realized-R floor the points head must clear before a bet is taken. `0` keeps the legacy
+    #: behaviour (any positive expectancy qualifies) and is the wire default, so a caller that has not
+    #: been taught the field behaves exactly as it did.
+    minimum_expected_points: float = 0.0
+
 
 @dataclass(frozen=True, slots=True)
 class OpenPositionInput:
@@ -183,6 +188,11 @@ class SignalResult:
     #: as a bool as well as in `warning` because a risk engine cannot gate on prose.
     barrier_extrapolated: bool = False
 
+    #: The points head's expected R for the reported side (or the best side on FLAT). `None` when the
+    #: serving bundle has no points head — a caller must be able to tell "not priced in R" apart from
+    #: "priced at exactly zero", the same way `calibration_method` distinguishes uncalibrated scores.
+    expected_points: float | None = None
+
 
 class BotAction:
     """The advisory verbs, as the strings the mapper turns into the proto enum.
@@ -244,6 +254,10 @@ class BotDecisionResult:
     #: and `expected_value` are extensions of the fitted surface rather than measurements on it. Carried
     #: as a bool as well as in `warning` because a risk engine cannot gate on prose.
     barrier_extrapolated: bool = False
+
+    #: Expected R from the points head for the direction this decision is about. `None` when the bundle
+    #: carries no head; the orchestrator keeps deciding on `expected_value` in that case.
+    expected_points: float | None = None
 
     def __post_init__(self) -> None:
         if self.reason_code not in REASON_CODES:

@@ -106,6 +106,14 @@ BARRIER_FEATURE_COLUMNS: tuple[str, ...] = (
     "direction_sign",
 )
 
+#: The realized outcome of one sampled bet, expressed in units of the risk it put up (R). This is the
+#: number the product actually optimizes: `+risk_reward_ratio` when the take-profit came first, `-1`
+#: when the stop did, and the mark-to-market at the horizon divided by the stop distance on a timeout.
+#: Kept beside the three-class label rather than replacing it, because the classes answer "which barrier
+#: was touched" (needed for calibration and for the existing wire contract) while this answers "what did
+#: the trade pay", which is what a points/expectancy objective regresses on.
+R_MULTIPLE_COLUMN = "r_multiple"
+
 #: Columns kept beside the label for auditing, grouping and reporting. None of these are features; the
 #: dataset builder returns the feature list explicitly so nothing here can leak into the model.
 CONTEXT_COLUMNS: tuple[str, ...] = (
@@ -119,6 +127,7 @@ CONTEXT_COLUMNS: tuple[str, ...] = (
     "bars_held",
     "ambiguous",
     "timeout_return_atr",
+    R_MULTIPLE_COLUMN,
 )
 
 LABEL_COLUMN = "target"
@@ -352,6 +361,16 @@ class BarrierDataset:
     @property
     def y(self) -> pd.Series:
         return self.frame[self.label_column]
+
+    @property
+    def r(self) -> pd.Series:
+        """Realized R-multiple per row — the regression target of the points objective.
+
+        Deliberately a separate accessor, not a second label column the classifier could be fed by
+        accident: `X` is built from `feature_columns`, which never contains this, and `y` stays the
+        three-class outcome the wire contract already speaks.
+        """
+        return self.frame[R_MULTIPLE_COLUMN]
 
     @property
     def times(self) -> np.ndarray:
@@ -619,6 +638,16 @@ def _label_one_symbol(
             # Only meaningful where the label is a timeout; kept for every row so a report can compare
             # the mark against what the barriers actually paid.
             variant["timeout_return_atr"] = labels.timeout_return_atr[rows]
+            # Realized R for this sampled bet: a take-profit pays the bracket's own reward:risk, a stop
+            # costs exactly 1R, and a timeout pays its mark-to-market divided by the stop distance. One
+            # quantity, all three outcomes, so a single regression head learns what the trade earned.
+            outcome = labels.outcome[rows]
+            timeout_r = labels.timeout_return_atr[rows] / pair.stop_loss_atr
+            variant[R_MULTIPLE_COLUMN] = np.where(
+                outcome == int(Outcome.TAKE_PROFIT_FIRST),
+                float(pair.risk_reward_ratio),
+                np.where(outcome == int(Outcome.STOP_LOSS_FIRST), -1.0, timeout_r),
+            ).astype(np.float32)
             variants.append(variant)
 
     if not variants:

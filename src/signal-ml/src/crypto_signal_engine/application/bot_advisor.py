@@ -452,5 +452,17 @@ class BotAdvisorService:
             rationale=assessment.choice.rationale + extra_rationale,
             warning=assessment.warning,
             barrier_extrapolated=assessment.barrier_extrapolated,
+            expected_points=(
+                assessment.choice.chosen.expected_points
+                if assessment.choice.chosen is not None
+                else max(
+                    (
+                        candidate.expected_points
+                        for candidate in assessment.choice.candidates
+                        if candidate.expected_points is not None
+                    ),
+                    default=None,
+                )
+            ),
             processing_milliseconds=assessment.elapsed_milliseconds,
         )

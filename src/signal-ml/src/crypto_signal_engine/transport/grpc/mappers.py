@@ -230,6 +230,8 @@ def signal_to_proto(result: SignalResult) -> pb.GetSignalResponse:
         warning=result.warning,
         processing_milliseconds=result.processing_milliseconds,
         barrier_extrapolated=result.barrier_extrapolated,
+        points_available=result.expected_points is not None,
+        expected_points=float(result.expected_points or 0.0),
     )
 
 
@@ -256,6 +258,8 @@ def bot_decision_to_proto(result: BotDecisionResult) -> pb.EvaluateBotDecisionRe
         warning=result.warning,
         processing_milliseconds=result.processing_milliseconds,
         barrier_extrapolated=result.barrier_extrapolated,
+        points_available=result.expected_points is not None,
+        expected_points=float(result.expected_points or 0.0),
     )
 
 
@@ -362,6 +366,48 @@ def training_status_to_proto(
 
 # ── market scan ─────────────────────────────────────────────────────────────
 
+def scan_result(
+    *,
+    symbol: str,
+    strategy: str,
+    direction: str,
+    confidence: float,
+    reason: str,
+    warning: str = "",
+    model_priced: bool = False,
+    points_available: bool = False,
+    expected_points: float = 0.0,
+    expected_value_atr: float = 0.0,
+    model_confidence: float = 0.0,
+    take_profit_atr: float = 0.0,
+    stop_loss_atr: float = 0.0,
+    model_id: str = "",
+    model_version: str = "",
+) -> pb.ScanSymbolResult:
+    """One scan row, including the model-priced fields the zoo never fills.
+
+    A builder rather than a dict in the servicer so the wire field names live in one file — the same
+    reason every other mapper does.
+    """
+    return pb.ScanSymbolResult(
+        symbol=symbol,
+        strategy=strategy,
+        direction=direction,
+        confidence=confidence,
+        reason=reason,
+        warning=warning,
+        model_priced=model_priced,
+        points_available=points_available,
+        expected_points=expected_points,
+        expected_value_atr=expected_value_atr,
+        model_confidence=model_confidence,
+        take_profit_atr=take_profit_atr,
+        stop_loss_atr=stop_loss_atr,
+        model_id=model_id,
+        model_version=model_version,
+    )
+
+
 def scan_symbols_response_to_proto(
     request_id: str,
     results,
@@ -378,6 +424,15 @@ def scan_symbols_response_to_proto(
                 confidence=r.confidence,
                 reason=r.reason,
                 warning=r.warning or "",
+                model_priced=r.model_priced,
+                points_available=r.points_available,
+                expected_points=r.expected_points,
+                expected_value_atr=r.expected_value_atr,
+                model_confidence=r.model_confidence,
+                take_profit_atr=r.take_profit_atr,
+                stop_loss_atr=r.stop_loss_atr,
+                model_id=r.model_id,
+                model_version=r.model_version,
             )
             for r in results
         ],

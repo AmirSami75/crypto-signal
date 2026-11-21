@@ -96,6 +96,10 @@ class ModelDescriptor:
     #: rather than inferred from silence.
     calibration_method: str = ""
 
+    #: Whether this bundle carries a points head (the realized-R regressor). A serving caller reads this
+    #: to decide whether it can price a bet in R or must fall back to ATR expected value.
+    has_points: bool = False
+
     @property
     def feature_count(self) -> int:
         return len(self.feature_columns)
@@ -130,11 +134,26 @@ class LoadedModel:
     estimator: Any
     fingerprint: tuple[int, int]
     is_sequence: bool = False
+    #: The realized-R regressor when the bundle carries one. Optional by design: every artifact trained
+    #: before the points objective loads and serves exactly as it did, and only bundles with the head
+    #: answer in R.
+    points_estimator: Any | None = None
     _lock: RLock = field(default_factory=RLock, repr=False)
 
     def predict_proba(self, features: Any) -> Any:
         with self._lock:
             return self.estimator.predict_proba(features)
+
+    def predict_points(self, features: Any) -> Any | None:
+        """Expected R for each row, or `None` when this bundle has no points head."""
+        if self.points_estimator is None:
+            return None
+        with self._lock:
+            return self.points_estimator.predict(features)
+
+    @property
+    def has_points(self) -> bool:
+        return self.points_estimator is not None
 
     @property
     def classes_(self) -> Any:
@@ -419,6 +438,7 @@ def _load(candidate: Candidate, fingerprint: tuple[int, int]) -> LoadedModel:
         payload = candidate.path.read_bytes()
         bundle = joblib.load(candidate.path)
         estimator = bundle["model"]
+        points_estimator = bundle.get("points_model")
         feature_columns = tuple(str(column) for column in bundle["feature_columns"])
         metadata = bundle["metadata"]
         interval = str(metadata["interval"])
@@ -434,6 +454,10 @@ def _load(candidate: Candidate, fingerprint: tuple[int, int]) -> LoadedModel:
 
     if not hasattr(estimator, "predict_proba"):
         raise ModelUnavailable("the estimator cannot produce probabilities")
+    if points_estimator is not None and not hasattr(points_estimator, "predict"):
+        # A malformed head is a broken artifact, not an optional extra: serving it would price every bet
+        # at whatever `predict` happened to be, and the caller would never learn the numbers were wrong.
+        raise ModelUnavailable("the points head cannot produce predictions")
 
     # A recurrent model reads only the scale-free candle features and is flagged `is_sequence`; it does
     # not carry the per-bet barrier columns, so the barrier-input guard below is skipped for it.
@@ -486,12 +510,14 @@ def _load(candidate: Candidate, fingerprint: tuple[int, int]) -> LoadedModel:
         is_sequence=is_sequence,
         lookback=lookback,
         calibration_method=str((metadata.get("calibration") or {}).get("method") or ""),
+        has_points=points_estimator is not None,
     )
     return LoadedModel(
         descriptor=descriptor,
         estimator=estimator,
         fingerprint=fingerprint,
         is_sequence=is_sequence,
+        points_estimator=points_estimator,
     )
 
 

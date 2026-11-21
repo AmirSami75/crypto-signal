@@ -326,6 +326,12 @@ message GetSignalResponse {
   // request becomes a wide ATR bracket whenever the market is quiet, at which point `expected_value`
   // is an extension of the fitted surface and must not be sized on.
   bool barrier_extrapolated = 21;
+
+  // Expected R from the points head: +risk_reward when a win, -1 when a loss, for the reported side
+  // (or the best side when FLAT). `points_available` distinguishes "this bundle has no points head"
+  // from "the head priced this bet at exactly zero" — proto3 defaults alone cannot.
+  bool points_available = 22;
+  double expected_points = 23;
 }
 
 // ─────────────────────────────── bot decision ───────────────────────────────
@@ -389,6 +395,10 @@ message EvaluateBotDecisionResponse {
   // Same meaning as on GetSignalResponse: the bracket asked about sits outside the model's fitted span.
   // Field number matches deliberately, so a shared mapper reads the same number on both messages.
   bool barrier_extrapolated = 21;
+
+  // Same meaning and field numbers as on GetSignalResponse, so one mapper rule covers both.
+  bool points_available = 22;
+  double expected_points = 23;
 }
 
 // ─────────────────────────────── online learning ───────────────────────────────
@@ -505,6 +515,18 @@ message ScanStrategySpec {
   double stop_loss_atr = 3;
 }
 
+// Asks the scanner to also price each symbol with the market's ML model, at this bracket. Absent
+// means "strategy zoo only" — the pre-points behaviour, so an old caller is unaffected.
+message ScanModelSpec {
+  double take_profit_atr = 1;
+  double stop_loss_atr = 2;
+  double minimum_confidence = 3;
+  // Expected-R floor. 0.0 = any positive expectancy; the orchestrator's policy value is what a bot
+  // would trade at, and the scanner reports rather than trades.
+  double minimum_expected_points = 4;
+  int32 max_holding_periods = 5;
+}
+
 message ScanSymbolResult {
   string symbol = 1;
   string strategy = 2;
@@ -515,6 +537,19 @@ message ScanSymbolResult {
   double confidence = 4;  // 1.0 for indicator strategies (deterministic).
   string reason = 5;
   string warning = 6;
+
+  // ── model-scored fields (strategy = "model"; zero/empty on zoo rows) ──
+  // Expected R from the points head. `model_priced` says whether the bundle actually had a head,
+  // because proto3 cannot distinguish "no head" from "priced at zero".
+  bool model_priced = 7;
+  bool points_available = 8;
+  double expected_points = 9;
+  double expected_value_atr = 10;
+  double model_confidence = 11;
+  double take_profit_atr = 12;
+  double stop_loss_atr = 13;
+  string model_id = 14;
+  string model_version = 15;
 }
 
 message ScanSymbolsRequest {
@@ -522,6 +557,8 @@ message ScanSymbolsRequest {
   repeated ScanSymbolRequest symbols = 2;
   repeated ScanStrategySpec strategies = 3;
   string interval = 4;
+  // Optional ML pricing pass. Absent = strategy zoo only.
+  ScanModelSpec model = 5;
 }
 
 message ScanSymbolsResponse {

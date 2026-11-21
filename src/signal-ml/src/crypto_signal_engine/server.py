@@ -17,8 +17,10 @@ needs restarting once one does.
 from __future__ import annotations
 
 from concurrent import futures
+from datetime import datetime
 import logging
 import os
+from pathlib import Path
 import signal
 from threading import Event
 
@@ -29,6 +31,7 @@ from grpc_reflection.v1alpha import reflection
 from crypto_signal_engine import __version__
 from crypto_signal_engine.application.bot_advisor import BotAdvisorService
 from crypto_signal_engine.application.evaluator import MarketEvaluator
+from crypto_signal_engine.application.online_calibration import CalibrationStore
 from crypto_signal_engine.application.online_learning import OnlineTrainer, TradeSampleStore
 from crypto_signal_engine.application.online_service import OnlineLearningService
 from crypto_signal_engine.application.signal_service import SignalService
@@ -54,6 +57,11 @@ def build_services(
     who has not opted in gets no sample store and no trainer threads, exactly as before this existed.
     """
     registry = ModelRegistry(settings.model_directory, single_artifact=settings.model_path)
+    # The fast learning loop's memory. It starts empty and only starts adjusting a market after that
+    # market has produced `MIN_SAMPLES` resolved trades, so a fresh deployment behaves exactly as before.
+    calibration = CalibrationStore(
+        Path(os.getenv("ML_CALIBRATION_PATH", "artifacts/online/calibration.json")).resolve()
+    )
     evaluator = MarketEvaluator(
         registry,
         minimum_candles=settings.minimum_candles,
@@ -61,6 +69,7 @@ def build_services(
         default_max_holding_periods=settings.default_max_holding_periods,
         default_minimum_confidence=settings.minimum_confidence,
         barrier_atr_bounds=settings.barrier_atr_bounds,
+        calibration=calibration,
     )
     signals = SignalService(
         evaluator,
@@ -90,7 +99,64 @@ def build_services(
             min_samples=settings.online_training_min_samples,
             sample_weight=settings.online_training_sample_weight,
         )
-        online = OnlineLearningService(store, trainer, enabled=True)
+        def _probability_probe(symbol, interval, candles, direction, take_profit, stop_loss):
+            """Re-price the decision that opened a trade, to learn from the outcome it produced.
+
+            The engine does not need the caller to remember the confidence: the request already carries
+            the candle window and the bracket, so the same model can be asked the same question again.
+            A probe that cannot answer returns None and the outcome is simply not used for calibration —
+            the training sample itself was already stored, which is the loop that gates challengers.
+            """
+            from decimal import Decimal
+
+            from crypto_signal_engine.application.models import (
+                CandleInput,
+                SignalRequest,
+                TradeParametersInput,
+            )
+
+            try:
+                parsed = tuple(
+                    CandleInput(
+                        open_time=datetime.fromisoformat(str(candle["open_time"])),
+                        open=Decimal(str(candle["open"])),
+                        high=Decimal(str(candle["high"])),
+                        low=Decimal(str(candle["low"])),
+                        close=Decimal(str(candle["close"])),
+                        volume=Decimal(str(candle.get("volume", "0"))),
+                    )
+                    for candle in candles
+                )
+                result = signals.get_signal(
+                    SignalRequest(
+                        request_id="calibration-probe",
+                        symbol=symbol,
+                        interval=interval,
+                        candles=parsed,
+                        parameters=TradeParametersInput(
+                            take_profit_percent=Decimal(str(take_profit)),
+                            stop_loss_percent=Decimal(str(stop_loss)),
+                            allow_short=True,
+                        ),
+                    )
+                )
+            except Exception:  # noqa: BLE001 — calibration must never fail the outcome RPC
+                logger.debug("Calibration probe could not score %s %s", symbol, interval, exc_info=True)
+                return None
+            probability = (
+                result.short_confidence
+                if str(direction).upper() == "SHORT"
+                else result.long_confidence
+            )
+            return probability if 0.0 < probability < 1.0 else None
+
+        online = OnlineLearningService(
+            store,
+            trainer,
+            enabled=True,
+            calibration=calibration,
+            probability_probe=_probability_probe,
+        )
         logger.info(
             "Online learning enabled | samples=%s | min_samples=%s",
             settings.trade_samples_path,

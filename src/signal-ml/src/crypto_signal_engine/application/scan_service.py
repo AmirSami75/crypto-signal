@@ -40,6 +40,19 @@ class ScanResult:
     reason: str
     warning: str = ""
 
+    #: Model-scored rows (`strategy="model"`) carry these; zoo rows leave them at their defaults.
+    #: `points_available` is the honest tri-state: false means the bundle has no points head, which is
+    #: not the same statement as "the head expects exactly 0R".
+    model_priced: bool = False
+    points_available: bool = False
+    expected_points: float = 0.0
+    expected_value_atr: float = 0.0
+    model_confidence: float = 0.0
+    take_profit_atr: float = 0.0
+    stop_loss_atr: float = 0.0
+    model_id: str = ""
+    model_version: str = ""
+
 
 @dataclass(frozen=True, slots=True)
 class ScanResponse:

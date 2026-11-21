@@ -63,6 +63,8 @@ from ..modeling import (
     aligned_probabilities,
     classification_metrics,
     fit_calibrated_model,
+    fit_regressor,
+    regression_metrics,
     walk_forward_validation_by_time,
 )
 from ..modeling.splitting import chronological_blocks
@@ -88,6 +90,16 @@ WIN_CLASS_INDEX = int(np.flatnonzero(ALL_CLASSES == 1)[0])
 #: floors are visibly the same decision rather than coincidentally equal literals.
 MINIMUM_EXPECTED_VALUE_ATR = 0.0
 LOSS_CLASS_INDEX = int(np.flatnonzero(ALL_CLASSES == -1)[0])
+
+#: How much more a losing trade counts than a winning one when the points head is fitted. 1.0 is an
+#: unbiased fit; the online loop raises it so the same mistake made twice costs more to ignore. Kept as
+#: a named constant rather than a literal because it is a policy choice the product owner should see.
+MISTAKE_WEIGHT = 1.0
+
+#: The R the holdout report uses when it says "what would this model have traded". Zero means every
+#: positive expectancy row is counted, which is the honest baseline; the gate later re-scores at the
+#: policy threshold a bot would actually use.
+POINTS_THRESHOLD = 0.0
 
 #: Features are fitted at single precision. The estimator bins its inputs to `uint8` before it splits on
 #: them, so the eighth significant digit cannot change a threshold, and the pooled frame is large enough
@@ -614,6 +626,29 @@ def _train_one(
         holdout_metrics["balanced_accuracy"],
     )
 
+    # The points head: the same features and the same folds, fitted on the *realized R* of each sampled
+    # bet rather than on which barrier came first. Fitted on the development block only and scored once
+    # on the strict holdout, exactly like the classifier above — a head measured on data it saw is a
+    # number, not evidence.
+    points_model = fit_regressor(
+        X.iloc[development],
+        dataset.r.iloc[development],
+        config.model,
+        sample_weight=training_weights(dataset.r.iloc[development].to_numpy(), MISTAKE_WEIGHT),
+    )
+    holdout_points = np.asarray(points_model.predict(X.iloc[holdout]), dtype=float)
+    points_metrics = regression_metrics(
+        dataset.r.iloc[holdout].to_numpy(), holdout_points, threshold=POINTS_THRESHOLD
+    )
+    logger.info(
+        "Bundle %s | points holdout | mean_pred=%.3fR | spearman=%.3f | expectancy=%.3fR over %s trades",
+        stem,
+        points_metrics["mean_predicted_r"],
+        points_metrics["spearman"],
+        points_metrics["expectancy_at_threshold"]["mean_r"],
+        points_metrics["expectancy_at_threshold"]["trades"],
+    )
+
     backtests = _backtest_holdout(
         model=model,
         dataset=dataset,
@@ -647,6 +682,10 @@ def _train_one(
     joblib.dump(
         {
             "model": model,
+            # The points head ships beside the classifier, not instead of it: the classifier's calibrated
+            # classes answer the existing wire contract and the confidence reach table, while this head
+            # answers "what does the bet pay". An engine that predates it simply ignores the key.
+            "points_model": points_model,
             "feature_columns": list(dataset.feature_columns),
             "metadata": _bundle_metadata(
                 symbols=symbols,
@@ -654,6 +693,7 @@ def _train_one(
                 calibration=calibration,
                 rows=rows,
                 candles=candles,
+                points=points_metrics,
             ),
         },
         path,
@@ -675,11 +715,25 @@ def _train_one(
             "holdout_rows": int(len(holdout)),
             "walk_forward_cv": _rename_report_classes(cv),
             "strict_holdout": _rename_report_classes(holdout_metrics),
+            "points": points_metrics,
             "calibration": _rename_report_classes(calibration.as_dict()),
             "bracket_backtest": backtests,
         },
         calibration=calibration,
     )
+
+
+def training_weights(r: np.ndarray, mistake_weight: float) -> np.ndarray:
+    """Row weights for the points head: a losing bet counts `mistake_weight` times a winning one.
+
+    1.0 is the unbiased fit and the default for a batch train. The online loop raises it, because the
+    product brief is explicit that a loss should teach the model more than a win confirms it — and
+    because a model fitted to a stream of live outcomes sees far more wins than losses when it is doing
+    well, which silently stops it learning from the mistakes that matter.
+    """
+    if mistake_weight <= 0:
+        raise ValueError(f"mistake_weight must be positive, got {mistake_weight!r}")
+    return np.where(np.asarray(r, dtype=float) < 0.0, float(mistake_weight), 1.0)
 
 
 def _carve_holdout(dataset: BarrierDataset, barrier: BarrierConfig) -> tuple[np.ndarray, np.ndarray]:
@@ -708,6 +762,7 @@ def _bundle_metadata(
     calibration: CalibrationReport,
     rows: int,
     candles: int,
+    points: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The dictionary the serving registry reads back out of the artifact.
 
@@ -740,6 +795,15 @@ def _bundle_metadata(
             "attempted": calibration.method,
             "improved": calibration.improved,
             "reach": calibration.reach.as_dict() if calibration.reach is not None else None,
+        },
+        # The points objective's declaration. `enabled` is what a serving engine reads to know whether
+        # `points_model` exists in the artifact; `holdout` is the evidence the gate is allowed to act on.
+        "points": {
+            "enabled": points is not None,
+            "objective": "realized R-multiple",
+            "mistake_weight": MISTAKE_WEIGHT,
+            "threshold": POINTS_THRESHOLD,
+            "holdout": points or {},
         },
     }
 

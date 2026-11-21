@@ -99,6 +99,18 @@ class SignalService:
                 default=0.0,
             )
         )
+        best_points = (
+            assessment.choice.chosen.expected_points
+            if direction is not Direction.FLAT and assessment.choice.chosen is not None
+            else max(
+                (
+                    candidate.expected_points
+                    for candidate in assessment.choice.candidates
+                    if candidate.expected_points is not None
+                ),
+                default=None,
+            )
+        )
 
         return SignalResult(
             request_id=request.request_id,
@@ -118,6 +130,7 @@ class SignalService:
             rationale=assessment.choice.rationale,
             warning=assessment.warning,
             barrier_extrapolated=assessment.barrier_extrapolated,
+            expected_points=best_points,
             processing_milliseconds=assessment.elapsed_milliseconds,
         )
 

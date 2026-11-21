@@ -216,11 +216,101 @@ class MlEngineServicer(ml_engine_pb2_grpc.MlEngineServiceServicer):
                 strategies=strategies,
             )
             result = svc.scan(parsed)
+            model_rows = (
+                self._price_with_model(request_id, request, symbols)
+                if request.HasField("model")
+                else ()
+            )
             return mappers.scan_symbols_response_to_proto(
-                result.request_id, result.results, result.warning
+                result.request_id, tuple(result.results) + tuple(model_rows), result.warning
             )
 
         return self._dispatch("ScanSymbols", request_id, context, work)
+
+    def _price_with_model(
+        self,
+        request_id: str,
+        request,
+        symbols,
+    ):
+        """Price every scanned symbol with the market's ML model, at the bracket the caller asked for.
+
+        One `GetSignal` per symbol rather than a new engine-internal path, so the scanner and a bot
+        asking the same question get the same answer from the same code. A symbol the model cannot
+        answer (no bundle for its interval, too few candles) is skipped with a warning row instead of
+        failing the pass: the scanner's job is to cover a universe, and one unservable market must not
+        blind the other hundred.
+        """
+        from decimal import Decimal
+
+        from crypto_signal_engine.application.errors import (
+            InvalidInferenceRequest,
+            ModelUnavailable,
+        )
+        from crypto_signal_engine.application.models import (
+            SignalRequest,
+            TradeParametersInput,
+        )
+
+        spec = request.model
+        parameters = TradeParametersInput(
+            # The contract requires positive percent barriers even when the caller is asking in ATR
+            # units; `take_profit_atr_multiple`/`stop_loss_atr_multiple` are what the evaluator
+            # actually prices with, so these are nominal, not the bet.
+            take_profit_percent=Decimal(str(max(float(spec.take_profit_atr), 0.1))),
+            stop_loss_percent=Decimal(str(max(float(spec.stop_loss_atr), 0.05))),
+            allow_short=True,
+            max_holding_periods=int(spec.max_holding_periods),
+            minimum_confidence=float(spec.minimum_confidence),
+            take_profit_atr_multiple=float(spec.take_profit_atr),
+            stop_loss_atr_multiple=float(spec.stop_loss_atr),
+            minimum_expected_points=float(spec.minimum_expected_points),
+        )
+
+        rows = []
+        for symbol, candles in symbols:
+            try:
+                signal = self._signals.get_signal(
+                    SignalRequest(
+                        request_id=f"{request_id}:{symbol}",
+                        symbol=symbol,
+                        interval=request.interval,
+                        candles=candles,
+                        parameters=parameters,
+                    )
+                )
+            except (InvalidInferenceRequest, ModelUnavailable, ValueError) as error:
+                rows.append(
+                    mappers.scan_result(
+                        symbol=symbol,
+                        strategy="model",
+                        direction="",
+                        confidence=0.0,
+                        reason=f"model unavailable: {error}",
+                        warning=str(error),
+                    )
+                )
+                continue
+            rows.append(
+                mappers.scan_result(
+                    symbol=symbol,
+                    strategy="model",
+                    direction=signal.direction.name,
+                    confidence=signal.confidence,
+                    reason=" | ".join(signal.rationale),
+                    warning=signal.warning,
+                    model_priced=True,
+                    points_available=signal.expected_points is not None,
+                    expected_points=float(signal.expected_points or 0.0),
+                    expected_value_atr=float(signal.expected_value),
+                    model_confidence=float(signal.confidence),
+                    take_profit_atr=float(spec.take_profit_atr),
+                    stop_loss_atr=float(spec.stop_loss_atr),
+                    model_id=signal.model.model_id,
+                    model_version=signal.model.model_version,
+                )
+            )
+        return tuple(rows)
 
     # ── error handling ────────────────────────────────────────────────────────────
 

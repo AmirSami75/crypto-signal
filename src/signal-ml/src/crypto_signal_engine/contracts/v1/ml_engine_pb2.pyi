@@ -235,7 +235,7 @@ class GetSignalRequest(_message.Message):
     def __init__(self, request_id: _Optional[str] = ..., symbol: _Optional[str] = ..., interval: _Optional[str] = ..., candles: _Optional[_Iterable[_Union[Candle, _Mapping]]] = ..., parameters: _Optional[_Union[TradeParameters, _Mapping]] = ..., expected_model_version: _Optional[str] = ...) -> None: ...
 
 class GetSignalResponse(_message.Message):
-    __slots__ = ("request_id", "direction", "levels", "confidence", "probabilities", "expected_value", "long_confidence", "short_confidence", "symbol", "interval", "candle_open_time", "valid_until", "model_id", "model_version", "model_trained_at", "used_wildcard_model", "input_digest_sha256", "rationale", "warning", "processing_milliseconds", "barrier_extrapolated")
+    __slots__ = ("request_id", "direction", "levels", "confidence", "probabilities", "expected_value", "long_confidence", "short_confidence", "symbol", "interval", "candle_open_time", "valid_until", "model_id", "model_version", "model_trained_at", "used_wildcard_model", "input_digest_sha256", "rationale", "warning", "processing_milliseconds", "barrier_extrapolated", "points_available", "expected_points")
     REQUEST_ID_FIELD_NUMBER: _ClassVar[int]
     DIRECTION_FIELD_NUMBER: _ClassVar[int]
     LEVELS_FIELD_NUMBER: _ClassVar[int]
@@ -257,6 +257,8 @@ class GetSignalResponse(_message.Message):
     WARNING_FIELD_NUMBER: _ClassVar[int]
     PROCESSING_MILLISECONDS_FIELD_NUMBER: _ClassVar[int]
     BARRIER_EXTRAPOLATED_FIELD_NUMBER: _ClassVar[int]
+    POINTS_AVAILABLE_FIELD_NUMBER: _ClassVar[int]
+    EXPECTED_POINTS_FIELD_NUMBER: _ClassVar[int]
     request_id: str
     direction: TradeDirection
     levels: TradeLevels
@@ -278,7 +280,9 @@ class GetSignalResponse(_message.Message):
     warning: str
     processing_milliseconds: float
     barrier_extrapolated: bool
-    def __init__(self, request_id: _Optional[str] = ..., direction: _Optional[_Union[TradeDirection, str]] = ..., levels: _Optional[_Union[TradeLevels, _Mapping]] = ..., confidence: _Optional[float] = ..., probabilities: _Optional[_Union[BarrierProbabilities, _Mapping]] = ..., expected_value: _Optional[float] = ..., long_confidence: _Optional[float] = ..., short_confidence: _Optional[float] = ..., symbol: _Optional[str] = ..., interval: _Optional[str] = ..., candle_open_time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., valid_until: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., model_id: _Optional[str] = ..., model_version: _Optional[str] = ..., model_trained_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., used_wildcard_model: _Optional[bool] = ..., input_digest_sha256: _Optional[str] = ..., rationale: _Optional[_Iterable[str]] = ..., warning: _Optional[str] = ..., processing_milliseconds: _Optional[float] = ..., barrier_extrapolated: _Optional[bool] = ...) -> None: ...
+    points_available: bool
+    expected_points: float
+    def __init__(self, request_id: _Optional[str] = ..., direction: _Optional[_Union[TradeDirection, str]] = ..., levels: _Optional[_Union[TradeLevels, _Mapping]] = ..., confidence: _Optional[float] = ..., probabilities: _Optional[_Union[BarrierProbabilities, _Mapping]] = ..., expected_value: _Optional[float] = ..., long_confidence: _Optional[float] = ..., short_confidence: _Optional[float] = ..., symbol: _Optional[str] = ..., interval: _Optional[str] = ..., candle_open_time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., valid_until: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., model_id: _Optional[str] = ..., model_version: _Optional[str] = ..., model_trained_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., used_wildcard_model: _Optional[bool] = ..., input_digest_sha256: _Optional[str] = ..., rationale: _Optional[_Iterable[str]] = ..., warning: _Optional[str] = ..., processing_milliseconds: _Optional[float] = ..., barrier_extrapolated: _Optional[bool] = ..., points_available: _Optional[bool] = ..., expected_points: _Optional[float] = ...) -> None: ...
 
 class EvaluateBotDecisionRequest(_message.Message):
     __slots__ = ("request_id", "bot_id", "symbol", "interval", "candles", "parameters", "position", "expected_model_version", "context_candles", "context_interval")
@@ -305,7 +309,7 @@ class EvaluateBotDecisionRequest(_message.Message):
     def __init__(self, request_id: _Optional[str] = ..., bot_id: _Optional[str] = ..., symbol: _Optional[str] = ..., interval: _Optional[str] = ..., candles: _Optional[_Iterable[_Union[Candle, _Mapping]]] = ..., parameters: _Optional[_Union[TradeParameters, _Mapping]] = ..., position: _Optional[_Union[OpenPosition, _Mapping]] = ..., expected_model_version: _Optional[str] = ..., context_candles: _Optional[_Iterable[_Union[Candle, _Mapping]]] = ..., context_interval: _Optional[str] = ...) -> None: ...
 
 class EvaluateBotDecisionResponse(_message.Message):
-    __slots__ = ("request_id", "action", "direction", "levels", "confidence", "probabilities", "expected_value", "reason_code", "rationale", "symbol", "interval", "candle_open_time", "valid_until", "model_id", "model_version", "model_trained_at", "used_wildcard_model", "input_digest_sha256", "warning", "processing_milliseconds", "barrier_extrapolated")
+    __slots__ = ("request_id", "action", "direction", "levels", "confidence", "probabilities", "expected_value", "reason_code", "rationale", "symbol", "interval", "candle_open_time", "valid_until", "model_id", "model_version", "model_trained_at", "used_wildcard_model", "input_digest_sha256", "warning", "processing_milliseconds", "barrier_extrapolated", "points_available", "expected_points")
     REQUEST_ID_FIELD_NUMBER: _ClassVar[int]
     ACTION_FIELD_NUMBER: _ClassVar[int]
     DIRECTION_FIELD_NUMBER: _ClassVar[int]
@@ -327,6 +331,8 @@ class EvaluateBotDecisionResponse(_message.Message):
     WARNING_FIELD_NUMBER: _ClassVar[int]
     PROCESSING_MILLISECONDS_FIELD_NUMBER: _ClassVar[int]
     BARRIER_EXTRAPOLATED_FIELD_NUMBER: _ClassVar[int]
+    POINTS_AVAILABLE_FIELD_NUMBER: _ClassVar[int]
+    EXPECTED_POINTS_FIELD_NUMBER: _ClassVar[int]
     request_id: str
     action: BotAction
     direction: TradeDirection
@@ -348,7 +354,9 @@ class EvaluateBotDecisionResponse(_message.Message):
     warning: str
     processing_milliseconds: float
     barrier_extrapolated: bool
-    def __init__(self, request_id: _Optional[str] = ..., action: _Optional[_Union[BotAction, str]] = ..., direction: _Optional[_Union[TradeDirection, str]] = ..., levels: _Optional[_Union[TradeLevels, _Mapping]] = ..., confidence: _Optional[float] = ..., probabilities: _Optional[_Union[BarrierProbabilities, _Mapping]] = ..., expected_value: _Optional[float] = ..., reason_code: _Optional[str] = ..., rationale: _Optional[_Iterable[str]] = ..., symbol: _Optional[str] = ..., interval: _Optional[str] = ..., candle_open_time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., valid_until: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., model_id: _Optional[str] = ..., model_version: _Optional[str] = ..., model_trained_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., used_wildcard_model: _Optional[bool] = ..., input_digest_sha256: _Optional[str] = ..., warning: _Optional[str] = ..., processing_milliseconds: _Optional[float] = ..., barrier_extrapolated: _Optional[bool] = ...) -> None: ...
+    points_available: bool
+    expected_points: float
+    def __init__(self, request_id: _Optional[str] = ..., action: _Optional[_Union[BotAction, str]] = ..., direction: _Optional[_Union[TradeDirection, str]] = ..., levels: _Optional[_Union[TradeLevels, _Mapping]] = ..., confidence: _Optional[float] = ..., probabilities: _Optional[_Union[BarrierProbabilities, _Mapping]] = ..., expected_value: _Optional[float] = ..., reason_code: _Optional[str] = ..., rationale: _Optional[_Iterable[str]] = ..., symbol: _Optional[str] = ..., interval: _Optional[str] = ..., candle_open_time: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., valid_until: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., model_id: _Optional[str] = ..., model_version: _Optional[str] = ..., model_trained_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., used_wildcard_model: _Optional[bool] = ..., input_digest_sha256: _Optional[str] = ..., warning: _Optional[str] = ..., processing_milliseconds: _Optional[float] = ..., barrier_extrapolated: _Optional[bool] = ..., points_available: _Optional[bool] = ..., expected_points: _Optional[float] = ...) -> None: ...
 
 class RecordTradeOutcomeRequest(_message.Message):
     __slots__ = ("request_id", "bot_id", "symbol", "interval", "model_id", "model_version", "direction", "candles", "take_profit_percent", "stop_loss_percent", "close_reason", "realized_pnl", "bars_held", "decision_candle_open_time", "closed_at")
@@ -456,33 +464,67 @@ class ScanStrategySpec(_message.Message):
     stop_loss_atr: float
     def __init__(self, name: _Optional[str] = ..., take_profit_atr: _Optional[float] = ..., stop_loss_atr: _Optional[float] = ...) -> None: ...
 
+class ScanModelSpec(_message.Message):
+    __slots__ = ("take_profit_atr", "stop_loss_atr", "minimum_confidence", "minimum_expected_points", "max_holding_periods")
+    TAKE_PROFIT_ATR_FIELD_NUMBER: _ClassVar[int]
+    STOP_LOSS_ATR_FIELD_NUMBER: _ClassVar[int]
+    MINIMUM_CONFIDENCE_FIELD_NUMBER: _ClassVar[int]
+    MINIMUM_EXPECTED_POINTS_FIELD_NUMBER: _ClassVar[int]
+    MAX_HOLDING_PERIODS_FIELD_NUMBER: _ClassVar[int]
+    take_profit_atr: float
+    stop_loss_atr: float
+    minimum_confidence: float
+    minimum_expected_points: float
+    max_holding_periods: int
+    def __init__(self, take_profit_atr: _Optional[float] = ..., stop_loss_atr: _Optional[float] = ..., minimum_confidence: _Optional[float] = ..., minimum_expected_points: _Optional[float] = ..., max_holding_periods: _Optional[int] = ...) -> None: ...
+
 class ScanSymbolResult(_message.Message):
-    __slots__ = ("symbol", "strategy", "direction", "confidence", "reason", "warning")
+    __slots__ = ("symbol", "strategy", "direction", "confidence", "reason", "warning", "model_priced", "points_available", "expected_points", "expected_value_atr", "model_confidence", "take_profit_atr", "stop_loss_atr", "model_id", "model_version")
     SYMBOL_FIELD_NUMBER: _ClassVar[int]
     STRATEGY_FIELD_NUMBER: _ClassVar[int]
     DIRECTION_FIELD_NUMBER: _ClassVar[int]
     CONFIDENCE_FIELD_NUMBER: _ClassVar[int]
     REASON_FIELD_NUMBER: _ClassVar[int]
     WARNING_FIELD_NUMBER: _ClassVar[int]
+    MODEL_PRICED_FIELD_NUMBER: _ClassVar[int]
+    POINTS_AVAILABLE_FIELD_NUMBER: _ClassVar[int]
+    EXPECTED_POINTS_FIELD_NUMBER: _ClassVar[int]
+    EXPECTED_VALUE_ATR_FIELD_NUMBER: _ClassVar[int]
+    MODEL_CONFIDENCE_FIELD_NUMBER: _ClassVar[int]
+    TAKE_PROFIT_ATR_FIELD_NUMBER: _ClassVar[int]
+    STOP_LOSS_ATR_FIELD_NUMBER: _ClassVar[int]
+    MODEL_ID_FIELD_NUMBER: _ClassVar[int]
+    MODEL_VERSION_FIELD_NUMBER: _ClassVar[int]
     symbol: str
     strategy: str
     direction: str
     confidence: float
     reason: str
     warning: str
-    def __init__(self, symbol: _Optional[str] = ..., strategy: _Optional[str] = ..., direction: _Optional[str] = ..., confidence: _Optional[float] = ..., reason: _Optional[str] = ..., warning: _Optional[str] = ...) -> None: ...
+    model_priced: bool
+    points_available: bool
+    expected_points: float
+    expected_value_atr: float
+    model_confidence: float
+    take_profit_atr: float
+    stop_loss_atr: float
+    model_id: str
+    model_version: str
+    def __init__(self, symbol: _Optional[str] = ..., strategy: _Optional[str] = ..., direction: _Optional[str] = ..., confidence: _Optional[float] = ..., reason: _Optional[str] = ..., warning: _Optional[str] = ..., model_priced: _Optional[bool] = ..., points_available: _Optional[bool] = ..., expected_points: _Optional[float] = ..., expected_value_atr: _Optional[float] = ..., model_confidence: _Optional[float] = ..., take_profit_atr: _Optional[float] = ..., stop_loss_atr: _Optional[float] = ..., model_id: _Optional[str] = ..., model_version: _Optional[str] = ...) -> None: ...
 
 class ScanSymbolsRequest(_message.Message):
-    __slots__ = ("request_id", "symbols", "strategies", "interval")
+    __slots__ = ("request_id", "symbols", "strategies", "interval", "model")
     REQUEST_ID_FIELD_NUMBER: _ClassVar[int]
     SYMBOLS_FIELD_NUMBER: _ClassVar[int]
     STRATEGIES_FIELD_NUMBER: _ClassVar[int]
     INTERVAL_FIELD_NUMBER: _ClassVar[int]
+    MODEL_FIELD_NUMBER: _ClassVar[int]
     request_id: str
     symbols: _containers.RepeatedCompositeFieldContainer[ScanSymbolRequest]
     strategies: _containers.RepeatedCompositeFieldContainer[ScanStrategySpec]
     interval: str
-    def __init__(self, request_id: _Optional[str] = ..., symbols: _Optional[_Iterable[_Union[ScanSymbolRequest, _Mapping]]] = ..., strategies: _Optional[_Iterable[_Union[ScanStrategySpec, _Mapping]]] = ..., interval: _Optional[str] = ...) -> None: ...
+    model: ScanModelSpec
+    def __init__(self, request_id: _Optional[str] = ..., symbols: _Optional[_Iterable[_Union[ScanSymbolRequest, _Mapping]]] = ..., strategies: _Optional[_Iterable[_Union[ScanStrategySpec, _Mapping]]] = ..., interval: _Optional[str] = ..., model: _Optional[_Union[ScanModelSpec, _Mapping]] = ...) -> None: ...
 
 class ScanSymbolsResponse(_message.Message):
     __slots__ = ("request_id", "results", "warning")

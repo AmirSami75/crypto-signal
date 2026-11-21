@@ -29,6 +29,7 @@ a statement about what being right is worth.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import Sequence
 
 import numpy as np
@@ -46,6 +47,8 @@ from .estimator import aligned_probabilities
 #: only applied where it is actually valid.
 COHERENCE_TOLERANCE = 0.02
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True, slots=True)
 class DirectionCandidate:
@@ -55,6 +58,11 @@ class DirectionCandidate:
     barriers: BarrierPair
     probabilities: OutcomeProbabilities
     expected_value_atr: float
+
+    #: The points head's prediction, in R units, when the bundle carries one. `None` for a bundle that
+    #: predates the points objective, so a caller can tell "this model does not price R" apart from
+    #: "this model prices R at zero" — the same distinction the confidence calibration field makes.
+    expected_points: float | None = None
 
     @property
     def confidence(self) -> float:
@@ -154,18 +162,28 @@ def choose_direction(
     minimum_expected_value_atr: float = 0.0,
     timeout_value_atr: float = 0.0,
     feature_columns: Sequence[str] | None = None,
+    points_model=None,
+    minimum_expected_points: float = 0.0,
+    probability_adjuster=None,
 ) -> DirectionChoice:
     """Price both sides of a bet and answer with the better one, or with FLAT.
 
     A single `predict_proba` call covers both directions: the two rows differ only in `direction_sign`,
     so batching them also guarantees they are scored by the same model state — which matters when a
     registry can swap an artifact between calls.
+
+    When the bundle carries a **points head**, its prediction is the primary decision metric: it is the
+    realized R the bet is expected to pay, which is what the account is scored on. The confidence and
+    ATR-expected-value floors still apply — they answer different questions (how often the bet wins, and
+    whether it pays for its fees under the classifier's own probabilities) and a bet must clear all of
+    them. `minimum_expected_points` is the policy threshold; 0.0 means "any positive expectancy".
     """
     if not 0.0 <= minimum_confidence <= 1.0:
         raise ValueError(f"minimum_confidence must be in [0, 1], got {minimum_confidence!r}")
 
     directions = (Direction.LONG, Direction.SHORT)
 
+    rows: pd.DataFrame | None = None
     if getattr(model, "is_sequence", False):
         # A recurrent model reads a window of candles; score the long and short bets by flipping the
         # `direction_sign` column across the whole window, exactly as the tree sees them.
@@ -176,20 +194,37 @@ def choose_direction(
             short_probs = short_probs.reshape(1, -1)
         probabilities = np.vstack([long_probs, short_probs])
     else:
-        rows = barrier_variants(features, barriers, directions)
+        scored_rows = barrier_variants(features, barriers, directions)
         if feature_columns is not None:
-            missing = [column for column in feature_columns if column not in rows.columns]
+            missing = [column for column in feature_columns if column not in scored_rows.columns]
             if missing:
                 raise ValueError(f"feature row is missing {len(missing)} column(s) the model expects: {missing[:5]}")
-            rows = rows[list(feature_columns)]
+            scored_rows = scored_rows[list(feature_columns)]
 
-        probabilities = aligned_probabilities(model, rows)
+        rows = scored_rows
+        probabilities = aligned_probabilities(model, scored_rows)
+
+    # The fast calibration loop's map, when the market has earned one: it was fitted on realized
+    # outcomes of this same market, and it runs *before* the candidates are priced so the confidence
+    # floor, the expected value and the chosen side all see the corrected number.
+    if probability_adjuster is not None:
+        probabilities = probability_adjuster(probabilities)
+
+    # One `predict` over both direction rows, so the long and short quotes come from the same model
+    # state for the same reason the probabilities do. A head that cannot score is treated as absent
+    # rather than fatal: the classifier's answer is still valid, and denying a request because an
+    # optional head failed would turn a degraded model into an outage.
+    expected_points = _points_for(rows, points_model)
+
     candidates = tuple(
         DirectionCandidate(
             direction=direction,
             barriers=barriers,
             probabilities=(outcome := OutcomeProbabilities.from_class_probabilities(probabilities[index])),
             expected_value_atr=expected_value(outcome, barriers, timeout_value_atr=timeout_value_atr),
+            expected_points=(
+                float(expected_points[index]) if expected_points is not None else None
+            ),
         )
         for index, direction in enumerate(directions)
     )
@@ -217,6 +252,10 @@ def choose_direction(
         for candidate in permitted
         if candidate.confidence >= minimum_confidence
         and candidate.expected_value_atr >= minimum_expected_value_atr
+        and (
+            candidate.expected_points is None
+            or candidate.expected_points >= minimum_expected_points
+        )
     ]
     if not qualified:
         best = max(permitted, key=lambda candidate: candidate.expected_value_atr, default=None)
@@ -226,6 +265,11 @@ def choose_direction(
             reason = (
                 f"flat: best confidence {best.confidence:.3f} is below the {minimum_confidence:.3f} "
                 "floor"
+            )
+        elif best.expected_points is not None and best.expected_points < minimum_expected_points:
+            reason = (
+                f"flat: best expected points {best.expected_points:+.3f}R is below the "
+                f"{minimum_expected_points:+.3f}R floor"
             )
         else:
             reason = (
@@ -241,12 +285,21 @@ def choose_direction(
             warning=warning,
         )
 
-    # Expected value decides, and a tie goes to the higher confidence — a coin-flip between two equally
-    # priced bets should land on the one the model is surer about, not on whichever came first in a list.
-    chosen = max(qualified, key=lambda candidate: (candidate.expected_value_atr, candidate.confidence))
-    rationale.append(
-        f"chose {chosen.direction.name.lower()} on expected value {chosen.expected_value_atr:+.3f} ATR"
-    )
+    # Expected points decides when the bundle carries a points head — it is the metric the account is
+    # scored on. The classifier's ATR expected value is the fallback for a bundle that predates it, and
+    # remains the tie-break input for confidence either way.
+    if any(candidate.expected_points is not None for candidate in qualified):
+        chosen = max(qualified, key=lambda candidate: (candidate.expected_points or 0.0, candidate.confidence))
+    else:
+        chosen = max(qualified, key=lambda candidate: (candidate.expected_value_atr, candidate.confidence))
+    if chosen.expected_points is not None:
+        rationale.append(
+            f"chose {chosen.direction.name.lower()} on expected points {chosen.expected_points:+.3f}R"
+        )
+    else:
+        rationale.append(
+            f"chose {chosen.direction.name.lower()} on expected value {chosen.expected_value_atr:+.3f} ATR"
+        )
     return DirectionChoice(
         direction=chosen.direction,
         chosen=chosen,
@@ -254,6 +307,27 @@ def choose_direction(
         rationale=tuple(rationale),
         warning=warning,
     )
+
+
+def _points_for(rows: pd.DataFrame | None, points_model) -> np.ndarray | None:
+    """Score both direction rows with the points head, or return `None` when there is no head.
+
+    A head that raises is logged and treated as absent rather than propagated: the classifier has
+    already produced a valid answer, and a partially broken artifact should degrade to the metric this
+    bundle shipped with instead of refusing every request.
+    """
+    if rows is None or points_model is None:
+        return None
+    # A serving `LoadedModel` exposes the head through `predict_points` (so the lock is held), while a
+    # bare estimator carries `predict`. Accept both rather than reaching into either object's internals.
+    predict = getattr(points_model, "predict_points", None) or getattr(points_model, "predict", None)
+    if predict is None:
+        return None
+    try:
+        return np.asarray(predict(rows), dtype=float).reshape(-1)
+    except Exception:  # noqa: BLE001 — an optional head must never deny a valid classifier answer
+        logger.warning("Points head could not score this request; falling back to ATR expected value", exc_info=True)
+        return None
 
 
 def _coherence_warning(

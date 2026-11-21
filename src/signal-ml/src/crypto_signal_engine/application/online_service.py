@@ -81,10 +81,17 @@ class OnlineLearningService:
         store: TradeSampleStore,
         trainer: OnlineTrainer,
         enabled: bool,
+        calibration=None,
+        probability_probe=None,
     ) -> None:
         self._store = store
         self._trainer = trainer
         self._enabled = enabled
+        # The fast loop. Both parts are optional: without a calibration store or a way to re-price the
+        # decision, the service stores the sample for the slow challenger loop and nothing else — which
+        # is exactly the behaviour every deployment had before this existed.
+        self._calibration = calibration
+        self._probability_probe = probability_probe
 
     def record_trade_outcome(self, request: TradeOutcomeInput) -> TradeOutcomeResult:
         """Validate and store one resolved trade; maybe trigger a background retrain."""
@@ -141,6 +148,30 @@ class OnlineLearningService:
         )
 
         status, stored = self._store.add(sample)
+        if status == "stored" and self._calibration is not None and self._probability_probe is not None:
+            try:
+                predicted = self._probability_probe(
+                    symbol,
+                    sample.interval,
+                    sample.candles,
+                    sample.direction,
+                    take_profit,
+                    stop_loss,
+                )
+                if predicted is not None:
+                    # A win is a positive realized P&L, the same definition the outcome report uses.
+                    count = self._calibration.add(symbol, sample.interval, predicted, realized > 0)
+                    logger.info(
+                        "Calibration sample | market=%s %s | predicted=%.3f | won=%s | samples=%s",
+                        symbol,
+                        sample.interval,
+                        predicted,
+                        realized > 0,
+                        count,
+                    )
+            except Exception:  # noqa: BLE001 — a calibration write must never fail the RPC
+                logger.exception("Calibration update failed for %s %s", symbol, sample.interval)
+
         triggered = False
         if status == "stored":
             try:

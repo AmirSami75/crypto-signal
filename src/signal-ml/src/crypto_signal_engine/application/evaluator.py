@@ -172,6 +172,7 @@ class MarketEvaluator:
         default_max_holding_periods: int,
         default_minimum_confidence: float,
         barrier_atr_bounds: tuple[float, float],
+        calibration=None,
     ) -> None:
         self._registry = registry
         self._minimum_candles = minimum_candles
@@ -179,6 +180,9 @@ class MarketEvaluator:
         self._default_max_holding_periods = default_max_holding_periods
         self._default_minimum_confidence = default_minimum_confidence
         self._barrier_atr_bounds = barrier_atr_bounds
+        # Optional fast-loop calibration, per market. `None` means "not configured", and every market
+        # without enough resolved trades behaves exactly as it did before this existed.
+        self._calibration = calibration
 
     @property
     def registry(self):
@@ -308,6 +312,10 @@ class MarketEvaluator:
             allow_short=permit_short,
             minimum_confidence=minimum_confidence,
             feature_columns=descriptor.feature_columns,
+            # Optional head: a bundle trained before the points objective has none, and this stays
+            # `None` so the classifier's ATR expected value keeps deciding exactly as before.
+            points_model=model if getattr(model, "has_points", False) else None,
+            minimum_expected_points=parameters.minimum_expected_points,
         )
 
         warning = self._warning(window, descriptor, barriers, max_holding_periods, choice)

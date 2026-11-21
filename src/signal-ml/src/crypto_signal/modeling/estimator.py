@@ -6,7 +6,7 @@ from typing import Any, Iterable
 
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 from sklearn.metrics import (
     balanced_accuracy_score,
     classification_report,
@@ -82,6 +82,142 @@ def fit_model(
         time.perf_counter() - started,
     )
     return model
+
+
+def build_regressor(config: ModelConfig, verbose: int = 0) -> HistGradientBoostingRegressor:
+    """The points head: same features, same folds, but it predicts realized R instead of a class.
+
+    A classifier trained on which barrier came first answers a *different* question from "what does
+    this trade pay": it is scored by log-loss, where a 51 %/49 % split costs almost nothing to get
+    wrong, while the product is scored in R where that same split is a coin flip around zero. Fitting
+    the quantity the decision is actually made on is the point of this head. `squared_error` rather
+    than an absolute loss because the tail (a timeout that drifts to 2R) is real and should not be
+    silently capped by a robust loss.
+    """
+    return HistGradientBoostingRegressor(
+        loss="squared_error",
+        learning_rate=config.learning_rate,
+        max_iter=config.max_iter,
+        max_leaf_nodes=config.max_leaf_nodes,
+        min_samples_leaf=config.min_samples_leaf,
+        l2_regularization=config.l2_regularization,
+        early_stopping=False,
+        random_state=config.random_state,
+        verbose=verbose,
+    )
+
+
+def fit_regressor(
+    X: pd.DataFrame,
+    r: pd.Series,
+    config: ModelConfig,
+    sample_weight: np.ndarray | pd.Series | None = None,
+) -> HistGradientBoostingRegressor:
+    """Fit the points head. `sample_weight` is where "learn from the losses" enters training.
+
+    The loop that accumulates live outcomes passes weights that raise losing trades above winning ones,
+    so the same mistake made twice costs twice as much to ignore. Nothing here picks the weights: the
+    caller owns that policy, and a plain batch train passes `None`.
+    """
+    if len(X) != len(r):
+        raise ValueError(f"X has {len(X)} rows but the R target has {len(r)}")
+    if r.nunique() < 2:
+        raise ValueError("The R target is constant; a regressor would learn only its mean")
+    started = time.perf_counter()
+    model = build_regressor(config, verbose=1)
+    model.fit(X, r, sample_weight=sample_weight)
+    logger.info(
+        "Points head fit finished | rows=%s | iterations=%s | elapsed=%.2fs",
+        f"{len(X):,}",
+        getattr(model, "n_iter_", config.max_iter),
+        time.perf_counter() - started,
+    )
+    return model
+
+
+def regression_metrics(
+    r_true: pd.Series | np.ndarray,
+    r_pred: np.ndarray,
+    *,
+    threshold: float = 0.0,
+) -> dict[str, Any]:
+    """What a points model is judged on: does the R it predicts show up when the trade is taken.
+
+    `expectancy_at_threshold` is the number the gate should use — the realized mean R of the rows the
+    policy would actually trade — together with a one-sided lower bound so a handful of lucky trades
+    cannot pass a promotion. `spearman` says whether the ranking carries information at all, and
+    `top_decile_r` says what the best-ranked tenth actually paid. MAE/RMSE are reported because they
+    are the honest failure numbers when the mean is flat.
+    """
+    actual = np.asarray(r_true, dtype=float)
+    predicted = np.asarray(r_pred, dtype=float)
+    if actual.shape != predicted.shape:
+        raise ValueError(f"r_true {actual.shape} and r_pred {predicted.shape} must align")
+    if len(actual) == 0:
+        return {}
+
+    errors = predicted - actual
+    selected = predicted >= threshold
+    payload: dict[str, Any] = {
+        "rows": int(len(actual)),
+        "mae": float(np.mean(np.abs(errors))),
+        "rmse": float(np.sqrt(np.mean(errors**2))),
+        "mean_predicted_r": float(np.mean(predicted)),
+        "mean_realized_r": float(np.mean(actual)),
+        "spearman": _spearman(predicted, actual),
+        "selected_share": float(np.mean(selected)),
+        "expectancy_at_threshold": _expectancy(actual, selected),
+    }
+    if len(actual) >= 10:
+        cutoff = np.quantile(predicted, 0.9)
+        top = actual[predicted >= cutoff]
+        payload["top_decile_r"] = float(np.mean(top)) if len(top) else 0.0
+    return payload
+
+
+def _expectancy(actual: np.ndarray, selected: np.ndarray) -> dict[str, Any]:
+    sample = actual[selected]
+    if len(sample) == 0:
+        return {"trades": 0, "mean_r": 0.0, "stderr": 0.0, "lower_bound_95": 0.0, "win_rate": 0.0}
+    mean = float(np.mean(sample))
+    stderr = float(np.std(sample, ddof=1) / np.sqrt(len(sample))) if len(sample) > 1 else 0.0
+    return {
+        "trades": int(len(sample)),
+        "mean_r": mean,
+        "stderr": stderr,
+        # One-sided 95 % lower bound: the number to gate on, so a positive mean from ten trades
+        # cannot claim an edge it has not earned.
+        "lower_bound_95": mean - 1.645 * stderr,
+        "win_rate": float(np.mean(sample > 0)),
+    }
+
+
+def _spearman(x: np.ndarray, y: np.ndarray) -> float:
+    """Rank correlation without a scipy dependency: Pearson on average ranks."""
+    if len(x) < 2:
+        return 0.0
+    ranks_x = _average_ranks(x)
+    ranks_y = _average_ranks(y)
+    rx = ranks_x - ranks_x.mean()
+    ry = ranks_y - ranks_y.mean()
+    denominator = float(np.sqrt(np.sum(rx**2) * np.sum(ry**2)))
+    return float(np.sum(rx * ry) / denominator) if denominator else 0.0
+
+
+def _average_ranks(values: np.ndarray) -> np.ndarray:
+    order = np.argsort(values, kind="mergesort")
+    ranks = np.empty(len(values), dtype=float)
+    ranks[order] = np.arange(len(values), dtype=float)
+    # Average ties so a model that predicts the same score for a block of rows is not rewarded for
+    # the arbitrary order pandas handed them in.
+    sorted_values = values[order]
+    start = 0
+    for index in range(1, len(sorted_values) + 1):
+        if index == len(sorted_values) or sorted_values[index] != sorted_values[start]:
+            if index - start > 1:
+                ranks[order[start:index]] = ranks[order[start:index]].mean()
+            start = index
+    return ranks
 
 
 def aligned_probabilities(
