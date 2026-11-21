@@ -63,4 +63,18 @@ public sealed class TradingOptions
     /// at each lower candle (backward join, no lookahead), so a handful suffices.
     /// </summary>
     public int MtfContextCandles { get; init; } = 48;
+
+    /// <summary>
+    /// The ranking floor a ScannerBot requires before it claims a proposal. The scanner writes the
+    /// expected R into <c>ScannerSignal.Score</c> when the served bundle carries a points head (and the
+    /// calibrated confidence when it does not, documented on the scanner), so this is the policy
+    /// threshold in R: 0.10 means "the bet must be expected to make a tenth of what it risks".
+    /// </summary>
+    public decimal ScannerMinimumScore { get; init; } = 0.10m;
+
+    /// <summary>
+    /// How old a proposal may be before a bot refuses it. A signal from an hour ago is priced off
+    /// candles that no longer describe the market; claiming it would be trading a stale level.
+    /// </summary>
+    public int ScannerMaxSignalAgeMinutes { get; init; } = 30;
 }

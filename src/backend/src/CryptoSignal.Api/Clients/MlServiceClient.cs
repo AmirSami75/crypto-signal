@@ -416,20 +416,35 @@ public sealed class MlServiceClient(
             exception);
     }
 
-    private DateTime Deadline() => DateTime.UtcNow.AddSeconds(options.Value.DeadlineSeconds);
+    private DateTime Deadline(int? overrideSeconds = null) =>
+        DateTime.UtcNow.AddSeconds(overrideSeconds ?? options.Value.DeadlineSeconds);
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<MlScanResult>> ScanSymbolsAsync(
         IReadOnlyList<MlScanSymbol> symbols,
         IReadOnlyList<MlScanStrategy> strategies,
         string interval,
-        CancellationToken cancellationToken)
+        MlScanModelSpec? model,
+        CancellationToken cancellationToken,
+        int? deadlineSeconds = null)
     {
         var grpcRequest = new ScanSymbolsRequest
         {
             RequestId = Guid.NewGuid().ToString(),
             Interval = interval,
         };
+
+        if (model is not null)
+        {
+            grpcRequest.Model = new ScanModelSpec
+            {
+                TakeProfitAtr = model.TakeProfitAtr,
+                StopLossAtr = model.StopLossAtr,
+                MinimumConfidence = model.MinimumConfidence,
+                MinimumExpectedPoints = model.MinimumExpectedPoints,
+                MaxHoldingPeriods = model.MaxHoldingPeriods,
+            };
+        }
 
         foreach (var symbol in symbols)
         {
@@ -452,11 +467,17 @@ public sealed class MlServiceClient(
 
         try
         {
+            // A market-wide scan is the one call whose cost grows with the exchange listing, so it gets
+            // its own budget instead of the interactive 10-second one.
             var response = await client.ScanSymbolsAsync(
-                grpcRequest, deadline: Deadline(), cancellationToken: cancellationToken);
+                grpcRequest,
+                deadline: Deadline(deadlineSeconds),
+                cancellationToken: cancellationToken);
             return response.Results
                 .Select(r => new MlScanResult(
-                    r.Symbol, r.Strategy, r.Direction, r.Confidence, r.Reason, r.Warning))
+                    r.Symbol, r.Strategy, r.Direction, r.Confidence, r.Reason, r.Warning,
+                    r.ModelPriced, r.PointsAvailable, r.ExpectedPoints, r.ExpectedValueAtr,
+                    r.ModelConfidence, r.TakeProfitAtr, r.StopLossAtr, r.ModelId, r.ModelVersion))
                 .ToArray();
         }
         catch (RpcException exception)

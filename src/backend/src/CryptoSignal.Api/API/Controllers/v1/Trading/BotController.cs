@@ -420,7 +420,11 @@ public class BotController(
             throw new BadRequestException("اجرای معاملات واقعی در این پلتفرم غیرفعال است");
 
         // Symbol gate — checked at start, not at create. Empty means nothing is tradable.
-        if (!limits.AllowedSymbols.Contains(bot.Symbol, StringComparer.OrdinalIgnoreCase))
+        // A Scanner-kind bot is the one exception: its whole contract is "any symbol the scanner
+        // proposes", and the executor already scopes it with `Symbol == "*"`. Refusing the wildcard at
+        // start would leave the scanner with no bot able to act on a proposal outside a hand-picked list.
+        var wildcardScanner = bot.Kind == BotKind.Scanner && bot.Symbol == "*";
+        if (!wildcardScanner && !limits.AllowedSymbols.Contains(bot.Symbol, StringComparer.OrdinalIgnoreCase))
             throw new BadRequestException($"نماد {bot.Symbol} در فهرست نمادهای مجاز پلتفرم نیست");
 
         if (bot.AllowShort && (limits.SpotOnly || !limits.AllowShorting))

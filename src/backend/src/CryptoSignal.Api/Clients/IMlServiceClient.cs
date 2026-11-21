@@ -42,12 +42,16 @@ public interface IMlServiceClient
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Batch market scan: evaluate named strategies on a batch of symbol candle windows.
-    /// Returns any signals found. The engine runs each strategy as-is (no I/O, no state).
+    /// Batch market scan: evaluate named strategies on a batch of symbol candle windows, and — when
+    /// <paramref name="model"/> is supplied — also price every symbol with the market's ML model in the
+    /// same round trip. The model pass is what makes a scan answer "is there an opportunity here" in R
+    /// rather than only "did an indicator fire".
     /// </summary>
     Task<IReadOnlyList<MlScanResult>> ScanSymbolsAsync(
         IReadOnlyList<MlScanSymbol> symbols,
         IReadOnlyList<MlScanStrategy> strategies,
         string interval,
-        CancellationToken cancellationToken);
+        MlScanModelSpec? model,
+        CancellationToken cancellationToken,
+        int? deadlineSeconds = null);
 }

@@ -35,6 +35,9 @@ public sealed class InstrumentRuleProvider(
 
     private readonly ConcurrentDictionary<(MarketVenue Venue, string Symbol), CachedRules> cache = new();
 
+    /// <summary>The whole venue listing, for venues that ignore the per-symbol filter.</summary>
+    private readonly ConcurrentDictionary<MarketVenue, (Dictionary<string, InstrumentRules> Rules, DateTimeOffset ExpiresAt)> fullListings = new();
+
     public async Task<InstrumentRules> GetRulesAsync(
         MarketVenue venue,
         string symbol,
@@ -56,6 +59,7 @@ public sealed class InstrumentRuleProvider(
             MarketVenue.BinanceFuturesTestnet =>
                 await FetchBinanceAsync(venue, key.Symbol, "/fapi/v1/exchangeInfo", cancellationToken),
             MarketVenue.Bybit => await FetchBybitAsync(key.Symbol, cancellationToken),
+            MarketVenue.Bitunix => await FetchBitunixAsync(venue, key.Symbol, cancellationToken),
             _ => throw new InstrumentRulesUnavailableException(
                 $"No instrument-rule source is configured for venue {venue}."),
         };
@@ -75,8 +79,8 @@ public sealed class InstrumentRuleProvider(
         JsonDocument document;
         try
         {
-            // Asked per symbol, not for the whole venue: the full exchangeInfo payload is megabytes and
-            // costs far more of the venue's request weight than the one symbol a bot trades.
+            // Asked per symbol first: the full exchangeInfo payload is megabytes and costs far more of
+            // the venue's request weight than the one symbol a bot trades.
             document = await client.GetFromJsonAsync<JsonDocument>(
                            $"{exchangeInfoPath}?symbol={Uri.EscapeDataString(symbol)}",
                            cancellationToken)
@@ -92,16 +96,187 @@ public sealed class InstrumentRuleProvider(
 
         using (document)
         {
-            if (!document.RootElement.TryGetProperty("symbols", out var symbols)
-                || symbols.ValueKind != JsonValueKind.Array
-                || symbols.GetArrayLength() == 0)
+            if (TryFindSymbol(document.RootElement, symbol, out var entry))
+                return ParseBinanceSymbol(venue, entry);
+
+            // Some venues — Binance's futures testnet among them — ignore the `symbol` filter and answer
+            // with their flagship pair. Resolving another market's grid is worse than a slow call: it
+            // prices the fill and caps the quantity against the wrong instrument, and the order that
+            // reaches the exchange is then sized for a market that is not the one being traded. Ask for
+            // the full listing, parse it once, and keep it for the same TTL as any other cached grid.
+            logger.LogInformation(
+                "{Venue} answered the symbol-filtered request for {Symbol} with another market; " +
+                "resolving from the full listing instead.", venue, symbol);
+
+            return await ResolveFromFullListingAsync(venue, symbol, exchangeInfoPath, client, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Bitunix publishes its grids through the public <c>trading_pairs</c> endpoint, which ignores a
+    /// per-symbol filter and always answers with the whole listing (~800 contracts). It is fetched once
+    /// per TTL and indexed, which is also what makes a market-wide scanner affordable here.
+    /// </summary>
+    /// <remarks>
+    /// Bitunix reports decimals rather than step sizes: <c>basePrecision</c> is the number of decimals a
+    /// quantity may carry and <c>quotePrecision</c> the same for a price. The grid is therefore
+    /// <c>10^-precision</c>, which is exact in decimal — no float rounding, unlike parsing a "0.0001" string.
+    /// </remarks>
+    private async Task<InstrumentRules> FetchBitunixAsync(
+        MarketVenue venue, string symbol, CancellationToken cancellationToken)
+    {
+        if (!fullListings.TryGetValue(venue, out var listing) || listing.ExpiresAt <= DateTimeOffset.UtcNow)
+        {
+            var client = httpClientFactory.CreateClient(TradingHttpClients.ForVenue(venue));
+            using var document = await client.GetFromJsonAsync<JsonDocument>(
+                                     "/api/v1/futures/market/trading_pairs", cancellationToken)
+                                 ?? throw new InstrumentRulesUnavailableException(
+                                     $"{venue} returned an empty trading-pairs body.");
+
+            if (!document.RootElement.TryGetProperty("data", out var pairs)
+                || pairs.ValueKind != JsonValueKind.Array)
             {
-                throw new InstrumentRulesUnavailableException(
-                    $"{venue} does not list a symbol named '{symbol}'.");
+                throw new InstrumentRulesUnavailableException($"{venue} returned no trading pairs.");
             }
 
-            return ParseBinanceSymbol(venue, symbols[0]);
+            var parsed = new Dictionary<string, InstrumentRules>(StringComparer.OrdinalIgnoreCase);
+            foreach (var element in pairs.EnumerateArray())
+            {
+                try
+                {
+                    var rules = ParseBitunixSymbol(venue, element);
+                    parsed[rules.Symbol] = rules;
+                }
+                catch (InstrumentRulesUnavailableException)
+                {
+                    // One malformed contract must not void the listing.
+                }
+            }
+
+            listing = (parsed, DateTimeOffset.UtcNow.Add(CacheTtl));
+            fullListings[venue] = listing;
         }
+
+        if (listing.Rules.TryGetValue(symbol, out var resolved))
+            return resolved;
+
+        throw new InstrumentRulesUnavailableException($"{venue} does not list a symbol named '{symbol}'.");
+    }
+
+    private InstrumentRules ParseBitunixSymbol(MarketVenue venue, JsonElement element)
+    {
+        var symbol = element.GetProperty("symbol").GetString()
+                     ?? throw new InstrumentRulesUnavailableException($"{venue} returned a pair with no name.");
+        var baseAsset = element.TryGetProperty("base", out var baseElement) ? baseElement.GetString() : null;
+        var quoteAsset = element.TryGetProperty("quote", out var quoteElement) ? quoteElement.GetString() : null;
+
+        if (string.IsNullOrWhiteSpace(baseAsset) || string.IsNullOrWhiteSpace(quoteAsset))
+        {
+            throw new InstrumentRulesUnavailableException(
+                $"{venue} did not report base/quote assets for {symbol}.");
+        }
+
+        var status = element.TryGetProperty("symbolStatus", out var statusElement)
+            ? statusElement.GetString()
+            : null;
+        var apiSupported = !element.TryGetProperty("isApiSupported", out var apiElement)
+                           || apiElement.ValueKind != JsonValueKind.False;
+
+        var basePrecision = element.TryGetProperty("basePrecision", out var basePrecisionElement)
+                            && basePrecisionElement.TryGetInt32(out var bp) ? bp : 0;
+        var quotePrecision = element.TryGetProperty("quotePrecision", out var quotePrecisionElement)
+                             && quotePrecisionElement.TryGetInt32(out var qp) ? qp : 0;
+
+        var minQuantity = BinanceJson.DecimalOrDefault(element, "minTradeVolume", 0m);
+        var maxQuantity = BinanceJson.DecimalOrDefault(element, "maxMarketOrderVolume", 0m);
+
+        return new InstrumentRules(
+            Symbol: symbol,
+            BaseAsset: baseAsset,
+            QuoteAsset: quoteAsset,
+            TickSize: Grid(quotePrecision),
+            StepSize: Grid(basePrecision),
+            MinQuantity: minQuantity,
+            MaxQuantity: maxQuantity,
+            MinNotional: 0m,
+            IsTradable: string.Equals(status, "OPEN", StringComparison.OrdinalIgnoreCase) && apiSupported,
+            SupportsMarketOrders: true,
+            PriceScale: quotePrecision,
+            QuantityScale: basePrecision);
+    }
+
+    /// <summary>The grid a decimal count implies: 4 decimals → 0.0001.</summary>
+    private static decimal Grid(int decimals)
+    {
+        var grid = 1m;
+        for (var index = 0; index < Math.Clamp(decimals, 0, 18); index++)
+            grid /= 10m;
+        return grid;
+    }
+
+    private async Task<InstrumentRules> ResolveFromFullListingAsync(
+        MarketVenue venue,
+        string symbol,
+        string exchangeInfoPath,
+        HttpClient client,
+        CancellationToken cancellationToken)
+    {
+        if (!fullListings.TryGetValue(venue, out var listing) || listing.ExpiresAt <= DateTimeOffset.UtcNow)
+        {
+            using var document = await client.GetFromJsonAsync<JsonDocument>(exchangeInfoPath, cancellationToken)
+                                 ?? throw new InstrumentRulesUnavailableException(
+                                     $"{venue} returned an empty exchangeInfo listing.");
+            if (!document.RootElement.TryGetProperty("symbols", out var symbols)
+                || symbols.ValueKind != JsonValueKind.Array)
+            {
+                throw new InstrumentRulesUnavailableException($"{venue} returned no symbol listing.");
+            }
+
+            var parsed = new Dictionary<string, InstrumentRules>(StringComparer.OrdinalIgnoreCase);
+            foreach (var element in symbols.EnumerateArray())
+            {
+                try
+                {
+                    var rules = ParseBinanceSymbol(venue, element);
+                    parsed[rules.Symbol] = rules;
+                }
+                catch (InstrumentRulesUnavailableException)
+                {
+                    // One malformed instrument must not void the listing; the requested symbol's own
+                    // lookup below will report it if it is the broken one.
+                }
+            }
+
+            listing = (parsed, DateTimeOffset.UtcNow.Add(CacheTtl));
+            fullListings[venue] = listing;
+        }
+
+        if (listing.Rules.TryGetValue(symbol, out var resolved))
+            return resolved;
+
+        throw new InstrumentRulesUnavailableException(
+            $"{venue} does not list a symbol named '{symbol}'.");
+    }
+
+    /// <summary>Finds one symbol in an exchangeInfo body by name. Clones the element so it survives the
+    /// document's disposal.</summary>
+    private static bool TryFindSymbol(JsonElement root, string symbol, out JsonElement found)
+    {
+        found = default;
+        if (!root.TryGetProperty("symbols", out var symbols) || symbols.ValueKind != JsonValueKind.Array)
+            return false;
+
+        foreach (var element in symbols.EnumerateArray())
+        {
+            if (element.TryGetProperty("symbol", out var name)
+                && string.Equals(name.GetString(), symbol, StringComparison.OrdinalIgnoreCase))
+            {
+                found = element.Clone();
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private InstrumentRules ParseBinanceSymbol(MarketVenue venue, JsonElement element)

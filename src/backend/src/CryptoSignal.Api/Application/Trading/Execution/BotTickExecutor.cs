@@ -2,6 +2,7 @@ using CryptoSignal.Api.Application.Markers;
 using CryptoSignal.Api.Application.Security;
 using CryptoSignal.Api.Application.Trading.Abstractions;
 using CryptoSignal.Api.Application.Trading.Models;
+using CryptoSignal.Api.Application.Trading.Risk;
 using CryptoSignal.Api.Clients;
 using CryptoSignal.Api.Contracts;
 using CryptoSignal.Api.Domain.Enums.Trading;
@@ -56,6 +57,7 @@ public sealed class BotTickExecutor(
     ICredentialProvider credentials,
     IBotAuditTrail audit,
     IOptions<TradingOptions> options,
+    IOptions<TradingRiskOptions> riskLimits,
     ILogger<BotTickExecutor> logger) : IScopedSvcMarker
 {
     // A conservative fee assumption folded into the estimated notional so the notional check and the
@@ -83,6 +85,11 @@ public sealed class BotTickExecutor(
 
         try
         {
+            // Settle before anything else and before any "already evaluated this candle" shortcut: a tick
+            // that died between the venue's fill and the position update leaves a position marked open on a
+            // book that is already flat, and every later decision is derived from that book.
+            await SettleStrandedIntentsAsync(bot, correlationId, cancellationToken);
+
             return await RunPipelineAsync(bot, correlationId, cancellationToken);
         }
         catch (BotFaultException fault)
@@ -130,13 +137,17 @@ public sealed class BotTickExecutor(
         // permanently halt a bot, but there is still no second venue and no skip — after the
         // retry the failure faults exactly as before. Fail-closed, just not fail-once.
         var source = marketData.Resolve(bot.Venue);
+        // A wildcard Scanner bot has no market of its own — it names the market per claimed proposal.
+        // The tick still needs a clock and a freshness reference, so it reads BTCUSDT's window and the
+        // claimed symbol's own price is fetched after the claim.
+        var windowSymbol = bot.Kind == BotKind.Scanner && bot.Symbol == "*" ? "BTCUSDT" : bot.Symbol;
         IReadOnlyList<MarketCandleData> window;
         try
         {
             try
             {
                 window = await source.GetClosedCandlesAsync(
-                    bot.Symbol, bot.Interval, options.Value.CandleWindowSize, cancellationToken);
+                    windowSymbol, bot.Interval, options.Value.CandleWindowSize, cancellationToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -144,13 +155,13 @@ public sealed class BotTickExecutor(
                 logger.LogWarning(
                     "Bot {BotId} candle fetch retry after: {Message}", bot.Id, exception.Message);
                 window = await source.GetClosedCandlesAsync(
-                    bot.Symbol, bot.Interval, options.Value.CandleWindowSize, cancellationToken);
+                    windowSymbol, bot.Interval, options.Value.CandleWindowSize, cancellationToken);
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             throw new BotFaultException(
-                $"the {bot.Venue} candle window for {bot.Symbol} {bot.Interval} could not be fetched: " +
+                $"the {bot.Venue} candle window for {windowSymbol} {bot.Interval} could not be fetched: " +
                 $"{exception.Message}");
         }
 
@@ -178,7 +189,11 @@ public sealed class BotTickExecutor(
         }
 
         // ── idempotency: has this candle already been decided on? ────────────────
-        if (bot.LastEvaluatedCandleOpenTime == candleOpenTime)
+        var sameCandle = bot.LastEvaluatedCandleOpenTime == candleOpenTime;
+        // A model bot is finished with a candle once it has decided on it. A scanner bot is not:
+        // proposals arrive during the candle and it must be able to claim one, so a repeat tick skips
+        // only the re-recording, not the claim.
+        if (sameCandle && bot.Kind != BotKind.Scanner)
             return new TickOutcome(TickResult.AlreadyEvaluated, correlationId, Message: "candle already evaluated");
 
         var alreadyDecided = await decisions.TableNoTracking
@@ -190,13 +205,19 @@ public sealed class BotTickExecutor(
         }
 
         // ── 3. persist the window (only the candles not already stored) ──────────
-        await PersistWindowAsync(bot, window, cancellationToken);
-        await audit.AppendAsync(
-            new BotAuditEntry(
-                correlationId, BotAuditEventType.CandleWindowRecorded, bot.OperatingMode,
-                $"Recorded {window.Count} {bot.Interval} candles for {bot.Symbol} up to {candleOpenTime:O}",
-                BotId: bot.Id, Symbol: bot.Symbol, CandleOpenTime: candleOpenTime),
-            cancellationToken);
+        if (!sameCandle)
+        {
+            await PersistWindowAsync(bot, window, cancellationToken);
+            await audit.AppendAsync(
+                new BotAuditEntry(
+                    correlationId, BotAuditEventType.CandleWindowRecorded, bot.OperatingMode,
+                    $"Recorded {window.Count} {bot.Interval} candles for {windowSymbol} up to {candleOpenTime:O}",
+                    BotId: bot.Id, Symbol: windowSymbol, CandleOpenTime: candleOpenTime),
+                cancellationToken);
+            bot.LastEvaluatedCandleOpenTime = candleOpenTime;
+            bot.LastTickAt = DateTime.UtcNow;
+            await bots.UpdateAsync(bot, saveNow: true, cancellationToken);
+        }
 
         // ── 4. produce a decision ─────────────────────────────────────────────────
         // Scanner-kind bots never consult the ML engine: their signal comes from the market
@@ -211,7 +232,10 @@ public sealed class BotTickExecutor(
             if (scannerOutcome is not null)
                 return scannerOutcome;
 
-            // No unclaimed signal this tick: a complete, recorded no-op.
+            // No unclaimed signal this tick: a complete, recorded no-op that still advances the tick
+            // clock, so the scheduler honours the bot's cadence instead of re-running every poll.
+            bot.LastTickAt = DateTime.UtcNow;
+            await bots.UpdateAsync(bot, saveNow: true, cancellationToken);
             return new TickOutcome(TickResult.Hold, correlationId, Message: "no unclaimed scanner signal");
         }
 
@@ -343,24 +367,66 @@ public sealed class BotTickExecutor(
         string correlationId,
         CancellationToken cancellationToken)
     {
-        // An open position is handled by the ordinary CLOSE path of a later tick; a scanner bot
-        // never opens a second one while the first is live.
+        // An open position is managed here, not by a second decision: a scanner bot never opens another
+        // one while the first is live, but it must still exit — a bracket nobody watches is a position
+        // that only closes when an operator clicks. The exit test runs on the last *closed* candle.
         if (openPosition is not null)
-            return new TickOutcome(TickResult.Hold, correlationId, Message: "position open; scanner bot holds");
+        {
+            var exit = await EvaluateScannerExitAsync(
+                bot, openPosition, candleOpenTime, correlationId, cancellationToken);
+            if (exit is null)
+                return new TickOutcome(TickResult.Hold, correlationId, Message: "position open; no exit level touched");
 
-        var newest = window[^1];
+            var (exitDecision, exitAction) = exit.Value;
+            return await ActOnDecisionAsync(
+                bot, exitDecision, exitAction, openPosition, window, correlationId,
+                candleOpenTime, cancellationToken);
+        }
 
-        // Oldest-first candidate: the longest-standing unclaimed proposal for this market.
+        // Oldest-first was right when every proposal was an indicator firing; with a model that prices
+        // expected R, the bot should take the *best* opportunity, not the stalest one. A stale proposal
+        // is also dangerous: its levels were computed from candles that no longer describe the market.
+        var settings = options.Value;
+        var cutoff = DateTime.UtcNow.AddMinutes(-Math.Max(1, settings.ScannerMaxSignalAgeMinutes));
+        // A wildcard scanner must only claim markets the risk layer would actually allow, otherwise it
+        // burns the best proposal of the pass on a symbol the risk engine denies one step later.
+        var allowedSymbols = riskLimits.Value.AllowedSymbols
+            .Select(s => s.ToUpperInvariant())
+            .ToArray();
         var candidate = await scannerSignals.TableNoTracking
             .Where(s => s.TakenByBotId == null
                         && s.Interval == bot.Interval
-                        && (s.Symbol == bot.Symbol || bot.Symbol == "*"))
-            .Where(s => bot.StrategyKey == null || s.StrategyKey == bot.StrategyKey)
-            .OrderBy(s => s.CreatedAt)
+                        && s.CreatedAt >= cutoff
+                        && s.Score >= settings.ScannerMinimumScore
+                        && (bot.Symbol != "*"
+                            ? s.Symbol == bot.Symbol
+                            : allowedSymbols.Contains(s.Symbol)))
+            // An unpinned scanner bot consumes model proposals. Zoo rows only exist when the scanner's
+            // model pass is disabled, and their score is a liquidity heuristic — mixing it with expected
+            // R in one ranking column would let a heuristic outrank the model.
+            .Where(s => bot.StrategyKey != null ? s.StrategyKey == bot.StrategyKey : s.StrategyKey == "model")
+            .OrderByDescending(s => s.Score)
+            .ThenByDescending(s => s.CreatedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (candidate is null)
             return null;
+
+        // The proposal may be for a market this bot holds no window for (wildcard scanner), so the entry
+        // price is read from the proposal's own market before anything is claimed: a claim that cannot
+        // be priced would burn the opportunity for every other bot.
+        decimal entryPrice;
+        try
+        {
+            var entryWindow = await marketData.Resolve(bot.Venue)
+                .GetClosedCandlesAsync(candidate.Symbol, bot.Interval, 2, cancellationToken);
+            entryPrice = entryWindow[^1].Close;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return new TickOutcome(TickResult.Hold, correlationId,
+                Message: $"scanner signal {candidate.Id} entry price unavailable: {exception.Message}");
+        }
 
         // Shorts are a bet the bot must be configured to take, same rule as the engine advisor.
         var direction = candidate.Direction == SignalDirection.Long
@@ -381,7 +447,6 @@ public sealed class BotTickExecutor(
             return new TickOutcome(TickResult.Hold, correlationId,
                 Message: "scanner signal claimed by another bot");
 
-        var entryPrice = newest.Close;
         var atr = candidate.AtrAtSignal;
 
         // Bracket: the bot's ATR multiples when set, else the scanner defaults (1.5 / 1.0 ATR),
@@ -422,7 +487,10 @@ public sealed class BotTickExecutor(
             Confidence = candidate.Confidence,
             LongConfidence = direction == TradeDirection.Long ? candidate.Confidence : 0,
             ShortConfidence = direction == TradeDirection.Short ? candidate.Confidence : 0,
-            ExpectedValue = 0,
+            // For a scanner bot this column carries the proposal's ranking number — expected R when the
+            // served bundle has a points head. It is not ATR units like the model bots' expected value,
+            // and the scanner-sourced ReasonCode is what tells the two apart in the audit trail.
+            ExpectedValue = (double)candidate.Score,
             EntryPrice = entryPrice,
             TakeProfitPrice = takeProfit,
             StopLossPrice = stopLoss,
@@ -454,6 +522,138 @@ public sealed class BotTickExecutor(
     }
 
     /// <summary>
+    /// The exit test for an open scanner position: does the last closed candle touch a bracket level?
+    /// </summary>
+    /// <remarks>
+    /// Both levels can be touched inside one candle — the candle carries a high and a low, not an order
+    /// of events. When that happens the stop wins: assuming the take-profit filled first would book the
+    /// best possible outcome of an ambiguous bar, which is exactly the optimism a backtest cannot afford.
+    /// </remarks>
+    private async Task<(StrategyDecision Decision, BotDecisionAction Action)?> EvaluateScannerExitAsync(
+        TradingBot bot,
+        BotPosition openPosition,
+        DateTime candleOpenTime,
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
+        if (openPosition.ClosedAt is not null || openPosition.Quantity <= 0)
+            return null;
+        if (string.IsNullOrWhiteSpace(openPosition.Symbol) || openPosition.Symbol == "*")
+            return null; // a position booked before the wildcard fix cannot be priced; leave it to an operator
+
+        var interval = bot.Interval.EndsWith('m')
+            ? TimeSpan.FromMinutes(double.Parse(bot.Interval[..^1]))
+            : TimeSpan.FromHours(double.Parse(bot.Interval[..^1]));
+        var barsOpen = interval > TimeSpan.Zero
+            ? Math.Max(0, (int)((candleOpenTime - openPosition.OpenedFromCandleOpenTime).TotalSeconds / interval.TotalSeconds))
+            : 0;
+
+        // Every candle the position has lived through, not just the newest one. A restart used to make
+        // the exit blind: a stop touched while the process was down was never tested again, so the
+        // position sat open at a price the bracket had already abandoned.
+        var wanted = (int)Math.Clamp(barsOpen + 2, 2, 300);
+
+        IReadOnlyList<MarketCandleData> candles;
+        try
+        {
+            candles = await marketData.Resolve(bot.Venue)
+                .GetClosedCandlesAsync(openPosition.Symbol, bot.Interval, wanted, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(exception, "Scanner exit for {Symbol} could not read candles", openPosition.Symbol);
+            return null;
+        }
+
+        if (candles.Count == 0)
+            return null;
+
+        var isLong = openPosition.Direction == TradeDirection.Long;
+        var takeProfit = openPosition.TakeProfitPrice;
+        var stopLoss = openPosition.StopLossPrice;
+
+        string? reason = null;
+        decimal exitPrice = 0m;
+        DateTime exitCandleOpen = candles[^1].OpenTime.UtcDateTime;   // the candle that triggered, for the message
+
+        // Oldest first: the first candle that violates the bracket is the one that ended the trade.
+        foreach (var candle in candles)
+        {
+            if (stopLoss is { } stop && (isLong ? candle.Low <= stop : candle.High >= stop))
+            {
+                reason = "stop_loss_touched";
+                exitPrice = stop;
+                exitCandleOpen = candle.OpenTime.UtcDateTime;
+                break;
+            }
+
+            if (takeProfit is { } take && (isLong ? candle.High >= take : candle.Low <= take))
+            {
+                reason = "take_profit_touched";
+                exitPrice = take;
+                exitCandleOpen = candle.OpenTime.UtcDateTime;
+                break;
+            }
+        }
+
+        if (reason is null && bot.MaxHoldingPeriods > 0 && barsOpen >= bot.MaxHoldingPeriods)
+        {
+            reason = "max_holding_periods_reached";
+            exitPrice = candles[^1].Close;
+        }
+
+        if (reason is null)
+            return null;
+
+        // The decision is booked on *this tick's* candle, not on the candle that touched the level: the
+        // idempotency key is (BotId, CandleOpenTime), and an exit discovered from a candle hours ago
+        // already has a decision row — inserting a second one failed the whole scheduler cycle.
+        var alreadyDecided = await decisions.TableNoTracking.AnyAsync(
+            d => d.BotId == bot.Id && d.CandleOpenTime == candleOpenTime, cancellationToken);
+        if (alreadyDecided)
+            return null;
+
+        var decision = new StrategyDecision
+        {
+            BotId = bot.Id,
+            OperatingMode = bot.OperatingMode,
+            Symbol = openPosition.Symbol,
+            Interval = bot.Interval,
+            CandleOpenTime = candleOpenTime,
+            CandleWindowDigest = string.Empty,
+            Action = BotDecisionAction.Close,
+            Direction = openPosition.Direction,
+            ReasonCode = reason,
+            Confidence = 1d,
+            LongConfidence = isLong ? 1d : 0d,
+            ShortConfidence = isLong ? 0d : 1d,
+            ExpectedValue = 0d,
+            EntryPrice = exitPrice,
+            TakeProfitPrice = takeProfit,
+            StopLossPrice = stopLoss,
+            Atr = null,
+            ModelId = "scanner-exit",
+            ModelVersion = reason,
+            UsedWildcardModel = false,
+            BarrierExtrapolated = false,
+            EngineRequestId = correlationId,
+            Warning = $"scanner exit on {openPosition.Symbol} ({reason}) at ~{exitPrice}; " +
+                      $"first touched on the {exitCandleOpen:O} candle",
+        };
+        await decisions.AddAsync(decision, saveNow: true, cancellationToken);
+
+        await audit.AppendAsync(
+            new BotAuditEntry(
+                correlationId, BotAuditEventType.PositionChanged, bot.OperatingMode,
+                $"Exit {openPosition.Symbol} ({reason}) at ~{exitPrice}",
+                BotId: bot.Id, Symbol: openPosition.Symbol,
+                StrategyDecisionId: decision.Id, CandleOpenTime: decision.CandleOpenTime),
+            cancellationToken);
+
+        return (decision, BotDecisionAction.Close);
+    }
+
+    /// <summary>
     /// Steps 6–8 shared by both bot kinds: build the intent, pass risk, place and record.
     /// Extracted verbatim from the model path so the safety argument is one pipeline, not two.
     /// </summary>
@@ -468,7 +668,12 @@ public sealed class BotTickExecutor(
         CancellationToken cancellationToken)
     {
         // ── 6. build the intent (deterministic client order id) ──────────────────
-        var rules = await instrumentRules.GetRulesAsync(bot.Venue, bot.Symbol, cancellationToken);
+        // Rules belong to the market being traded. A wildcard bot's registration symbol is `*`, and
+        // asking the venue about `*` resolves another instrument's grid — which then prices the fill and
+        // caps the quantity against the wrong market (a 0.2341 entry quantised to a 0.10 tick became
+        // 0.30, and a 156-unit order was refused a 120-unit cap that belonged to BTCUSDT).
+        var tradedSymbol = string.IsNullOrWhiteSpace(decision.Symbol) ? bot.Symbol : decision.Symbol;
+        var rules = await instrumentRules.GetRulesAsync(bot.Venue, tradedSymbol, cancellationToken);
         var intent = BuildIntent(bot, decision, action, openPosition, rules);
         if (intent is null)
         {
@@ -482,8 +687,8 @@ public sealed class BotTickExecutor(
         await audit.AppendAsync(
             new BotAuditEntry(
                 correlationId, BotAuditEventType.OrderIntentCreated, bot.OperatingMode,
-                $"Intent {intent.ClientOrderId}: {intent.Side} {intent.Quantity} {bot.Symbol} @ ~{intent.ReferencePrice}",
-                BotId: bot.Id, Symbol: bot.Symbol, StrategyDecisionId: decision.Id,
+                $"Intent {intent.ClientOrderId}: {intent.Side} {intent.Quantity} {intent.Symbol} @ ~{intent.ReferencePrice}",
+                BotId: bot.Id, Symbol: intent.Symbol, StrategyDecisionId: decision.Id,
                 OrderIntentId: intent.Id, CandleOpenTime: candleOpenTime),
             cancellationToken);
 
@@ -755,7 +960,10 @@ public sealed class BotTickExecutor(
                 BotId = bot.Id,
                 OperatingMode = bot.OperatingMode,
                 Venue = bot.Venue,
-                Symbol = bot.Symbol,
+                // The market that was traded, not the bot's registration symbol: a wildcard scanner
+                // carries `*`, and a position booked against `*` cannot be marked to market, matched by
+                // a closing decision, or shown against the symbol it actually holds.
+                Symbol = string.IsNullOrWhiteSpace(intent.Symbol) ? bot.Symbol : intent.Symbol,
                 Direction = intent.Direction,
                 Status = PositionStatus.Open,
                 AverageEntryPrice = avgPrice,
@@ -789,7 +997,9 @@ public sealed class BotTickExecutor(
         openPosition.ClosedAt = DateTime.UtcNow;
         openPosition.RealizedPnl = realized - openPosition.FeesPaid - feePaid;
         openPosition.FeesPaid += feePaid;
-        openPosition.Quantity = 0m;
+        // The quantity stays at the size that was closed. Zeroing it read as "flat", but the row's own
+        // check constraint requires a positive quantity on every row — so every close violated it and the
+        // position could never settle. Status is what says the position is closed, not a zeroed size.
         openPosition.CloseReason = MapCloseReason(decision.ReasonCode);
         await positions.UpdateAsync(openPosition, saveNow: true, cancellationToken);
         return openPosition;
@@ -800,6 +1010,15 @@ public sealed class BotTickExecutor(
     /// decision consumed, the bracket actually traded, and how the position ended. Fire-and-forget by
     /// design — a lost sample costs one training datum, never a trade.
     /// </summary>
+    /// <summary>
+    /// A bracket level as a percentage of the entry, falling back to the bot's configured percentage when
+    /// the position carries no level (a manual close, or a venue-side bracket the platform never saw).
+    /// </summary>
+    private static decimal BracketPercent(decimal entry, decimal? level, decimal fallback) =>
+        entry > 0m && level is { } value && value > 0m
+            ? Math.Abs((value - entry) / entry) * 100m
+            : fallback;
+
     private async Task ReportTradeOutcomeAsync(
         TradingBot bot,
         StrategyDecision decision,
@@ -811,19 +1030,45 @@ public sealed class BotTickExecutor(
         if (position.ClosedAt is null)
             return;
 
+        // The engine learns from the window the decision consumed. For a wildcard bot the tick's own
+        // window belongs to the clock anchor (BTCUSDT), not to the market that was traded, so reporting
+        // it would teach the model that ZKUSDT's features are Bitcoin's. Re-read the traded market.
+        var candles = window;
+        if (candles.Count == 0
+            || !string.Equals(position.Symbol, bot.Symbol, StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                candles = await marketData.Resolve(bot.Venue)
+                    .GetClosedCandlesAsync(position.Symbol, bot.Interval, 300, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                logger.LogWarning(exception,
+                    "Outcome window for {Symbol} could not be read; the sample is skipped", position.Symbol);
+                return;
+            }
+        }
+
         try
         {
             var ack = await engine.RecordTradeOutcomeAsync(
                 new MlTradeOutcome(
                     BotId: bot.Id.ToString(),
-                    Symbol: bot.Symbol,
+                    // The traded market, not the bot's registration symbol: a wildcard scanner carries `*`,
+                    // and an outcome reported against `*` teaches the calibrator about a market that does
+                    // not exist while the market that actually paid stays uncalibrated.
+                    Symbol: position.Symbol,
                     Interval: bot.Interval,
                     ModelId: decision.ModelId ?? string.Empty,
                     ModelVersion: decision.ModelVersion ?? string.Empty,
                     Direction: (MlDirection)(int)position.Direction,
-                    Candles: window.Select(ToMlCandle).ToList(),
-                    TakeProfitPercent: bot.TakeProfitPercent,
-                    StopLossPercent: bot.StopLossPercent,
+                    Candles: candles.Select(ToMlCandle).ToList(),
+                    // The bracket actually traded, expressed as the percentages the engine re-prices with.
+                    // A scanner bot's levels come from ATR multiples, so the bot's configured percentages
+                    // describe a bracket that was never placed.
+                    TakeProfitPercent: BracketPercent(position.AverageEntryPrice, position.TakeProfitPrice, bot.TakeProfitPercent),
+                    StopLossPercent: BracketPercent(position.AverageEntryPrice, position.StopLossPrice, bot.StopLossPercent),
                     CloseReason: MapCloseReason(decision.ReasonCode) == PositionCloseReason.Manual
                         && decision.ReasonCode is "manual"
                         ? "manual"
@@ -876,7 +1121,14 @@ public sealed class BotTickExecutor(
                 return null;
 
             side = direction == TradeDirection.Long ? OrderSide.Buy : OrderSide.Sell;
-            quantity = rules.QuantizeQuantity(bot.QuoteNotionalPerTrade / referencePrice);
+            // A venue caps order size per instrument (Binance's MARKET_LOT_SIZE.maxQty). Sizing past that
+            // cap is not a risk appetite the operator can opt into — the venue rejects the order and the
+            // intent dies with a rule violation that had nothing to do with risk. The cap belongs in the
+            // sizing step, so the order that reaches the risk engine is one the venue can actually fill.
+            var budgeted = bot.QuoteNotionalPerTrade / referencePrice;
+            if (rules.MaxQuantity > 0m && budgeted > rules.MaxQuantity)
+                budgeted = rules.MaxQuantity;
+            quantity = rules.QuantizeQuantity(budgeted);
         }
         else // Close
         {
@@ -902,7 +1154,10 @@ public sealed class BotTickExecutor(
             BotId = bot.Id,
             OperatingMode = bot.OperatingMode,
             ClientOrderId = TradingIdentifiers.ClientOrderId(decision.Id),
-            Symbol = bot.Symbol,
+            // The market being traded, not the bot's registration symbol: a wildcard scanner carries `*`
+            // and the intents it produces must name the proposal's market or the risk engine reads the
+            // order as "an intent for * on a bot trading ARBUSDT" and denies its own provenance check.
+            Symbol = string.IsNullOrWhiteSpace(decision.Symbol) ? bot.Symbol : decision.Symbol,
             Direction = direction,
             Side = side,
             Type = OrderType.Market,
@@ -1064,6 +1319,80 @@ public sealed class BotTickExecutor(
                 $"Bracket moved to TP {response.Levels.TakeProfitPrice} / SL {response.Levels.StopLossPrice}",
                 BotId: bot.Id, Symbol: bot.Symbol, BotPositionId: openPosition.Id),
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Finishes any order whose fill was recorded but whose position never got settled.
+    /// </summary>
+    /// <remarks>
+    /// The stall this exists for is real: a close was placed, the venue filled it, and the tick ended before
+    /// <see cref="ApplyToPositionAsync"/> ran — leaving the intent in Submitted and the position open on a
+    /// book that had already gone flat. This step is idempotent (a settled intent is no longer Submitted),
+    /// so running it on every tick costs one indexed read and removes a whole class of "the bot thinks it
+    /// is long something it sold yesterday".
+    /// </remarks>
+    private async Task SettleStrandedIntentsAsync(
+        TradingBot bot, string correlationId, CancellationToken cancellationToken)
+    {
+        var settledFloor = DateTime.UtcNow.AddSeconds(-10);
+        var stranded = await intents.Table
+            .Where(i => i.BotId == bot.Id
+                        && (i.Status == OrderIntentStatus.Submitted || i.Status == OrderIntentStatus.PartiallyFilled)
+                        && i.SubmittedAt != null
+                        && i.SubmittedAt < settledFloor
+                        && !i.IsDeleted)
+            .OrderByDescending(i => i.CreatedAt)
+            .Take(3)
+            .ToListAsync(cancellationToken);
+
+        if (stranded.Count == 0)
+            return;
+
+        var open = await LoadOpenPositionAsync(bot, cancellationToken);
+
+        foreach (var intent in stranded)
+        {
+            var order = await exchangeOrders.TableNoTracking
+                .FirstOrDefaultAsync(o => o.OrderIntentId == intent.Id, cancellationToken);
+            if (order is null || order.FilledQuantity <= 0)
+                continue;
+
+            var decision = await decisions.TableNoTracking
+                .FirstOrDefaultAsync(d => d.Id == intent.StrategyDecisionId, cancellationToken);
+            if (decision is null)
+                continue;
+
+            var fillRows = await fills.TableNoTracking
+                .Where(f => f.ExchangeOrderId == order.Id)
+                .ToListAsync(cancellationToken);
+            if (fillRows.Count == 0)
+                continue;
+
+            if (open is not null && decision.Action == BotDecisionAction.Close)
+            {
+                var settled = await ApplyToPositionAsync(
+                    bot, decision, intent, order, fillRows, BotDecisionAction.Close, open, cancellationToken);
+
+                // A settled close is a labelled example. Without this the fast calibration loop never sees
+                // a trade that was rescued by reconciliation — the very trades most worth learning from.
+                if (settled is not null)
+                    await ReportTradeOutcomeAsync(
+                        bot, decision, settled, Array.Empty<MarketCandleData>(), correlationId,
+                        CancellationToken.None);
+            }
+
+            intent.Status = OrderIntentStatus.Filled;
+            intent.CompletedAt = DateTime.UtcNow;
+            await intents.UpdateAsync(intent, saveNow: true, cancellationToken);
+
+            await audit.AppendAsync(
+                new BotAuditEntry(
+                    correlationId, BotAuditEventType.OrderStateChanged, bot.OperatingMode,
+                    $"Settled stranded intent {intent.ClientOrderId} from its recorded fill",
+                    BotId: bot.Id, Symbol: intent.Symbol, StrategyDecisionId: decision.Id,
+                    OrderIntentId: intent.Id, ExchangeOrderId: order.Id),
+                cancellationToken);
+        }
     }
 
     private async Task<BotPosition?> LoadOpenPositionAsync(TradingBot bot, CancellationToken cancellationToken) =>

@@ -144,10 +144,13 @@ public sealed class PaperBroker(
         if (!rules.IsTradable)
             return $"{request.Symbol} is not tradable on {request.Venue}";
 
-        // Every venue this platform reaches is spot, so a SHORT cannot be filled on any of them — a spot
-        // account cannot sell what it does not hold. Simulating one would produce paper profits that are
-        // unreachable in sandbox, so the simulator refuses exactly where the venue would.
-        if (request.Direction == TradeDirection.Short && request.Side == OrderSide.Sell)
+        // A spot venue cannot sell what it does not hold, so a SHORT there would be paper profit the sandbox
+        // could never reproduce. Futures venues are the opposite: shorts are the product. Refusing them
+        // everywhere made every scanner SHORT proposal a guaranteed rejection in paper mode.
+        var futuresVenue = request.Venue is MarketVenue.BinanceFuturesTestnet
+            or MarketVenue.Bitunix
+            or MarketVenue.Bybit;
+        if (!futuresVenue && request.Direction == TradeDirection.Short && request.Side == OrderSide.Sell)
         {
             return "a spot venue cannot open a SHORT: selling borrowed base currency requires margin, " +
                    "which this platform does not enable";

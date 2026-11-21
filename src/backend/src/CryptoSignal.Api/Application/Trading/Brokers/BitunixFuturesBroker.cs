@@ -89,11 +89,17 @@ public sealed class BitunixFuturesBroker(
     public string Name => "bitunix-futures";
 
     /// <summary>
-    /// Bitunix has no demo/testnet host. It therefore cannot claim SANDBOX: its only HTTP host is
-    /// production <c>fapi.bitunix.com</c>. PAPER is handled by the simulator; LIVE remains disabled.
+    /// Bitunix publishes no separate demo host: a demo API key authenticates against the same
+    /// <c>fapi.bitunix.com</c> surface and is scoped to the demo account server-side. SANDBOX therefore
+    /// resolves here, with the same adapter as LIVE — the difference between the two is which key the
+    /// operator stored, not which URL is called. PAPER stays with the simulator.
     /// </summary>
+    /// <remarks>
+    /// The live gate is the risk layer, not this method: <c>Trading:Risk:AllowLiveExecution</c> is false and
+    /// <c>EnabledOperatingModes</c> lists PAPER and SANDBOX only, so a Live bot cannot reach an order.
+    /// </remarks>
     public bool Supports(OperatingMode mode, MarketVenue venue) =>
-        mode == OperatingMode.Live && venue == MarketVenue.Bitunix;
+        mode is OperatingMode.Sandbox or OperatingMode.Live && venue == MarketVenue.Bitunix;
 
     public async Task<BrokerPlacement> PlaceAsync(
         BrokerOrderRequest request,
@@ -105,29 +111,30 @@ public sealed class BitunixFuturesBroker(
                             "configure Exchange__Bitunix__ApiKey/ApiSecret");
         var creds = credentials;
 
-        var body = JsonSerializer.Serialize(new Dictionary<string, object>
+        // Bitunix separates *which* side of the book to hit (`side`) from *why* — opening or closing a
+        // position (`tradeSide`). Sending only `side` is a parameter error on this venue, and a close sent
+        // as OPEN would double the position instead of flattening it.
+        var opening = request.Side ==
+                      (request.Direction == TradeDirection.Long ? OrderSide.Buy : OrderSide.Sell);
+        var isMarket = request.Type == OrderType.Market;
+
+        var fields = new Dictionary<string, object>
         {
             ["symbol"] = request.Symbol.Trim().ToUpperInvariant(),
             ["side"] = request.Side == OrderSide.Buy ? "BUY" : "SELL",
-            ["orderType"] = request.Type == OrderType.Market ? "MARKET" : "LIMIT",
+            ["tradeSide"] = opening ? "OPEN" : "CLOSE",
+            ["orderType"] = isMarket ? "MARKET" : "LIMIT",
             ["qty"] = request.Quantity.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["clientId"] = request.ClientOrderId,
+            // A market order is immediate-or-cancel by definition; a resting order carries the caller's
+            // time-in-force.
+            ["effect"] = isMarket ? "IOC" : MapTimeInForce(request.TimeInForce),
+        };
 
-            // Bitunix requires an explicit effect even for market orders.
-            ["effect"] = MapTimeInForce(request.TimeInForce),
+        if (!isMarket && request.LimitPrice is { } limitPrice)
+            fields["price"] = limitPrice.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-            // Bracket fields when the decision carried levels — Bitunix accepts TP/SL inline.
-            ["reduceOnly"] = false,
-        });
-
-        if (request.Type != OrderType.Market && request.LimitPrice is { } limitPrice)
-        {
-            var withPrice = new Dictionary<string, object>(JsonSerializer.Deserialize<Dictionary<string, object>>(body)!)
-            {
-                ["price"] = limitPrice.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            };
-            body = JsonSerializer.Serialize(withPrice);
-        }
+        var body = JsonSerializer.Serialize(fields);
 
         return await SendSignedAsync(
             HttpMethod.Post, "/api/v1/futures/trade/place_order", [], body, creds,

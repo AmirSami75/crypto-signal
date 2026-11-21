@@ -40,6 +40,13 @@ public sealed record RiskSnapshot
     public string ClientOrderId { get; init; } = string.Empty;
     public TradeDirection Direction { get; init; }
     public OrderSide Side { get; init; }
+
+    /// <summary>
+    /// True when the order's side is the opposite of the direction it was booked for — a close, not a new
+    /// bet. Checks that bound *exposure* must skip such an order: it can only reduce what is already open,
+    /// and refusing it leaves the position running with nobody at the wheel.
+    /// </summary>
+    public bool ReducesExposure { get; init; }
     public OrderType OrderType { get; init; }
     public TimeInForce? TimeInForce { get; init; }
     public decimal Quantity { get; init; }

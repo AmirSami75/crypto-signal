@@ -96,29 +96,46 @@ public sealed class MarketScannerService(
             return;
         }
 
-        var topSymbols = tickers.Take(settings.MaxSymbolsPerPass).ToList();
+        // Binance lists a handful of symbols with non-ASCII names (e.g. a Chinese-titled token). The
+        // engine's ticker contract is uppercase alphanumerics, and a whole scan must not die on one
+        // untradeable name — so they are filtered before ranking rather than skipped mid-pass.
+        var topSymbols = tickers
+            .Where(t => System.Text.RegularExpressions.Regex.IsMatch(t.Symbol, "^[A-Z0-9]{2,}$"))
+            .Take(settings.MaxSymbolsPerPass)
+            .ToList();
         logger.LogInformation(
             "Scanner pass {ScanId}: top symbols {Symbols}",
             scanId, string.Join(",", topSymbols.Select(t => t.Symbol)));
 
         var source = marketData.Resolve(settings.Venue);
         var windows = new List<(ScannerTicker Ticker, IReadOnlyList<MarketCandleData> Candles)>();
-        foreach (var ticker in topSymbols)
+        // Bounded fan-out. A pass over a few hundred symbols is dominated by the venue round trip, and
+        // the weight budget (not the CPU) is what bounds concurrency — eight in flight is well inside
+        // Binance's 2,400/min for a 5-minute cadence.
+        var gate = new SemaphoreSlim(Math.Max(1, settings.MaxConcurrency));
+        var fetched = new System.Collections.Concurrent.ConcurrentBag<(ScannerTicker, IReadOnlyList<MarketCandleData>)>();
+        await Task.WhenAll(topSymbols.Select(async ticker =>
         {
+            await gate.WaitAsync(cancellationToken);
             try
             {
                 var candles = await source.GetClosedCandlesAsync(
                     ticker.Symbol, settings.Interval, settings.CandleCount, cancellationToken);
-                windows.Add((ticker, candles));
+                fetched.Add((ticker, candles));
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // One symbol's feed failing must not mute the other nineteen.
+                // One symbol's feed failing must not mute the rest of the universe.
                 logger.LogWarning(
                     "Scanner skipping {Symbol}: candle window unavailable: {Message}",
                     ticker.Symbol, exception.Message);
             }
-        }
+            finally
+            {
+                gate.Release();
+            }
+        }));
+        windows.AddRange(fetched);
 
         if (windows.Count == 0)
         {
@@ -137,14 +154,39 @@ public sealed class MarketScannerService(
                     c.OpenTime, c.Open, c.High, c.Low, c.Close, c.Volume)).ToList()))
             .ToList();
 
+        var modelSpec = settings.ModelEnabled
+            ? new MlScanModelSpec(
+                settings.ModelTakeProfitAtr,
+                settings.ModelStopLossAtr,
+                settings.ModelMinimumConfidence,
+                settings.ModelMinimumExpectedPoints,
+                settings.ModelMaxHoldingPeriods)
+            : null;
+
         var results = await engine.ScanSymbolsAsync(
-            scanSymbols, strategySpecs, settings.Interval, cancellationToken);
+            scanSymbols,
+            strategySpecs,
+            settings.Interval,
+            modelSpec,
+            cancellationToken,
+            settings.ScanDeadlineSeconds);
+
+        // A symbol with a model verdict is not also recorded from the zoo: the model prices the same
+        // bet in R, and two rows for one symbol would make a ScannerBot claim whichever landed first.
+        var modelBySymbol = results
+            .Where(r => r.ModelPriced)
+            .GroupBy(r => r.Symbol)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(r => r.ExpectedPoints).First());
 
         var tickerBySymbol = topSymbols.ToDictionary(t => t.Symbol, t => t);
         var atrBySymbol = windows.ToDictionary(
             w => w.Ticker.Symbol, w => AverageTrueRange(w.Candles, 14));
 
         var recorded = 0;
+        var priced = 0;
+        var withPoints = 0;
         foreach (var result in results)
         {
             if (string.IsNullOrEmpty(result.Direction))
@@ -154,6 +196,19 @@ public sealed class MarketScannerService(
             if (!isLong && result.Direction != "SHORT")
                 continue;
 
+            // A model row is authoritative for its symbol: skip the zoo's duplicate. When the model pass
+            // is enabled the zoo rows are dropped entirely — otherwise Score would compare expected R
+            // against the liquidity×move heuristic in one column, and the bot would claim whichever
+            // number happened to be bigger.
+            if (modelSpec is not null && !result.ModelPriced)
+                continue;
+            if (!result.ModelPriced
+                && modelBySymbol.TryGetValue(result.Symbol, out var modelRow)
+                && modelRow.Direction == result.Direction)
+            {
+                continue;
+            }
+
             tickerBySymbol.TryGetValue(result.Symbol, out var ticker);
             atrBySymbol.TryGetValue(result.Symbol, out var atr);
 
@@ -162,20 +217,38 @@ public sealed class MarketScannerService(
                 ScanId = scanId,
                 Symbol = result.Symbol,
                 Interval = settings.Interval,
-                StrategyKey = result.Strategy,
+                StrategyKey = result.ModelPriced ? "model" : result.Strategy,
                 Direction = isLong ? SignalDirection.Long : SignalDirection.Short,
-                Confidence = result.Confidence,
-                Score = ticker is null ? 0m : ScanScore(ticker),
+                Confidence = result.ModelPriced ? result.ModelConfidence : result.Confidence,
+                // The ranking statistic is expected R when the model priced the symbol, and the
+                // ticker's liquidity×move score for zoo-only rows. One number, two honest meanings,
+                // both documented on the column's consumer (ScannerController ordering).
+                Score = result.ModelPriced
+                    ? (result.PointsAvailable
+                        ? (decimal)result.ExpectedPoints
+                        // No points head on this bundle yet: rank by the calibrated confidence the model
+                        // did produce, rather than writing a column of zeros that makes every signal
+                        // indistinguishable to the claimer.
+                        : (decimal)result.ModelConfidence)
+                    : ticker is null ? 0m : ScanScore(ticker),
                 AtrAtSignal = atr,
-                Reason = result.Reason,
+                Reason = result.ModelPriced
+                    ? $"{result.Reason} | points={result.ExpectedPoints:+0.000;-0.000}R"
+                    : result.Reason,
             }, saveNow: true, cancellationToken);
             recorded++;
+            if (result.ModelPriced)
+            {
+                priced++;
+                if (result.PointsAvailable)
+                    withPoints++;
+            }
         }
 
         logger.LogInformation(
-            "Scanner pass {ScanId} complete: {Recorded} signals from {Symbols} symbols, " +
-            "{Strategies} strategies each",
-            scanId, recorded, windows.Count, strategySpecs.Length);
+            "Scanner pass {ScanId} complete: {Recorded} signals from {Symbols} symbols " +
+            "({Priced} model-priced, {WithPoints} with a points head), {Strategies} strategies each",
+            scanId, recorded, windows.Count, priced, withPoints, strategySpecs.Length);
     }
 
     /// <summary>The scanner's ranking score: |24h change %| × log10(quote volume).</summary>
@@ -226,6 +299,37 @@ public sealed class ScannerOptions
 
     /// <summary>Symbols evaluated per pass, ranked by 24h change × volume.</summary>
     public int MaxSymbolsPerPass { get; set; } = 20;
+
+    /// <summary>
+    /// Candle fetches in flight per pass. The venue's request-weight allowance, not the CPU, is the
+    /// real ceiling: 300-candle klines are weight 2 each, so eight concurrent is ~16 weight against a
+    /// 2,400/min budget even when a pass over hundreds of symbols takes tens of seconds.
+    /// </summary>
+    public int MaxConcurrency { get; set; } = 8;
+
+    /// <summary>
+    /// Ask the engine to price every scanned symbol with the ML model in the same scan call. When a
+    /// symbol is priced, its model row is the one recorded — the zoo's duplicate is skipped.
+    /// </summary>
+    public bool ModelEnabled { get; set; } = true;
+
+    /// <summary>ATR bracket the model prices each scanned symbol at.</summary>
+    public double ModelTakeProfitAtr { get; set; } = 1.5;
+    public double ModelStopLossAtr { get; set; } = 1.0;
+
+    /// <summary>Floors the model row must clear to be recorded. 0 = any positive expectancy.</summary>
+    public double ModelMinimumConfidence { get; set; } = 0.0;
+    public double ModelMinimumExpectedPoints { get; set; } = 0.0;
+
+    /// <summary>
+    /// Budget for one market-wide scan RPC. Scaling with the listing is the point: a pass prices every
+    /// candidate symbol, so the interactive deadline (seconds) fails as soon as the exchange lists more
+    /// pairs than the box can score in ten seconds — which is every pass once training shares the CPU.
+    /// </summary>
+    public int ScanDeadlineSeconds { get; set; } = 180;
+
+    /// <summary>Holding horizon handed to the engine; 0 defers to the bundle's own label horizon.</summary>
+    public int ModelMaxHoldingPeriods { get; set; } = 0;
 
     /// <summary>Closed candles fetched per symbol per pass.</summary>
     public int CandleCount { get; set; } = 300;

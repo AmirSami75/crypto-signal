@@ -164,6 +164,11 @@ public sealed class RiskEngine(
                 i => i.StrategyDecisionId == decision.Id && i.Id != intent.Id,
                 cancellationToken);
 
+        // What is being traded, not what the bot is registered as. A Scanner-kind bot carries `*` and
+        // the decision names the market a proposal was actually for; checking the placeholder against
+        // the allowlist would deny every scanner trade while the allowlist was doing its job.
+        var tradeSymbol = string.IsNullOrWhiteSpace(decision.Symbol) ? bot.Symbol : decision.Symbol;
+
         // Any engaged switch whose scope covers this bot blocks it. Evaluated as one query so a switch
         // engaged mid-evaluation cannot be seen by one check and missed by another.
         var engaged = await killSwitches.TableNoTracking
@@ -173,7 +178,7 @@ public sealed class RiskEngine(
                                 k.ScopeOperatingMode == bot.OperatingMode)
                             || (k.Scope == KillSwitchScope.Exchange && k.ScopeVenue == bot.Venue)
                             || (k.Scope == KillSwitchScope.Bot && k.ScopeBotId == bot.Id)
-                            || (k.Scope == KillSwitchScope.Symbol && k.ScopeSymbol == bot.Symbol)))
+                            || (k.Scope == KillSwitchScope.Symbol && k.ScopeSymbol == tradeSymbol)))
             .Select(k => new { k.Scope, k.Reason })
             .ToListAsync(cancellationToken);
 
@@ -191,7 +196,7 @@ public sealed class RiskEngine(
             .Any(m => string.Equals(m, bot.OperatingMode.ToString(), StringComparison.OrdinalIgnoreCase));
 
         var symbolAllowed = limits.AllowedSymbols
-            .Any(s => string.Equals(s, bot.Symbol, StringComparison.OrdinalIgnoreCase));
+            .Any(s => string.Equals(s, tradeSymbol, StringComparison.OrdinalIgnoreCase));
 
         // An empty approved-version list means "do not pin", which cannot overspend. Every other empty
         // list in the options denies.
@@ -208,7 +213,7 @@ public sealed class RiskEngine(
             BotStatus = bot.Status,
             OperatingMode = bot.OperatingMode,
             Venue = bot.Venue,
-            Symbol = bot.Symbol,
+            Symbol = tradeSymbol,
             Interval = bot.Interval,
 
             StrategyDecisionId = decision.Id,
@@ -216,6 +221,7 @@ public sealed class RiskEngine(
             ClientOrderId = intent.ClientOrderId,
             Direction = intent.Direction,
             Side = intent.Side,
+            ReducesExposure = intent.Side != (intent.Direction == TradeDirection.Long ? OrderSide.Buy : OrderSide.Sell),
             OrderType = intent.Type,
             TimeInForce = intent.TimeInForce,
             Quantity = intent.Quantity,
@@ -531,6 +537,11 @@ public sealed class RiskEngine(
     {
         const RiskCheck check = RiskCheck.ExposureWithinLimits;
 
+        // A closing order cannot add exposure. Counting it against the concurrent-position limit denied
+        // every exit as soon as a bot was at its own cap — the position could open but never come back.
+        if (s.ReducesExposure)
+            return;
+
         if (s.EffectiveMaxConcurrentPositions <= 0)
             deny(check, "no concurrent-position limit is configured; an unset limit denies");
         else if (s.OpenPositionCount >= s.EffectiveMaxConcurrentPositions)
@@ -591,9 +602,10 @@ public sealed class RiskEngine(
             return;
         }
 
-        // Only a buy spends quote currency. A futures buy reserves margin, not full exposure; a sell
-        // is bounded by the base-asset/position checks. On spot leverage is 1, so this is unchanged.
-        if (s.Side == OrderSide.Buy && available < s.EstimatedMargin)
+        // An order that *opens* a position reserves margin on both sides: on a futures venue a short spends
+        // quote margin exactly like a long, and treating it as free let an account with 0 USDT ship orders
+        // the venue then refused. A closing order reserves nothing and is not checked here.
+        if (!s.ReducesExposure && available < s.EstimatedMargin)
             deny(check, $"available balance {available} is below the required margin {s.EstimatedMargin}");
     }
 

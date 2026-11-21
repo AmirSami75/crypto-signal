@@ -333,7 +333,30 @@ public sealed record MlScanResult(
     string Direction,  // "LONG" | "SHORT" | ""
     double Confidence,
     string Reason,
-    string Warning);
+    string Warning,
+    // Model-priced rows (Strategy == "model"). `ModelPriced` says the engine actually asked a bundle;
+    // `PointsAvailable` says that bundle carried a points head, which is a different fact — a bundle
+    // trained before the R objective answers with expected_value only.
+    bool ModelPriced = false,
+    bool PointsAvailable = false,
+    double ExpectedPoints = 0.0,
+    double ExpectedValueAtr = 0.0,
+    double ModelConfidence = 0.0,
+    double TakeProfitAtr = 0.0,
+    double StopLossAtr = 0.0,
+    string ModelId = "",
+    string ModelVersion = "");
+
+/// <summary>
+/// Asks the engine to price each scanned symbol with the market's ML model at a fixed ATR bracket.
+/// Null on the request means "strategy zoo only", the pre-points behaviour.
+/// </summary>
+public sealed record MlScanModelSpec(
+    double TakeProfitAtr,
+    double StopLossAtr,
+    double MinimumConfidence,
+    double MinimumExpectedPoints,
+    int MaxHoldingPeriods);
 
 public sealed class MlServiceException(
     string errorCode,
